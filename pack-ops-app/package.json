@@ -13,7 +13,9 @@
     "supabase:link": "supabase link --project-ref bktlwcqllvxkxbeibrhl",
     "supabase:db:push": "supabase db push",
     "supabase:db:reset": "supabase db reset",
-    "supabase:types": "supabase gen types typescript --linked --schema public > src/data/supabase/types.ts"
+    "supabase:types": "supabase gen types typescript --linked --schema public > src/data/supabase/types.ts",
+    "deploy": "npm run build && wrangler deploy",
+    "preview": "npm run build && wrangler dev"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.58.0",
@@ -24,12 +26,14 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^5.1.0",
+    "@cloudflare/vite-plugin": "^1.34.0",
     "@types/node": "^24.6.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
     "supabase": "^2.51.0",
     "typescript": "^5.9.3",
-    "vite": "^7.1.9"
+    "vite": "^7.1.9",
+    "wrangler": "^4.86.0"
   }
 }
