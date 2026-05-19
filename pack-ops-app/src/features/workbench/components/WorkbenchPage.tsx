@@ -601,7 +601,14 @@ function ActualMaterialEditorCard({
 
       {isEditing ? (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 2fr) repeat(3, minmax(92px, 1fr))", gap: "8px" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+              gap: "8px",
+              minWidth: 0,
+            }}
+          >
             <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Material name" />
             <input value={quantity} onChange={(event) => setQuantity(event.target.value)} inputMode="decimal" placeholder="Qty" />
             <input value={unit} onChange={(event) => setUnit(event.target.value)} placeholder="Unit" />
@@ -724,7 +731,14 @@ function ManualActualCostEditorCard({
 
       {isEditing ? (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1fr) minmax(200px, 2fr)", gap: "8px" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+              gap: "8px",
+              minWidth: 0,
+            }}
+          >
             <select value={category} onChange={(event) => setCategory(event.target.value as JobManualActualCategory)}>
               <option value="labor">Labour</option>
               <option value="material">Material</option>
@@ -833,6 +847,7 @@ export function WorkbenchPage() {
     return window.localStorage.getItem("pack-ops:show-hidden-jobs") === "true";
   });
   const [showEditJob, setShowEditJob] = useState(false);
+  const [showManualActualComposer, setShowManualActualComposer] = useState(false);
   const [showInvoiceGenerator, setShowInvoiceGenerator] = useState(false);
   const [invoiceSource, setInvoiceSource] = useState<InvoiceGenerationSource>("quote");
   const [invoiceQuotePreview, setInvoiceQuotePreview] = useState<InvoiceGenerationPreview | null>(null);
@@ -874,6 +889,9 @@ export function WorkbenchPage() {
   const [neededCopyFeedback, setNeededCopyFeedback] = useState("");
   const [usedCopyFeedback, setUsedCopyFeedback] = useState("");
   const [now, setNow] = useState(() => Date.now());
+  const [isMobileLayout, setIsMobileLayout] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth <= 820 : false,
+  );
   const activityNoteRef = useRef<HTMLTextAreaElement | null>(null);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const createPanelRef = useRef<HTMLDivElement | null>(null);
@@ -881,6 +899,8 @@ export function WorkbenchPage() {
   const usedMaterialSearchRef = useRef<{ focus: () => void; clear: () => void } | null>(null);
   const assemblySearchRef = useRef<{ focus: () => void; clear: () => void } | null>(null);
   const manualActualSectionRef = useRef<HTMLElement | null>(null);
+  const manualActualComposerCardRef = useRef<HTMLDivElement | null>(null);
+  const manualActualDescriptionRef = useRef<HTMLInputElement | null>(null);
   const { currentUser, signOut } = useAuthContext();
   const client = getSupabaseClient(import.meta.env);
   const selectedWorkbenchJobId = useUiStore((state) => state.selectedWorkbenchJobId);
@@ -1326,6 +1346,54 @@ export function WorkbenchPage() {
   }, [activeRunningTimerDraft]);
 
   useEffect(() => {
+    function handleResize() {
+      setIsMobileLayout(window.innerWidth <= 820);
+    }
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (!showManualActualComposer) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      manualActualComposerCardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      manualActualDescriptionRef.current?.focus();
+    }, 0);
+  }, [showManualActualComposer]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || !isMobileLayout) {
+      return;
+    }
+
+    const rafId = window.requestAnimationFrame(() => {
+      const docWidth = document.documentElement.clientWidth;
+      const offenders = Array.from(document.querySelectorAll<HTMLElement>("body *"))
+        .filter((element) => element.clientWidth > 0 && element.scrollWidth - element.clientWidth > 2)
+        .filter((element) => element.scrollWidth > docWidth + 2)
+        .slice(0, 10)
+        .map((element) => ({
+          tag: element.tagName.toLowerCase(),
+          className: element.className,
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+          text: element.textContent?.trim().slice(0, 80) ?? "",
+        }));
+
+      if (offenders.length > 0) {
+        console.warn("[Pack Ops] Mobile overflow offenders", offenders);
+      }
+    });
+
+    return () => window.cancelAnimationFrame(rafId);
+  }, [isMobileLayout, selectedJobId, jobScreen, showInvoiceGenerator, showManualActualComposer]);
+
+  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
@@ -1365,6 +1433,7 @@ export function WorkbenchPage() {
     setJobScreen("main");
     setShowAssignPeople(false);
     setShowEditJob(false);
+    setShowManualActualComposer(false);
     setShowInvoiceGenerator(false);
     setInvoiceQuotePreview(null);
     setInvoiceActualsBase(null);
@@ -2158,7 +2227,7 @@ export function WorkbenchPage() {
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <button
             type="button"
-            onClick={() => manualActualSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            onClick={() => setShowManualActualComposer(true)}
           >
             Add Manual Actual Line
           </button>
@@ -2199,7 +2268,10 @@ export function WorkbenchPage() {
       </div>
 
       <section style={cardStyle("#fff")}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+        <div
+          ref={manualActualComposerCardRef}
+          style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}
+        >
           <div>
             <strong>Manual Actual Costs</strong>
             <div style={{ color: "#5b6475", fontSize: "13px", marginTop: "4px" }}>
@@ -2208,11 +2280,148 @@ export function WorkbenchPage() {
           </div>
           <button
             type="button"
-            onClick={() => manualActualSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            onClick={() => setShowManualActualComposer(true)}
           >
-            Go to Manual Cost Entry
+            {showManualActualComposer ? "Manual Cost Form Open" : "Open Manual Cost Entry"}
           </button>
         </div>
+        {showManualActualComposer ? (
+          <div style={{ display: "grid", gap: "12px", marginTop: "14px" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobileLayout ? "1fr" : "minmax(140px, 1fr) minmax(220px, 2fr)",
+                gap: "8px",
+              }}
+            >
+              <select
+                value={manualActualCostDraft.category}
+                onChange={(event) => setManualActualCostDraft((current) => ({ ...current, category: event.target.value as JobManualActualCategory }))}
+                style={{ minWidth: 0 }}
+              >
+                <option value="labor">Labour</option>
+                <option value="material">Material</option>
+                <option value="equipment">Equipment</option>
+                <option value="subcontractor">Subcontractor</option>
+                <option value="other">Other</option>
+              </select>
+              <input
+                ref={manualActualDescriptionRef}
+                value={manualActualCostDraft.description}
+                onChange={(event) => setManualActualCostDraft((current) => ({ ...current, description: event.target.value }))}
+                placeholder="Description"
+                style={{ minWidth: 0 }}
+              />
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobileLayout ? "1fr" : "repeat(auto-fit, minmax(120px, 1fr))",
+                gap: "8px",
+              }}
+            >
+              <select
+                value={manualActualCostDraft.sectionName}
+                onChange={(event) => setManualActualCostDraft((current) => ({ ...current, sectionName: event.target.value }))}
+                style={{ minWidth: 0 }}
+              >
+                {actualPartOptions.map((partName) => (
+                  <option key={partName} value={partName === "General" ? "" : partName}>
+                    {partName}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={manualActualCostDraft.quantity}
+                onChange={(event) =>
+                  setManualActualCostDraft((current) => {
+                    const nextQuantity = event.target.value;
+                    const nextQuantityNumber = Number(nextQuantity) || 0;
+                    const unitCostNumber = Number(current.unitCost) || 0;
+                    return {
+                      ...current,
+                      quantity: nextQuantity,
+                      totalCost: String(roundMoney(nextQuantityNumber * unitCostNumber)),
+                    };
+                  })
+                }
+                inputMode="decimal"
+                placeholder="Qty"
+                style={{ minWidth: 0 }}
+              />
+              <input
+                value={manualActualCostDraft.unitCost}
+                onChange={(event) =>
+                  setManualActualCostDraft((current) => {
+                    const nextUnitCost = event.target.value;
+                    const nextUnitCostNumber = Number(nextUnitCost) || 0;
+                    const quantityNumber = Number(current.quantity) || 0;
+                    return {
+                      ...current,
+                      unitCost: nextUnitCost,
+                      totalCost: String(roundMoney(quantityNumber * nextUnitCostNumber)),
+                    };
+                  })
+                }
+                inputMode="decimal"
+                placeholder="Unit cost"
+                style={{ minWidth: 0 }}
+              />
+              <input
+                value={manualActualCostDraft.totalCost}
+                onChange={(event) =>
+                  setManualActualCostDraft((current) => {
+                    const nextTotalCost = event.target.value;
+                    const nextTotalNumber = Number(nextTotalCost) || 0;
+                    const quantityNumber = Number(current.quantity) || 0;
+                    return {
+                      ...current,
+                      totalCost: nextTotalCost,
+                      unitCost: quantityNumber > 0 ? String(roundMoney(nextTotalNumber / quantityNumber)) : current.unitCost,
+                    };
+                  })
+                }
+                inputMode="decimal"
+                placeholder="Total cost"
+                style={{ minWidth: 0 }}
+              />
+            </div>
+
+            <input
+              value={manualActualCostDraft.note}
+              onChange={(event) => setManualActualCostDraft((current) => ({ ...current, note: event.target.value }))}
+              placeholder="Optional note"
+              style={{ minWidth: 0 }}
+            />
+
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => void handleAddManualActualCostLine()}
+                disabled={
+                  createManualActualCostLine.isPending ||
+                  !manualActualCostDraft.description.trim() ||
+                  Number(manualActualCostDraft.quantity) < 0 ||
+                  Number(manualActualCostDraft.unitCost) < 0 ||
+                  Number(manualActualCostDraft.totalCost) < 0
+                }
+              >
+                {createManualActualCostLine.isPending ? "Adding..." : "Save Manual Actual Line"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setManualActualCostDraft(createEmptyManualActualCostDraft());
+                  setShowManualActualComposer(false);
+                }}
+                disabled={createManualActualCostLine.isPending}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section style={cardStyle("#fff")}>
@@ -2532,7 +2741,14 @@ export function WorkbenchPage() {
             onSelect={(materialId) => applyCatalogMaterialToDraft(materialId, setUsedMaterialDraft)}
           />
 
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(160px, 1fr) minmax(180px, 2fr) repeat(3, minmax(92px, 1fr))", gap: "8px" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobileLayout ? "1fr" : "minmax(160px, 1fr) minmax(180px, 2fr) repeat(3, minmax(92px, 1fr))",
+              gap: "8px",
+              minWidth: 0,
+            }}
+          >
             <select
               value={usedMaterialDraft.sectionName}
               onChange={(event) => setUsedMaterialDraft((current) => ({ ...current, sectionName: event.target.value }))}
@@ -2602,7 +2818,7 @@ export function WorkbenchPage() {
             <div style={{ display: "grid", gap: "10px" }}>
               {usedMaterialsByPart.map((section) =>
                 section.materials.length === 0 ? null : (
-                  <div key={section.name} style={{ display: "grid", gap: "10px", border: "1px solid #d9dfeb", borderRadius: "14px", padding: "12px" }}>
+                  <div key={section.name} style={{ display: "grid", gap: "10px", border: "1px solid #d9dfeb", borderRadius: "14px", padding: "12px", minWidth: 0 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
                       <strong>{section.name}</strong>
                       <strong>{formatMoney(section.materials.reduce((total, item) => total + roundMoney(item.quantity * (item.unitCost ?? item.currentCatalogCost ?? 0)), 0))}</strong>
@@ -3086,7 +3302,15 @@ export function WorkbenchPage() {
             isPending={createJobMaterial.isPending}
             onSelect={(materialId) => applyCatalogMaterialToDraft(materialId, setNeededMaterialDraft)}
           />
-          <div style={{ display: "grid", gridTemplateColumns: "110px 1fr auto", gap: "8px", alignItems: "start" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobileLayout ? "1fr" : "110px 1fr auto",
+              gap: "8px",
+              alignItems: "start",
+              minWidth: 0,
+            }}
+          >
             <input
               value={neededMaterialDraft.quantity}
               onChange={(event) => setNeededMaterialDraft((current) => ({ ...current, quantity: event.target.value }))}
@@ -3112,10 +3336,10 @@ export function WorkbenchPage() {
           ) : (
             <div style={{ display: "grid", gap: "10px" }}>
               {neededMaterialDisplayItems.map((item) => (
-                <div key={item.key} style={{ ...cardStyle("#fafcff"), padding: "12px", display: "grid", gap: "8px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
+                <div key={item.key} style={{ ...cardStyle("#fafcff"), padding: "12px", display: "grid", gap: "8px", minWidth: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap", minWidth: 0 }}>
                     <div>
-                      <strong>{item.materialName}</strong>
+                      <strong style={{ overflowWrap: "anywhere" }}>{item.materialName}</strong>
                       <div style={{ color: "#5b6475", fontSize: "13px", marginTop: "4px" }}>
                         {item.sectionName ? `${item.sectionName} · ` : ""}
                         {item.materialSku ? `${item.materialSku} · ` : ""}
@@ -3139,7 +3363,14 @@ export function WorkbenchPage() {
                     ) : null}
                   </div>
                   {item.isPersisted && item.id ? (
-                    <div style={{ display: "grid", gridTemplateColumns: "110px 1fr auto", gap: "8px" }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: isMobileLayout ? "1fr" : "110px 1fr auto",
+                        gap: "8px",
+                        minWidth: 0,
+                      }}
+                    >
                       <input
                         defaultValue={String(item.quantity)}
                         inputMode="decimal"
@@ -3191,123 +3422,21 @@ export function WorkbenchPage() {
           <div>
             <h3 style={{ margin: 0 }}>Manual Actual Cost Lines</h3>
             <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
-              Add direct job costs that are not imported from materials or time. These stay separate in Actuals but still roll into job cost totals.
+              Direct costs entered here stay separate from materials and labour imports, but they still roll into job cost totals.
             </p>
           </div>
         </div>
 
         <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1fr) minmax(220px, 2fr)", gap: "8px" }}>
-            <select
-              value={manualActualCostDraft.category}
-              onChange={(event) => setManualActualCostDraft((current) => ({ ...current, category: event.target.value as JobManualActualCategory }))}
-            >
-              <option value="labor">Labour</option>
-              <option value="material">Material</option>
-              <option value="equipment">Equipment</option>
-              <option value="subcontractor">Subcontractor</option>
-              <option value="other">Other</option>
-            </select>
-            <input
-              value={manualActualCostDraft.description}
-              onChange={(event) => setManualActualCostDraft((current) => ({ ...current, description: event.target.value }))}
-              placeholder="Description"
-            />
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "8px" }}>
-            <select
-              value={manualActualCostDraft.sectionName}
-              onChange={(event) => setManualActualCostDraft((current) => ({ ...current, sectionName: event.target.value }))}
-            >
-              {actualPartOptions.map((partName) => (
-                <option key={partName} value={partName === "General" ? "" : partName}>
-                  {partName}
-                </option>
-              ))}
-            </select>
-            <input
-              value={manualActualCostDraft.quantity}
-              onChange={(event) =>
-                setManualActualCostDraft((current) => {
-                  const nextQuantity = event.target.value;
-                  const nextQuantityNumber = Number(nextQuantity) || 0;
-                  const unitCostNumber = Number(current.unitCost) || 0;
-                  return {
-                    ...current,
-                    quantity: nextQuantity,
-                    totalCost: String(roundMoney(nextQuantityNumber * unitCostNumber)),
-                  };
-                })
-              }
-              inputMode="decimal"
-              placeholder="Qty"
-            />
-            <input
-              value={manualActualCostDraft.unitCost}
-              onChange={(event) =>
-                setManualActualCostDraft((current) => {
-                  const nextUnitCost = event.target.value;
-                  const nextUnitCostNumber = Number(nextUnitCost) || 0;
-                  const quantityNumber = Number(current.quantity) || 0;
-                  return {
-                    ...current,
-                    unitCost: nextUnitCost,
-                    totalCost: String(roundMoney(quantityNumber * nextUnitCostNumber)),
-                  };
-                })
-              }
-              inputMode="decimal"
-              placeholder="Unit cost"
-            />
-            <input
-              value={manualActualCostDraft.totalCost}
-              onChange={(event) =>
-                setManualActualCostDraft((current) => {
-                  const nextTotalCost = event.target.value;
-                  const nextTotalNumber = Number(nextTotalCost) || 0;
-                  const quantityNumber = Number(current.quantity) || 0;
-                  return {
-                    ...current,
-                    totalCost: nextTotalCost,
-                    unitCost: quantityNumber > 0 ? String(roundMoney(nextTotalNumber / quantityNumber)) : current.unitCost,
-                  };
-                })
-              }
-              inputMode="decimal"
-              placeholder="Total cost"
-            />
-          </div>
-
-          <input
-            value={manualActualCostDraft.note}
-            onChange={(event) => setManualActualCostDraft((current) => ({ ...current, note: event.target.value }))}
-            placeholder="Optional note"
-          />
-
-          <div>
-            <button
-              type="button"
-              onClick={() => void handleAddManualActualCostLine()}
-              disabled={
-                createManualActualCostLine.isPending ||
-                !manualActualCostDraft.description.trim() ||
-                Number(manualActualCostDraft.quantity) < 0 ||
-                Number(manualActualCostDraft.unitCost) < 0 ||
-                Number(manualActualCostDraft.totalCost) < 0
-              }
-            >
-              {createManualActualCostLine.isPending ? "Adding..." : "Add Manual Cost Line"}
-            </button>
-          </div>
-
           {(jobWorkspace?.manualActualCostLines ?? []).length === 0 ? (
-            <p style={{ color: "#5b6475", margin: 0 }}>No manual actual cost lines logged yet.</p>
+            <p style={{ color: "#5b6475", margin: 0 }}>
+              No manual actual cost lines logged yet. Use the Add Manual Actual Line button above to start one here.
+            </p>
           ) : (
             <div style={{ display: "grid", gap: "10px" }}>
               {manualActualCostsByPart.map((section) =>
                 section.lines.length === 0 ? null : (
-                  <div key={section.name} style={{ display: "grid", gap: "10px", border: "1px solid #d9dfeb", borderRadius: "14px", padding: "12px" }}>
+                  <div key={section.name} style={{ display: "grid", gap: "10px", border: "1px solid #d9dfeb", borderRadius: "14px", padding: "12px", minWidth: 0 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
                       <strong>{section.name}</strong>
                       <strong>{formatMoney(section.lines.reduce((total, line) => total + line.totalCost, 0))}</strong>

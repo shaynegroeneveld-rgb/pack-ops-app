@@ -506,7 +506,8 @@ export function AppShell() {
             minHeight: "36px",
             display: "inline-flex",
             alignItems: "center",
-            whiteSpace: "nowrap",
+            whiteSpace: isMobileShellLayout ? "normal" : "nowrap",
+            textAlign: "center",
             cursor: "pointer",
           }}
         >
