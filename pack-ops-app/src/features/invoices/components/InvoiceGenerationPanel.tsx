@@ -348,10 +348,24 @@ export function InvoiceGenerationPanel({
         placeItems: "center",
         padding: "20px",
         zIndex: 60,
+        overflowX: "hidden",
       }}
     >
       <style>
         {`
+          @media (max-width: 820px) {
+            .invoice-preview-overlay {
+              padding: 0 !important;
+              place-items: stretch !important;
+            }
+            .invoice-preview-shell {
+              max-height: 100vh !important;
+              border-radius: 0 !important;
+              padding: 14px !important;
+              overflow-y: auto !important;
+              overflow-x: hidden !important;
+            }
+          }
           @media print {
             @page {
               margin: 8mm;
@@ -471,7 +485,8 @@ export function InvoiceGenerationPanel({
           width: "100%",
           maxWidth: "1080px",
           maxHeight: "92vh",
-          overflow: "auto",
+          overflowY: "auto",
+          overflowX: "hidden",
           background: "#fff",
           border: "1px solid #d9dfeb",
           borderRadius: "18px",

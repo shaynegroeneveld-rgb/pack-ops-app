@@ -880,6 +880,7 @@ export function WorkbenchPage() {
   const neededMaterialSearchRef = useRef<{ focus: () => void; clear: () => void } | null>(null);
   const usedMaterialSearchRef = useRef<{ focus: () => void; clear: () => void } | null>(null);
   const assemblySearchRef = useRef<{ focus: () => void; clear: () => void } | null>(null);
+  const manualActualSectionRef = useRef<HTMLElement | null>(null);
   const { currentUser, signOut } = useAuthContext();
   const client = getSupabaseClient(import.meta.env);
   const selectedWorkbenchJobId = useUiStore((state) => state.selectedWorkbenchJobId);
@@ -2155,6 +2156,12 @@ export function WorkbenchPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => manualActualSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          >
+            Add Manual Actual Line
+          </button>
           {canGenerateInvoices ? (
             <button
               type="button"
@@ -2190,6 +2197,23 @@ export function WorkbenchPage() {
           <strong style={{ fontSize: "22px" }}>{(jobWorkspace?.manualActualCostLines ?? []).length}</strong>
         </div>
       </div>
+
+      <section style={cardStyle("#fff")}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+          <div>
+            <strong>Manual Actual Costs</strong>
+            <div style={{ color: "#5b6475", fontSize: "13px", marginTop: "4px" }}>
+              Add equipment, subcontractor, manual labour, or other direct costs without changing materials or time entries.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => manualActualSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          >
+            Go to Manual Cost Entry
+          </button>
+        </div>
+      </section>
 
       <section style={cardStyle("#fff")}>
         <div style={sectionHeadingRow()}>
@@ -3162,7 +3186,7 @@ export function WorkbenchPage() {
         </div>
       </section>
 
-      <section style={cardStyle("#fff")}>
+      <section ref={manualActualSectionRef} style={cardStyle("#fff")}>
         <div style={sectionHeadingRow()}>
           <div>
             <h3 style={{ margin: 0 }}>Manual Actual Cost Lines</h3>

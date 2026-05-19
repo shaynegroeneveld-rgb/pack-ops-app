@@ -537,7 +537,7 @@ export function QuoteEditorPanel({
         background: "rgba(23, 32, 51, 0.35)",
         display: "grid",
         placeItems: "center",
-        padding: "20px",
+        padding: isMobileLayout ? "0" : "20px",
         zIndex: 30,
       }}
     >
@@ -545,17 +545,18 @@ export function QuoteEditorPanel({
         style={{
           width: "100%",
           maxWidth: "1120px",
-          maxHeight: "min(92vh, 960px)",
-          overflow: "auto",
+          maxHeight: isMobileLayout ? "100vh" : "min(92vh, 960px)",
+          overflowY: "auto",
+          overflowX: "hidden",
           border: "1px solid #d9dfeb",
-          borderRadius: "18px",
-          padding: "18px",
+          borderRadius: isMobileLayout ? "0" : "18px",
+          padding: isMobileLayout ? "14px" : "18px",
           background: "#fff",
           display: "grid",
           gap: "16px",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
           <div>
             <h3 style={{ margin: 0 }}>{currentDraft.quoteId ? "Edit Quote" : "New Quote"}</h3>
             <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
@@ -935,83 +936,101 @@ export function QuoteEditorPanel({
                         gap: "10px",
                       }}
                     >
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px", alignItems: "end" }}>
-                        <label style={{ display: "grid", gap: "6px" }}>
-                          <span>Add Material</span>
-                          <MaterialSearchSelect
-                            catalogItems={catalogItems}
-                            selectedMaterialId={selectedCatalogItemIds[section.name] ?? ""}
-                            isPending={isPending || isLockedByInvoice}
-                            placeholder={`Search materials for ${section.name}...`}
-                            onSelect={(materialId) =>
-                              setSelectedCatalogItemIds((current) => ({ ...current, [section.name]: materialId }))
-                            }
-                          />
-                        </label>
-                        <label style={{ display: "grid", gap: "6px" }}>
-                          <span>Qty</span>
-                          <input
-                            type="number"
-                            min="0.001"
-                            step="0.001"
-                            inputMode="decimal"
-                            style={mobileSafeInputStyle}
-                            value={selectedCatalogQuantities[section.name] ?? "1"}
-                            onChange={(event) =>
-                              setSelectedCatalogQuantities((current) => ({ ...current, [section.name]: event.target.value }))
-                            }
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => addCatalogItem(section.name)}
-                          disabled={
-                            isPending ||
-                            isLockedByInvoice ||
-                            !(selectedCatalogItemIds[section.name] ?? "") ||
-                            Number(selectedCatalogQuantities[section.name] ?? "1") <= 0
-                          }
+                      <div style={{ display: "grid", gap: "12px", alignItems: "end" }}>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: isMobileLayout ? "1fr" : "minmax(260px, 2fr) minmax(100px, 120px) auto",
+                            gap: "10px",
+                            alignItems: "end",
+                          }}
                         >
-                          Add Material
-                        </button>
-                        <label style={{ display: "grid", gap: "6px" }}>
-                          <span>Add Assembly</span>
-                          <AssemblySearchSelect
-                            assemblies={assemblies}
-                            selectedAssemblyId={selectedAssemblyIds[section.name] ?? ""}
-                            isPending={isPending || isLockedByInvoice}
-                            placeholder={`Search assemblies for ${section.name}...`}
-                            onSelect={(assemblyId) =>
-                              setSelectedAssemblyIds((current) => ({ ...current, [section.name]: assemblyId }))
+                          <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
+                            <span>Add Material</span>
+                            <MaterialSearchSelect
+                              catalogItems={catalogItems}
+                              selectedMaterialId={selectedCatalogItemIds[section.name] ?? ""}
+                              isPending={isPending || isLockedByInvoice}
+                              placeholder={`Search materials for ${section.name}...`}
+                              onSelect={(materialId) =>
+                                setSelectedCatalogItemIds((current) => ({ ...current, [section.name]: materialId }))
+                              }
+                            />
+                          </label>
+                          <label style={{ display: "grid", gap: "6px" }}>
+                            <span>Qty</span>
+                            <input
+                              type="number"
+                              min="0.001"
+                              step="0.001"
+                              inputMode="decimal"
+                              style={mobileSafeInputStyle}
+                              value={selectedCatalogQuantities[section.name] ?? "1"}
+                              onChange={(event) =>
+                                setSelectedCatalogQuantities((current) => ({ ...current, [section.name]: event.target.value }))
+                              }
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => addCatalogItem(section.name)}
+                            disabled={
+                              isPending ||
+                              isLockedByInvoice ||
+                              !(selectedCatalogItemIds[section.name] ?? "") ||
+                              Number(selectedCatalogQuantities[section.name] ?? "1") <= 0
                             }
-                          />
-                        </label>
-                        <label style={{ display: "grid", gap: "6px" }}>
-                          <span>Qty</span>
-                          <input
-                            type="number"
-                            min="0.001"
-                            step="0.001"
-                            inputMode="decimal"
-                            style={mobileSafeInputStyle}
-                            value={selectedAssemblyQuantities[section.name] ?? "1"}
-                            onChange={(event) =>
-                              setSelectedAssemblyQuantities((current) => ({ ...current, [section.name]: event.target.value }))
-                            }
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => addAssembly(section.name)}
-                          disabled={
-                            isPending ||
-                            isLockedByInvoice ||
-                            !(selectedAssemblyIds[section.name] ?? "") ||
-                            Number(selectedAssemblyQuantities[section.name] ?? "1") <= 0
-                          }
+                          >
+                            Add Material
+                          </button>
+                        </div>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: isMobileLayout ? "1fr" : "minmax(260px, 2fr) minmax(100px, 120px) auto",
+                            gap: "10px",
+                            alignItems: "end",
+                          }}
                         >
-                          Add Assembly
-                        </button>
+                          <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
+                            <span>Add Assembly</span>
+                            <AssemblySearchSelect
+                              assemblies={assemblies}
+                              selectedAssemblyId={selectedAssemblyIds[section.name] ?? ""}
+                              isPending={isPending || isLockedByInvoice}
+                              placeholder={`Search assemblies for ${section.name}...`}
+                              onSelect={(assemblyId) =>
+                                setSelectedAssemblyIds((current) => ({ ...current, [section.name]: assemblyId }))
+                              }
+                            />
+                          </label>
+                          <label style={{ display: "grid", gap: "6px" }}>
+                            <span>Qty</span>
+                            <input
+                              type="number"
+                              min="0.001"
+                              step="0.001"
+                              inputMode="decimal"
+                              style={mobileSafeInputStyle}
+                              value={selectedAssemblyQuantities[section.name] ?? "1"}
+                              onChange={(event) =>
+                                setSelectedAssemblyQuantities((current) => ({ ...current, [section.name]: event.target.value }))
+                              }
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => addAssembly(section.name)}
+                            disabled={
+                              isPending ||
+                              isLockedByInvoice ||
+                              !(selectedAssemblyIds[section.name] ?? "") ||
+                              Number(selectedAssemblyQuantities[section.name] ?? "1") <= 0
+                            }
+                          >
+                            Add Assembly
+                          </button>
+                        </div>
                       </div>
                       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                         <button type="button" onClick={() => addLabourLine(section.name)} disabled={isPending || isLockedByInvoice}>

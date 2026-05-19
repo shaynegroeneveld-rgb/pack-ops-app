@@ -425,7 +425,7 @@ export function AppShell() {
   }
 
   return (
-    <main style={{ minHeight: "100vh", background: brand.surfaceAlt }}>
+    <main style={{ minHeight: "100vh", background: brand.surfaceAlt, width: "100%", overflowX: "hidden" }}>
       <nav
         style={{
           display: "flex",
@@ -439,9 +439,21 @@ export function AppShell() {
           flexWrap: "wrap",
           alignItems: "center",
           boxShadow: "0 10px 24px rgba(23, 32, 51, 0.04)",
+          width: "100%",
+          overflowX: "hidden",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginRight: "12px", minWidth: "fit-content" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            marginRight: "12px",
+            minWidth: 0,
+            maxWidth: isMobileShellLayout ? "100%" : undefined,
+            flex: isMobileShellLayout ? "1 1 100%" : "0 1 auto",
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             {logoDataUrl ? (
               <img
@@ -473,7 +485,7 @@ export function AppShell() {
                 PE
               </div>
             )}
-            <div style={{ display: "grid", lineHeight: 1.05 }}>
+            <div style={{ display: "grid", lineHeight: 1.05, minWidth: 0 }}>
               <strong style={{ fontSize: "17px", letterSpacing: "-0.02em", color: brand.text }}>{companyName}</strong>
               <span style={{ fontSize: "12px", color: brand.textSoft }}>Operations</span>
             </div>
@@ -514,7 +526,7 @@ export function AppShell() {
           );
         })}
         {canSeeFinance ? (
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", minWidth: 0 }}>
             <span style={{ color: brand.textSoft, fontSize: "12px", fontWeight: 800, padding: "0 2px" }}>Finance</span>
             {FINANCE_NAV_ITEMS.map((item) => {
               const isActive = activeRoute === item.route;
