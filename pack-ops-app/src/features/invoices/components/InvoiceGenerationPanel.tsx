@@ -68,6 +68,23 @@ function lineStatusLabel(line: EditableInvoiceDraftLine): { label: string; tone:
   return { label: "Generated", tone: "#166534", background: "#dcfce7" };
 }
 
+function lineSourceLabel(line: EditableInvoiceDraftLine): string | null {
+  switch (line.sourceKind) {
+    case "actual-manual":
+      return "Manual Actual";
+    case "actual-material":
+      return "Actual Material";
+    case "actual-labor":
+      return "Actual Labour";
+    case "quote-line":
+      return "Quote Line";
+    case "manual":
+      return "Manual Invoice Line";
+    default:
+      return null;
+  }
+}
+
 function groupPreviewSections(lines: InvoiceGenerationPreview["lines"]) {
   const grouped = new Map<string, InvoiceGenerationPreview["lines"]>();
   for (const line of lines) {
@@ -764,6 +781,7 @@ export function InvoiceGenerationPanel({
             <div style={{ display: "grid", gap: "12px" }}>
               {draftLines.map((line, index) => {
                 const status = lineStatusLabel(line);
+                const sourceLabel = lineSourceLabel(line);
                 const showCostControls = selectedSource === "actuals" && line.category === "material";
 
                 return (
@@ -774,6 +792,11 @@ export function InvoiceGenerationPanel({
                         <span style={{ padding: "4px 8px", borderRadius: "999px", fontSize: "12px", fontWeight: 700, color: status.tone, background: status.background }}>
                           {status.label}
                         </span>
+                        {sourceLabel ? (
+                          <span style={{ padding: "4px 8px", borderRadius: "999px", fontSize: "12px", fontWeight: 700, color: "#4338ca", background: "#e0e7ff" }}>
+                            {sourceLabel}
+                          </span>
+                        ) : null}
                         <span style={{ color: "#5b6475", fontSize: "13px" }}>
                           {(line.category ?? "other").replace("labor", "labour")}
                         </span>

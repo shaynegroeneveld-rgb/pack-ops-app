@@ -65,7 +65,7 @@ export interface InvoicePreviewLine {
   note?: string | null;
   unitCost?: number | null;
   markupPercent?: number | null;
-  sourceKind?: "quote-line" | "actual-material" | "actual-labor" | "manual";
+  sourceKind?: "quote-line" | "actual-material" | "actual-labor" | "actual-manual" | "manual";
   generatedSourceId?: string | null;
   origin?: "generated" | "manual";
   isEdited?: boolean;
@@ -130,6 +130,17 @@ export interface ActualsInvoiceLaborInput {
   sectionName?: string | null;
 }
 
+export interface ActualsInvoiceManualInput {
+  id: string;
+  description: string;
+  category: "labor" | "material" | "equipment" | "subcontractor" | "other";
+  quantity: number;
+  unitCost: number;
+  totalCost: number;
+  note: string | null;
+  sectionName?: string | null;
+}
+
 export interface ActualsInvoicePreviewBase {
   source: "actuals";
   jobId: JobId;
@@ -143,6 +154,7 @@ export interface ActualsInvoicePreviewBase {
   internalNotes: string | null;
   materials: ActualsInvoiceMaterialInput[];
   labor: ActualsInvoiceLaborInput[];
+  manualActuals: ActualsInvoiceManualInput[];
 }
 
 export interface InvoiceGenerationPreview {

@@ -4,6 +4,7 @@ import { CatalogItemsRepositoryImpl } from "@/data/repositories/catalog-items.re
 import { ContactsRepositoryImpl } from "@/data/repositories/contacts.repository.impl";
 import type { RepositoryContext } from "@/data/repositories/contracts";
 import { JobMaterialsRepositoryImpl } from "@/data/repositories/job-materials.repository.impl";
+import { JobManualActualCostLinesRepositoryImpl } from "@/data/repositories/job-manual-actual-cost-lines.repository.impl";
 import { JobsRepositoryImpl } from "@/data/repositories/jobs.repository.impl";
 import { QuoteLineItemsRepositoryImpl } from "@/data/repositories/quote-line-items.repository.impl";
 import { QuotesRepositoryImpl } from "@/data/repositories/quotes.repository.impl";
@@ -158,6 +159,22 @@ function collapseLaborLines(lines: InvoicePreviewLine[], sectionName: string | n
   ];
 }
 
+function getManualActualUnit(category: "labor" | "material" | "equipment" | "subcontractor" | "other") {
+  return category === "labor" ? "hours" : "unit";
+}
+
+function mapManualActualCategoryToInvoiceCategory(
+  category: "labor" | "material" | "equipment" | "subcontractor" | "other",
+): "labor" | "material" | "other" {
+  if (category === "labor") {
+    return "labor";
+  }
+  if (category === "material") {
+    return "material";
+  }
+  return "other";
+}
+
 export function createEditableInvoiceDraftLines(preview: InvoiceGenerationPreview | null): EditableInvoiceDraftLine[] {
   if (!preview) {
     return [];
@@ -233,6 +250,31 @@ export function buildInvoicePreviewFromActuals(
       isEdited: false,
     }));
 
+  const rawManualLines: InvoicePreviewLine[] = base.manualActuals
+    .filter((entry) => entry.quantity > 0 || entry.totalCost > 0)
+    .filter((entry) => selectedPartMatches(entry.sectionName))
+    .map((entry) => {
+      const invoiceCategory = mapManualActualCategoryToInvoiceCategory(entry.category);
+      const safeQuantity = entry.quantity > 0 ? entry.quantity : 1;
+      return {
+        id: `manual-actual:${entry.id}`,
+        description: entry.description,
+        unit: getManualActualUnit(entry.category),
+        quantity: roundQuantity(safeQuantity),
+        unitPrice: safeQuantity > 0 ? roundMoney(entry.totalCost / safeQuantity) : roundMoney(entry.unitCost),
+        subtotal: roundMoney(entry.totalCost),
+        sectionName: entry.sectionName ?? null,
+        category: invoiceCategory,
+        note: entry.note,
+        unitCost: roundMoney(entry.unitCost),
+        markupPercent: null,
+        sourceKind: "actual-manual",
+        generatedSourceId: String(entry.id),
+        origin: "generated",
+        isEdited: false,
+      };
+    });
+
   const materialLines = base.materials
     .filter((entry) => entry.quantity > 0)
     .filter((entry) => selectedPartMatches(entry.sectionName))
@@ -261,7 +303,9 @@ export function buildInvoicePreviewFromActuals(
       origin: "generated" as const,
       isEdited: false,
     })),
+    ...rawManualLines.filter((line) => line.category !== "labor"),
     ...rawLaborLines,
+    ...rawManualLines.filter((line) => line.category === "labor"),
   ], selectedPartName);
 
   const subtotal = roundMoney(lines.reduce((total, line) => total + line.subtotal, 0));
@@ -300,6 +344,7 @@ export class InvoiceGenerationService {
   readonly quoteLineItems;
   readonly catalogItems;
   readonly jobMaterials;
+  readonly jobManualActualCostLines;
   readonly timeEntries;
 
   constructor(
@@ -313,6 +358,7 @@ export class InvoiceGenerationService {
     this.quoteLineItems = new QuoteLineItemsRepositoryImpl(context, client);
     this.catalogItems = new CatalogItemsRepositoryImpl(context, client);
     this.jobMaterials = new JobMaterialsRepositoryImpl(context, client);
+    this.jobManualActualCostLines = new JobManualActualCostLinesRepositoryImpl(context, client);
     this.timeEntries = new TimeEntriesRepositoryImpl(context, client);
   }
 
@@ -328,13 +374,14 @@ export class InvoiceGenerationService {
       throw new Error("Job not found.");
     }
 
-    const [contact, quote, quoteLines, catalogItems, jobMaterials, timeEntries, orgResponse, appSettingsResponse, counterResponse] =
+    const [contact, quote, quoteLines, catalogItems, jobMaterials, manualActualCostLines, timeEntries, orgResponse, appSettingsResponse, counterResponse] =
       await Promise.all([
         this.contacts.getById(job.contactId),
         job.quoteId ? this.quotes.getById(job.quoteId) : Promise.resolve(null),
         job.quoteId ? this.quoteLineItems.listByQuoteIds([job.quoteId]) : Promise.resolve([]),
         this.catalogItems.list({ filter: { includeInactive: true } }),
         this.jobMaterials.list({ filter: { jobId: job.id } }),
+        this.jobManualActualCostLines.list({ filter: { jobId: job.id } }),
         this.timeEntries.list({ filter: { jobId: job.id } }),
         this.client.from("orgs").select("name, settings").eq("id", this.context.orgId).single(),
         this.client.from("app_settings").select("logo_b64").maybeSingle(),
@@ -360,6 +407,7 @@ export class InvoiceGenerationService {
       quoteLines,
       catalogItems,
       jobMaterials,
+      manualActualCostLines,
       timeEntries,
       org: orgResponse.data,
       logoDataUrl: buildLogoDataUrl(appSettingsResponse.data?.logo_b64 ?? null),
@@ -460,6 +508,18 @@ export class InvoiceGenerationService {
           description: entry.description?.trim() || "Labour",
           hours: entry.hours,
           note: entry.workDate,
+          sectionName: entry.sectionName ?? null,
+        })),
+      manualActuals: context.manualActualCostLines
+        .filter((entry) => entry.quantity > 0 || entry.totalCost > 0)
+        .map((entry) => ({
+          id: String(entry.id),
+          description: entry.description.trim(),
+          category: entry.category,
+          quantity: roundQuantity(entry.quantity),
+          unitCost: roundMoney(entry.unitCost),
+          totalCost: roundMoney(entry.totalCost),
+          note: entry.note ?? null,
           sectionName: entry.sectionName ?? null,
         })),
     };
