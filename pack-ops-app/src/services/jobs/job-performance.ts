@@ -1,6 +1,7 @@
 import type {
   Job,
   JobEstimateMaterialSnapshot,
+  JobManualActualCostLine,
   JobMaterialEntry,
   JobPerformanceHealthStatus,
   JobPerformanceOverrunDriver,
@@ -269,6 +270,9 @@ export function computeJobPerformanceSummary(input: {
   jobMaterials: Array<
     Pick<JobMaterialEntry, "catalogItemId" | "kind" | "quantity" | "unitCost" | "unitSell" | "markupPercent">
   >;
+  manualActualCostLines: Array<
+    Pick<JobManualActualCostLine, "category" | "quantity" | "unitCost" | "totalCost">
+  >;
   timeEntries: Array<Pick<TimeEntry, "status" | "hours" | "hourlyRate">>;
   canViewFinancials: boolean;
 }): JobPerformanceSummary | null {
@@ -295,8 +299,18 @@ export function computeJobPerformanceSummary(input: {
       : input.settingsDefaults?.laborCostRate ?? null;
   const estimatedLaborCost =
     estimatedHours !== null && laborCostRate !== null ? roundMoney(estimatedHours * laborCostRate) : null;
-  const actualLaborCost =
+  const manualLaborCost = roundMoney(
+    input.manualActualCostLines
+      .filter((entry) => entry.category === "labor")
+      .reduce(
+        (total, entry) => total + (typeof entry.totalCost === "number" ? entry.totalCost : entry.quantity * entry.unitCost),
+        0,
+      ),
+  );
+  const timeEntryLaborCost =
     laborCostRate !== null ? roundMoney(actualHours * laborCostRate) : null;
+  const actualLaborCost =
+    timeEntryLaborCost !== null ? roundMoney(timeEntryLaborCost + manualLaborCost) : manualLaborCost > 0 ? manualLaborCost : null;
 
   const estimatedMaterialCost = estimatedMaterialLines.length > 0
     ? roundMoney(
@@ -319,7 +333,13 @@ export function computeJobPerformanceSummary(input: {
           ? item.unitCost
           : catalogItem?.costPrice ?? 0;
       return total + unitCost * item.quantity;
-    }, 0),
+    }, 0) +
+      input.manualActualCostLines
+        .filter((entry) => entry.category !== "labor")
+        .reduce(
+          (total, entry) => total + (typeof entry.totalCost === "number" ? entry.totalCost : entry.quantity * entry.unitCost),
+          0,
+        ),
   );
   const actualMaterialRevenue = input.savedInvoiceSell?.materialRevenue ?? null;
   const actualLaborRevenue = input.savedInvoiceSell?.laborRevenue ?? null;

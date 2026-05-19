@@ -15,6 +15,7 @@ import type {
 } from "@/domain/invoices/types";
 import type { Job, JobMaterialView } from "@/domain/jobs/types";
 import type { TimeEntry } from "@/domain/time-entries/types";
+import type { JobManualActualCategory, JobManualActualCostLine } from "@/domain/jobs/types";
 import {
   getSelectableJobStatuses,
   getWorkbenchJobPhaseLabel,
@@ -98,6 +99,15 @@ type ActualLaborDraft = {
   description: string;
   sectionName: string;
   hourlyRate: string;
+};
+type ManualActualCostDraft = {
+  category: JobManualActualCategory;
+  description: string;
+  quantity: string;
+  unitCost: string;
+  totalCost: string;
+  note: string;
+  sectionName: string;
 };
 
 const DEFAULT_ACTUAL_INVOICE_CONTROLS: ActualInvoiceControls = {
@@ -262,6 +272,10 @@ function deriveHoursFromSlot(startTime: string, endTime: string): number | null 
   return Math.round(((endTotal - startTotal) / 60) * 100) / 100;
 }
 
+function formatManualActualCategoryLabel(category: JobManualActualCategory) {
+  return category === "labor" ? "Labour" : category.charAt(0).toUpperCase() + category.slice(1);
+}
+
 function createEmptyJobMaterialDraft(): JobMaterialDraft {
   return {
     materialId: "",
@@ -272,6 +286,18 @@ function createEmptyJobMaterialDraft(): JobMaterialDraft {
     unitCost: "",
     markupPercent: "",
     unitSell: "",
+    sectionName: "",
+  };
+}
+
+function createEmptyManualActualCostDraft(): ManualActualCostDraft {
+  return {
+    category: "material",
+    description: "",
+    quantity: "1",
+    unitCost: "0",
+    totalCost: "0",
+    note: "",
     sectionName: "",
   };
 }
@@ -465,6 +491,23 @@ interface ActualMaterialEditorCardProps {
   onDuplicate: () => void;
 }
 
+interface ManualActualCostEditorCardProps {
+  item: JobManualActualCostLine;
+  isSaving: boolean;
+  isDeleting: boolean;
+  onSave: (input: {
+    id: string;
+    category: JobManualActualCategory;
+    description: string;
+    quantity: number;
+    unitCost: number;
+    totalCost: number;
+    note?: string | null;
+    sectionName?: string | null;
+  }) => void;
+  onDelete: () => void;
+}
+
 function ActualMaterialEditorCard({
   item,
   isSaving,
@@ -613,6 +656,171 @@ function ActualMaterialEditorCard({
   );
 }
 
+function ManualActualCostEditorCard({
+  item,
+  isSaving,
+  isDeleting,
+  onSave,
+  onDelete,
+}: ManualActualCostEditorCardProps) {
+  const [category, setCategory] = useState<JobManualActualCategory>(item.category);
+  const [description, setDescription] = useState(item.description);
+  const [quantity, setQuantity] = useState(String(item.quantity));
+  const [unitCost, setUnitCost] = useState(String(item.unitCost));
+  const [totalCost, setTotalCost] = useState(String(item.totalCost));
+  const [note, setNote] = useState(item.note ?? "");
+  const [sectionName, setSectionName] = useState(item.sectionName ?? "");
+  const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    setCategory(item.category);
+    setDescription(item.description);
+    setQuantity(String(item.quantity));
+    setUnitCost(String(item.unitCost));
+    setTotalCost(String(item.totalCost));
+    setNote(item.note ?? "");
+    setSectionName(item.sectionName ?? "");
+    setIsEditing(false);
+  }, [item]);
+
+  const quantityNumber = Number(quantity) || 0;
+  const unitCostNumber = Number(unitCost) || 0;
+  const totalCostNumber = Number(totalCost) || 0;
+
+  return (
+    <div style={{ ...cardStyle("#fafcff"), padding: "14px", display: "grid", gap: "10px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap" }}>
+        <div style={{ display: "grid", gap: "4px" }}>
+          <strong>{description || "Manual actual cost"}</strong>
+          <div style={{ color: "#5b6475", fontSize: "13px" }}>
+            {formatManualActualCategoryLabel(category)}
+            {sectionName.trim() ? ` · ${sectionName.trim()}` : ""}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button type="button" onClick={() => setIsEditing((current) => !current)} disabled={isSaving}>
+            {isEditing ? "Collapse" : "Edit"}
+          </button>
+          <button type="button" onClick={onDelete} disabled={isDeleting}>
+            {isDeleting ? "Removing..." : "Delete"}
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>
+        <div>
+          <div style={{ color: "#5b6475", fontSize: "12px" }}>Quantity</div>
+          <strong>{quantityNumber}</strong>
+        </div>
+        <div>
+          <div style={{ color: "#5b6475", fontSize: "12px" }}>Unit Cost</div>
+          <strong>{formatMoney(unitCostNumber)}</strong>
+        </div>
+        <div>
+          <div style={{ color: "#5b6475", fontSize: "12px" }}>Total Cost</div>
+          <strong>{formatMoney(totalCostNumber)}</strong>
+        </div>
+      </div>
+
+      {isEditing ? (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1fr) minmax(200px, 2fr)", gap: "8px" }}>
+            <select value={category} onChange={(event) => setCategory(event.target.value as JobManualActualCategory)}>
+              <option value="labor">Labour</option>
+              <option value="material">Material</option>
+              <option value="equipment">Equipment</option>
+              <option value="subcontractor">Subcontractor</option>
+              <option value="other">Other</option>
+            </select>
+            <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Description" />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "8px" }}>
+            <input
+              value={quantity}
+              onChange={(event) => {
+                const nextQuantity = event.target.value;
+                setQuantity(nextQuantity);
+                const nextQuantityNumber = Number(nextQuantity) || 0;
+                const nextTotal = roundMoney(nextQuantityNumber * unitCostNumber);
+                setTotalCost(String(nextTotal));
+              }}
+              inputMode="decimal"
+              placeholder="Qty"
+            />
+            <input
+              value={unitCost}
+              onChange={(event) => {
+                const nextUnitCost = event.target.value;
+                setUnitCost(nextUnitCost);
+                const nextUnitCostNumber = Number(nextUnitCost) || 0;
+                const nextTotal = roundMoney(quantityNumber * nextUnitCostNumber);
+                setTotalCost(String(nextTotal));
+              }}
+              inputMode="decimal"
+              placeholder="Unit cost"
+            />
+            <input
+              value={totalCost}
+              onChange={(event) => {
+                const nextTotalCost = event.target.value;
+                setTotalCost(nextTotalCost);
+                const nextTotalNumber = Number(nextTotalCost) || 0;
+                if (quantityNumber > 0) {
+                  setUnitCost(String(roundMoney(nextTotalNumber / quantityNumber)));
+                }
+              }}
+              inputMode="decimal"
+              placeholder="Total cost"
+            />
+            <input value={sectionName} onChange={(event) => setSectionName(event.target.value)} placeholder="Part / section" />
+          </div>
+
+          <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Optional note" />
+
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => {
+                onSave({
+                  id: String(item.id),
+                  category,
+                  description,
+                  quantity: quantityNumber,
+                  unitCost: unitCostNumber,
+                  totalCost: totalCostNumber,
+                  note: note || null,
+                  sectionName: sectionName.trim() || null,
+                });
+                setIsEditing(false);
+              }}
+              disabled={isSaving || !description.trim() || quantityNumber < 0 || unitCostNumber < 0 || totalCostNumber < 0}
+            >
+              {isSaving ? "Saving..." : "Save Changes"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCategory(item.category);
+                setDescription(item.description);
+                setQuantity(String(item.quantity));
+                setUnitCost(String(item.unitCost));
+                setTotalCost(String(item.totalCost));
+                setNote(item.note ?? "");
+                setSectionName(item.sectionName ?? "");
+                setIsEditing(false);
+              }}
+              disabled={isSaving}
+            >
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export function WorkbenchPage() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [jobScreen, setJobScreen] = useState<JobScreen>("main");
@@ -641,6 +849,7 @@ export function WorkbenchPage() {
   const [activityNoteDraft, setActivityNoteDraft] = useState("");
   const [neededMaterialDraft, setNeededMaterialDraft] = useState<JobMaterialDraft>(createEmptyJobMaterialDraft);
   const [usedMaterialDraft, setUsedMaterialDraft] = useState<JobMaterialDraft>(createEmptyJobMaterialDraft);
+  const [manualActualCostDraft, setManualActualCostDraft] = useState<ManualActualCostDraft>(createEmptyManualActualCostDraft);
   const [assemblyActualDraft, setAssemblyActualDraft] = useState<AssemblyActualDraft>({
     assemblyId: "",
     multiplier: "1",
@@ -724,6 +933,9 @@ export function WorkbenchPage() {
     deleteJobMaterial,
     duplicateJobMaterial,
     addAssemblyToActuals,
+    createManualActualCostLine,
+    updateManualActualCostLine,
+    deleteManualActualCostLine,
     openAttachment,
   } = useWorkbenchSlice(currentUser, {
     selectedJobId,
@@ -888,15 +1100,21 @@ export function WorkbenchPage() {
         ordered.add(entry.sectionName.trim());
       }
     }
+    for (const line of jobWorkspace?.manualActualCostLines ?? []) {
+      if (line.sectionName?.trim()) {
+        ordered.add(line.sectionName.trim());
+      }
+    }
     if (
       ordered.size === 0 ||
       (jobWorkspace?.usedMaterials ?? []).some((item) => !item.sectionName?.trim()) ||
-      (jobWorkspace?.timeEntries ?? []).some((entry) => !entry.sectionName?.trim())
+      (jobWorkspace?.timeEntries ?? []).some((entry) => !entry.sectionName?.trim()) ||
+      (jobWorkspace?.manualActualCostLines ?? []).some((line) => !line.sectionName?.trim())
     ) {
       return ["General", ...Array.from(ordered)];
     }
     return Array.from(ordered);
-  }, [actualPartNames, jobWorkspace?.timeEntries, jobWorkspace?.usedMaterials]);
+  }, [actualPartNames, jobWorkspace?.manualActualCostLines, jobWorkspace?.timeEntries, jobWorkspace?.usedMaterials]);
   const usedMaterialsByPart = useMemo(
     () =>
       actualPartOptions.map((partName) => ({
@@ -904,6 +1122,14 @@ export function WorkbenchPage() {
         materials: (jobWorkspace?.usedMaterials ?? []).filter((item) => (item.sectionName?.trim() || "General") === partName),
       })),
     [actualPartOptions, jobWorkspace?.usedMaterials],
+  );
+  const manualActualCostsByPart = useMemo(
+    () =>
+      actualPartOptions.map((partName) => ({
+        name: partName,
+        lines: (jobWorkspace?.manualActualCostLines ?? []).filter((line) => (line.sectionName?.trim() || "General") === partName),
+      })),
+    [actualPartOptions, jobWorkspace?.manualActualCostLines],
   );
   const labourByPart = useMemo(
     () =>
@@ -1110,6 +1336,7 @@ export function WorkbenchPage() {
     setEstimatedCopyFeedback("");
     setNeededMaterialDraft(createEmptyJobMaterialDraft());
     setUsedMaterialDraft(createEmptyJobMaterialDraft());
+    setManualActualCostDraft(createEmptyManualActualCostDraft());
     setAssemblyActualDraft({
       assemblyId: "",
       multiplier: "1",
@@ -1223,6 +1450,7 @@ export function WorkbenchPage() {
     setUsedMaterialDraft((current) => ({ ...current, sectionName: current.sectionName || normalized }));
     setAssemblyActualDraft((current) => ({ ...current, sectionName: current.sectionName || normalized }));
     setActualLaborDraft((current) => ({ ...current, sectionName: current.sectionName || normalized }));
+    setManualActualCostDraft((current) => ({ ...current, sectionName: current.sectionName || normalized }));
     setNewActualPartName("");
   }
 
@@ -1280,6 +1508,40 @@ export function WorkbenchPage() {
 
   async function handleDuplicateJobMaterial(jobMaterialId: string) {
     await duplicateJobMaterial.mutateAsync(jobMaterialId);
+  }
+
+  async function handleAddManualActualCostLine() {
+    if (!selectedJob) {
+      return;
+    }
+
+    const quantity = Number(manualActualCostDraft.quantity);
+    const unitCost = Number(manualActualCostDraft.unitCost);
+    const totalCost = Number(manualActualCostDraft.totalCost);
+
+    await createManualActualCostLine.mutateAsync({
+      jobId: selectedJob.job.id,
+      category: manualActualCostDraft.category,
+      description: manualActualCostDraft.description,
+      quantity,
+      unitCost,
+      totalCost,
+      note: manualActualCostDraft.note || null,
+      sectionName: manualActualCostDraft.sectionName || null,
+    });
+
+    setManualActualCostDraft((current) => ({
+      ...createEmptyManualActualCostDraft(),
+      sectionName: current.sectionName,
+    }));
+  }
+
+  async function handleRemoveManualActualCostLine(item: JobManualActualCostLine) {
+    if (!window.confirm(`Remove manual actual cost line "${item.description}"?`)) {
+      return;
+    }
+
+    await deleteManualActualCostLine.mutateAsync(String(item.id));
   }
 
   async function handleAddAssemblyToActuals() {
@@ -1922,6 +2184,10 @@ export function WorkbenchPage() {
         <div style={cardStyle("#fafcff")}>
           <div style={{ color: "#5b6475", fontSize: "13px" }}>Actual Labour Entries</div>
           <strong style={{ fontSize: "22px" }}>{(jobWorkspace?.timeEntries ?? []).length}</strong>
+        </div>
+        <div style={cardStyle("#fafcff")}>
+          <div style={{ color: "#5b6475", fontSize: "13px" }}>Manual Actual Lines</div>
+          <strong style={{ fontSize: "22px" }}>{(jobWorkspace?.manualActualCostLines ?? []).length}</strong>
         </div>
       </div>
 
@@ -2891,6 +3157,150 @@ export function WorkbenchPage() {
                   ) : null}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section style={cardStyle("#fff")}>
+        <div style={sectionHeadingRow()}>
+          <div>
+            <h3 style={{ margin: 0 }}>Manual Actual Cost Lines</h3>
+            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
+              Add direct job costs that are not imported from materials or time. These stay separate in Actuals but still roll into job cost totals.
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1fr) minmax(220px, 2fr)", gap: "8px" }}>
+            <select
+              value={manualActualCostDraft.category}
+              onChange={(event) => setManualActualCostDraft((current) => ({ ...current, category: event.target.value as JobManualActualCategory }))}
+            >
+              <option value="labor">Labour</option>
+              <option value="material">Material</option>
+              <option value="equipment">Equipment</option>
+              <option value="subcontractor">Subcontractor</option>
+              <option value="other">Other</option>
+            </select>
+            <input
+              value={manualActualCostDraft.description}
+              onChange={(event) => setManualActualCostDraft((current) => ({ ...current, description: event.target.value }))}
+              placeholder="Description"
+            />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "8px" }}>
+            <select
+              value={manualActualCostDraft.sectionName}
+              onChange={(event) => setManualActualCostDraft((current) => ({ ...current, sectionName: event.target.value }))}
+            >
+              {actualPartOptions.map((partName) => (
+                <option key={partName} value={partName === "General" ? "" : partName}>
+                  {partName}
+                </option>
+              ))}
+            </select>
+            <input
+              value={manualActualCostDraft.quantity}
+              onChange={(event) =>
+                setManualActualCostDraft((current) => {
+                  const nextQuantity = event.target.value;
+                  const nextQuantityNumber = Number(nextQuantity) || 0;
+                  const unitCostNumber = Number(current.unitCost) || 0;
+                  return {
+                    ...current,
+                    quantity: nextQuantity,
+                    totalCost: String(roundMoney(nextQuantityNumber * unitCostNumber)),
+                  };
+                })
+              }
+              inputMode="decimal"
+              placeholder="Qty"
+            />
+            <input
+              value={manualActualCostDraft.unitCost}
+              onChange={(event) =>
+                setManualActualCostDraft((current) => {
+                  const nextUnitCost = event.target.value;
+                  const nextUnitCostNumber = Number(nextUnitCost) || 0;
+                  const quantityNumber = Number(current.quantity) || 0;
+                  return {
+                    ...current,
+                    unitCost: nextUnitCost,
+                    totalCost: String(roundMoney(quantityNumber * nextUnitCostNumber)),
+                  };
+                })
+              }
+              inputMode="decimal"
+              placeholder="Unit cost"
+            />
+            <input
+              value={manualActualCostDraft.totalCost}
+              onChange={(event) =>
+                setManualActualCostDraft((current) => {
+                  const nextTotalCost = event.target.value;
+                  const nextTotalNumber = Number(nextTotalCost) || 0;
+                  const quantityNumber = Number(current.quantity) || 0;
+                  return {
+                    ...current,
+                    totalCost: nextTotalCost,
+                    unitCost: quantityNumber > 0 ? String(roundMoney(nextTotalNumber / quantityNumber)) : current.unitCost,
+                  };
+                })
+              }
+              inputMode="decimal"
+              placeholder="Total cost"
+            />
+          </div>
+
+          <input
+            value={manualActualCostDraft.note}
+            onChange={(event) => setManualActualCostDraft((current) => ({ ...current, note: event.target.value }))}
+            placeholder="Optional note"
+          />
+
+          <div>
+            <button
+              type="button"
+              onClick={() => void handleAddManualActualCostLine()}
+              disabled={
+                createManualActualCostLine.isPending ||
+                !manualActualCostDraft.description.trim() ||
+                Number(manualActualCostDraft.quantity) < 0 ||
+                Number(manualActualCostDraft.unitCost) < 0 ||
+                Number(manualActualCostDraft.totalCost) < 0
+              }
+            >
+              {createManualActualCostLine.isPending ? "Adding..." : "Add Manual Cost Line"}
+            </button>
+          </div>
+
+          {(jobWorkspace?.manualActualCostLines ?? []).length === 0 ? (
+            <p style={{ color: "#5b6475", margin: 0 }}>No manual actual cost lines logged yet.</p>
+          ) : (
+            <div style={{ display: "grid", gap: "10px" }}>
+              {manualActualCostsByPart.map((section) =>
+                section.lines.length === 0 ? null : (
+                  <div key={section.name} style={{ display: "grid", gap: "10px", border: "1px solid #d9dfeb", borderRadius: "14px", padding: "12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+                      <strong>{section.name}</strong>
+                      <strong>{formatMoney(section.lines.reduce((total, line) => total + line.totalCost, 0))}</strong>
+                    </div>
+                    {section.lines.map((item) => (
+                      <ManualActualCostEditorCard
+                        key={item.id}
+                        item={item}
+                        isSaving={updateManualActualCostLine.isPending}
+                        isDeleting={deleteManualActualCostLine.isPending}
+                        onSave={(input) => updateManualActualCostLine.mutate(input)}
+                        onDelete={() => void handleRemoveManualActualCostLine(item)}
+                      />
+                    ))}
+                  </div>
+                ),
+              )}
             </div>
           )}
         </div>

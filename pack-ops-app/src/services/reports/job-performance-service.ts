@@ -4,6 +4,7 @@ import { jobsMapper } from "@/data/mappers/jobs.mapper";
 import type { TableRow } from "@/data/mappers/database-row-types";
 import { CatalogItemsRepositoryImpl } from "@/data/repositories/catalog-items.repository.impl";
 import type { RepositoryContext } from "@/data/repositories/contracts";
+import { JobManualActualCostLinesRepositoryImpl } from "@/data/repositories/job-manual-actual-cost-lines.repository.impl";
 import { JobMaterialsRepositoryImpl } from "@/data/repositories/job-materials.repository.impl";
 import { QuoteLineItemsRepositoryImpl } from "@/data/repositories/quote-line-items.repository.impl";
 import { TimeEntriesRepositoryImpl } from "@/data/repositories/time-entries.repository.impl";
@@ -53,6 +54,7 @@ function isLaborInvoiceLine(line: Pick<InvoiceLineRow, "description" | "unit">):
 
 export class JobPerformanceService {
   readonly catalogItems;
+  readonly jobManualActualCostLines;
   readonly jobMaterials;
   readonly quoteLineItems;
   readonly timeEntries;
@@ -63,6 +65,7 @@ export class JobPerformanceService {
     private readonly client: SupabaseClient<Database>,
   ) {
     this.catalogItems = new CatalogItemsRepositoryImpl(context, client);
+    this.jobManualActualCostLines = new JobManualActualCostLinesRepositoryImpl(context, client);
     this.jobMaterials = new JobMaterialsRepositoryImpl(context, client);
     this.quoteLineItems = new QuoteLineItemsRepositoryImpl(context, client);
     this.timeEntries = new TimeEntriesRepositoryImpl(context, client);
@@ -96,10 +99,11 @@ export class JobPerformanceService {
       jobsQuery = jobsQuery.eq("status", filters.status);
     }
 
-    const [{ data: jobsData, error: jobsError }, catalogItems, jobMaterials, timeEntries, orgResponse] = await Promise.all([
+    const [{ data: jobsData, error: jobsError }, catalogItems, jobMaterials, manualActualCostLines, timeEntries, orgResponse] = await Promise.all([
       jobsQuery,
       this.catalogItems.list({ filter: { includeInactive: true } }),
       this.jobMaterials.list(),
+      this.jobManualActualCostLines.list(),
       this.timeEntries.list(),
       this.client.from("orgs").select("settings").eq("id", this.context.orgId).single(),
     ]);
@@ -270,6 +274,7 @@ export class JobPerformanceService {
         },
         catalogItems,
         jobMaterials: jobMaterials.filter((entry) => String(entry.jobId) === String(job.id)),
+        manualActualCostLines: manualActualCostLines.filter((entry) => String(entry.jobId) === String(job.id)),
         timeEntries: timeEntries.filter((entry) => String(entry.jobId) === String(job.id)),
         canViewFinancials: true,
       }),

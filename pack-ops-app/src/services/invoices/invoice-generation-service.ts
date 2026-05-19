@@ -165,6 +165,7 @@ export function createEditableInvoiceDraftLines(preview: InvoiceGenerationPrevie
 
   return preview.lines.map((line) => ({
     ...line,
+    quantity: typeof line.quantity === "number" && Number.isFinite(line.quantity) && line.quantity > 0 ? line.quantity : 1,
     origin: line.origin ?? "generated",
     isEdited: Boolean(line.isEdited),
   }));

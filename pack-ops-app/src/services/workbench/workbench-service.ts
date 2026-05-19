@@ -10,6 +10,7 @@ import type { RepositoryContext } from "@/data/repositories/contracts";
 import { CatalogItemsRepositoryImpl } from "@/data/repositories/catalog-items.repository.impl";
 import { DocumentsRepositoryImpl } from "@/data/repositories/documents.repository.impl";
 import { JobAssignmentsRepositoryImpl } from "@/data/repositories/job-assignments.repository.impl";
+import { JobManualActualCostLinesRepositoryImpl } from "@/data/repositories/job-manual-actual-cost-lines.repository.impl";
 import { JobMaterialsRepositoryImpl } from "@/data/repositories/job-materials.repository.impl";
 import { JobsRepositoryImpl } from "@/data/repositories/jobs.repository.impl";
 import { NotesRepositoryImpl } from "@/data/repositories/notes.repository.impl";
@@ -25,7 +26,7 @@ import { SyncPushError, getInvalidJobStatusTransition } from "@/data/sync/errors
 import { deriveJobWorkflowFlags } from "@/domain/jobs/derived";
 import { getAllowedNextJobStatuses } from "@/domain/jobs/status";
 import type { ActionItem } from "@/domain/action-items/types";
-import type { Job, JobActivityEntry, JobAssignment, JobMaterialView, JobWorkspaceData } from "@/domain/jobs/types";
+import type { Job, JobActivityEntry, JobAssignment, JobManualActualCategory, JobManualActualCostLine, JobMaterialView, JobWorkspaceData } from "@/domain/jobs/types";
 import type { AssemblyView } from "@/domain/materials/types";
 import {
   createDraftFromActiveTimer,
@@ -124,6 +125,7 @@ export class WorkbenchService {
   readonly catalogItems;
   readonly documents;
   readonly jobAssignments;
+  readonly jobManualActualCostLines;
   readonly jobMaterials;
   readonly notes;
   readonly quoteLineItems;
@@ -149,6 +151,7 @@ export class WorkbenchService {
     this.assemblyItems = new AssemblyItemsRepositoryImpl(context, client);
     this.documents = new DocumentsRepositoryImpl(context, client);
     this.jobAssignments = new JobAssignmentsRepositoryImpl(context, client);
+    this.jobManualActualCostLines = new JobManualActualCostLinesRepositoryImpl(context, client);
     this.jobMaterials = new JobMaterialsRepositoryImpl(context, client);
     this.notes = new NotesRepositoryImpl(context, client);
     this.quoteLineItems = new QuoteLineItemsRepositoryImpl(context, client);
@@ -755,7 +758,7 @@ export class WorkbenchService {
 
   async getJobWorkspace(job: Job): Promise<JobWorkspaceData> {
     const now = new Date().toISOString();
-    const [contact, notes, attachments, scheduleBlocks, linkedQuote, linkedQuoteLineItems, jobEvents, catalogItems, jobMaterials, timeEntries, assignableUsers, assemblyOptions, orgResponse, invoicesResponse] = await Promise.all([
+    const [contact, notes, attachments, scheduleBlocks, linkedQuote, linkedQuoteLineItems, jobEvents, catalogItems, jobMaterials, manualActualCostLines, timeEntries, assignableUsers, assemblyOptions, orgResponse, invoicesResponse] = await Promise.all([
       this.contacts.getById(job.contactId),
       this.notes.list({ entityType: "jobs", entityId: job.id }),
       this.documents.list({ entityType: "jobs", entityId: job.id }),
@@ -780,6 +783,7 @@ export class WorkbenchService {
         .limit(25),
       this.catalogItems.list({ filter: { includeInactive: false } }),
       this.jobMaterials.list({ filter: { jobId: job.id } }),
+      this.jobManualActualCostLines.list({ filter: { jobId: job.id } }),
       this.timeEntries.list({ filter: { jobId: job.id } }),
       this.listAssignableUsers().catch(() => []),
       this.buildAssemblyViews().catch(() => []),
@@ -972,6 +976,7 @@ export class WorkbenchService {
       savedInvoiceSell,
       catalogItems,
       jobMaterials,
+      manualActualCostLines,
       timeEntries,
       canViewFinancials: this.currentUser.role !== "field",
     });
@@ -1029,6 +1034,7 @@ export class WorkbenchService {
       estimatedMaterials,
       usedMaterials,
       neededMaterials,
+      manualActualCostLines,
       timeEntries,
       pricingDefaults: {
         laborCostRate: settings.defaultLaborCostRate,
@@ -1220,6 +1226,87 @@ export class WorkbenchService {
 
   async deleteJobMaterial(jobMaterialId: string) {
     await this.jobMaterials.softDelete(jobMaterialId);
+  }
+
+  async createManualActualCostLine(input: {
+    jobId: string;
+    category: JobManualActualCategory;
+    description: string;
+    quantity: number;
+    unitCost: number;
+    totalCost: number;
+    note?: string | null;
+    sectionName?: string | null;
+  }) {
+    if (!input.description.trim()) {
+      throw new Error("Manual actual description is required.");
+    }
+    if (!Number.isFinite(input.quantity) || input.quantity < 0) {
+      throw new Error("Manual actual quantity cannot be negative.");
+    }
+    if (!Number.isFinite(input.unitCost) || input.unitCost < 0) {
+      throw new Error("Manual actual unit cost cannot be negative.");
+    }
+    if (!Number.isFinite(input.totalCost) || input.totalCost < 0) {
+      throw new Error("Manual actual total cost cannot be negative.");
+    }
+
+    const quantity = this.roundQuantity(input.quantity);
+    const totalCost = this.roundMoney(input.totalCost);
+    const unitCost = quantity > 0 ? this.roundMoney(totalCost / quantity) : this.roundMoney(input.unitCost);
+
+    return this.jobManualActualCostLines.create({
+      jobId: input.jobId,
+      category: input.category,
+      description: input.description.trim(),
+      quantity,
+      unitCost,
+      totalCost,
+      note: input.note?.trim() || null,
+      sectionName: input.sectionName?.trim() || null,
+    });
+  }
+
+  async updateManualActualCostLine(input: {
+    id: string;
+    category: JobManualActualCategory;
+    description: string;
+    quantity: number;
+    unitCost: number;
+    totalCost: number;
+    note?: string | null;
+    sectionName?: string | null;
+  }) {
+    if (!input.description.trim()) {
+      throw new Error("Manual actual description is required.");
+    }
+    if (!Number.isFinite(input.quantity) || input.quantity < 0) {
+      throw new Error("Manual actual quantity cannot be negative.");
+    }
+    if (!Number.isFinite(input.unitCost) || input.unitCost < 0) {
+      throw new Error("Manual actual unit cost cannot be negative.");
+    }
+    if (!Number.isFinite(input.totalCost) || input.totalCost < 0) {
+      throw new Error("Manual actual total cost cannot be negative.");
+    }
+
+    const quantity = this.roundQuantity(input.quantity);
+    const totalCost = this.roundMoney(input.totalCost);
+    const unitCost = quantity > 0 ? this.roundMoney(totalCost / quantity) : this.roundMoney(input.unitCost);
+
+    return this.jobManualActualCostLines.update(input.id, {
+      category: input.category,
+      description: input.description.trim(),
+      quantity,
+      unitCost,
+      totalCost,
+      note: input.note?.trim() || null,
+      sectionName: input.sectionName?.trim() || null,
+    });
+  }
+
+  async deleteManualActualCostLine(id: string) {
+    await this.jobManualActualCostLines.softDelete(id);
   }
 
   async addAssemblyToJobActuals(input: {

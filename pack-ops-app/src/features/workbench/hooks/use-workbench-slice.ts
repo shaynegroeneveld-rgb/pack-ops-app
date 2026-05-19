@@ -691,6 +691,57 @@ export function useWorkbenchSlice(
     },
   });
 
+  const createManualActualCostLine = useMutation({
+    mutationFn: (input: {
+      jobId: string;
+      category: "labor" | "material" | "equipment" | "subcontractor" | "other";
+      description: string;
+      quantity: number;
+      unitCost: number;
+      totalCost: number;
+      note?: string | null;
+      sectionName?: string | null;
+    }) => service.createManualActualCostLine(input),
+    onSuccess: async () => {
+      setFeedback({ tone: "success", text: "Manual actual cost added." });
+      await queryClient.invalidateQueries({ queryKey: [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id] });
+    },
+    onError: (error) => {
+      setFeedback({ tone: "error", text: getFriendlyErrorMessage(error, "Could not add the manual actual cost.") });
+    },
+  });
+
+  const updateManualActualCostLine = useMutation({
+    mutationFn: (input: {
+      id: string;
+      category: "labor" | "material" | "equipment" | "subcontractor" | "other";
+      description: string;
+      quantity: number;
+      unitCost: number;
+      totalCost: number;
+      note?: string | null;
+      sectionName?: string | null;
+    }) => service.updateManualActualCostLine(input),
+    onSuccess: async () => {
+      setFeedback({ tone: "success", text: "Manual actual cost updated." });
+      await queryClient.invalidateQueries({ queryKey: [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id] });
+    },
+    onError: (error) => {
+      setFeedback({ tone: "error", text: getFriendlyErrorMessage(error, "Could not update the manual actual cost.") });
+    },
+  });
+
+  const deleteManualActualCostLine = useMutation({
+    mutationFn: (id: string) => service.deleteManualActualCostLine(id),
+    onSuccess: async () => {
+      setFeedback({ tone: "success", text: "Manual actual cost removed." });
+      await queryClient.invalidateQueries({ queryKey: [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id] });
+    },
+    onError: (error) => {
+      setFeedback({ tone: "error", text: getFriendlyErrorMessage(error, "Could not remove the manual actual cost.") });
+    },
+  });
+
   async function startTimer(jobId: string) {
     try {
       const existingDraft = activeRunningTimerDraft;
@@ -904,6 +955,9 @@ export function useWorkbenchSlice(
     deleteJobMaterial,
     duplicateJobMaterial,
     addAssemblyToActuals,
+    createManualActualCostLine,
+    updateManualActualCostLine,
+    deleteManualActualCostLine,
     openAttachment: (storagePath: string) => service.getAttachmentAccessUrl(storagePath),
     feedback,
     syncStatus: flushSync.isPending

@@ -51,6 +51,23 @@ export interface JobMaterialView extends JobMaterialEntry {
   currentCatalogUnitPrice: number | null;
 }
 
+export type JobManualActualCategory = "labor" | "material" | "equipment" | "subcontractor" | "other";
+
+export interface JobManualActualCostLine extends AuditedEntity {
+  id: string;
+  orgId: OrgId;
+  jobId: JobId;
+  category: JobManualActualCategory;
+  description: string;
+  quantity: number;
+  unitCost: number;
+  totalCost: number;
+  note: string | null;
+  sectionName: string | null;
+  createdBy: UserId | null;
+  updatedBy: UserId | null;
+}
+
 export interface JobEstimateSnapshot {
   sourceQuoteId: QuoteId | null;
   sourceQuoteNumber: string | null;
@@ -227,6 +244,7 @@ export interface JobWorkspaceData {
   estimatedMaterials: JobEstimateMaterialSnapshot[];
   usedMaterials: JobMaterialView[];
   neededMaterials: JobMaterialView[];
+  manualActualCostLines: JobManualActualCostLine[];
   timeEntries: TimeEntry[];
   pricingDefaults: {
     laborCostRate: number;

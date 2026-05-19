@@ -59,6 +59,10 @@ function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function roundQuantity(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
 function toNumber(value: string, fallback = 0): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -158,7 +162,9 @@ export function QuoteEditorPanel({
   const [draft, setDraft] = useState<QuoteEditorDraft | null>(initialDraft);
   const [sectionNames, setSectionNames] = useState<string[]>([]);
   const [selectedCatalogItemIds, setSelectedCatalogItemIds] = useState<Record<string, string>>({});
+  const [selectedCatalogQuantities, setSelectedCatalogQuantities] = useState<Record<string, string>>({});
   const [selectedAssemblyIds, setSelectedAssemblyIds] = useState<Record<string, string>>({});
+  const [selectedAssemblyQuantities, setSelectedAssemblyQuantities] = useState<Record<string, string>>({});
   const [newSectionName, setNewSectionName] = useState("");
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [expandedLineIds, setExpandedLineIds] = useState<Set<string>>(new Set());
@@ -179,7 +185,9 @@ export function QuoteEditorPanel({
       ),
     );
     setSelectedCatalogItemIds({});
+    setSelectedCatalogQuantities({});
     setSelectedAssemblyIds({});
+    setSelectedAssemblyQuantities({});
     setNewSectionName("");
     setCopyFeedback(null);
     setExpandedLineIds(new Set());
@@ -398,6 +406,11 @@ export function QuoteEditorPanel({
       return;
     }
 
+    const quantity = Number(selectedCatalogQuantities[sectionName] || "1");
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return;
+    }
+
     const unitCost = selectedCatalogItem.costPrice ?? 0;
     const nextLine: QuoteEditorDraftLine = {
       localId: createLocalId(),
@@ -409,7 +422,7 @@ export function QuoteEditorPanel({
       sectionName: toStoredSectionName(sectionName),
       sourceType: "material",
       lineKind: "item",
-      quantity: 1,
+      quantity,
       unit: selectedCatalogItem.unit || "each",
       unitCost,
       unitSell: applyMarkup(unitCost, currentMarkup),
@@ -419,12 +432,18 @@ export function QuoteEditorPanel({
       current ? { ...current, lineItems: [...current.lineItems, nextLine] } : current,
     );
     setSelectedCatalogItemIds((current) => ({ ...current, [sectionName]: "" }));
+    setSelectedCatalogQuantities((current) => ({ ...current, [sectionName]: "1" }));
   }
 
   function addAssembly(sectionName: string) {
     const selectedAssemblyId = selectedAssemblyIds[sectionName] ?? "";
     const selectedAssembly = assemblies.find((assembly) => assembly.id === selectedAssemblyId) ?? null;
     if (!selectedAssembly) {
+      return;
+    }
+
+    const multiplier = Number(selectedAssemblyQuantities[sectionName] || "1");
+    if (!Number.isFinite(multiplier) || multiplier <= 0) {
       return;
     }
 
@@ -446,7 +465,7 @@ export function QuoteEditorPanel({
           sectionName: item.sectionName ?? toStoredSectionName(sectionName),
           sourceType: "assembly",
           lineKind: "item",
-          quantity: item.quantity,
+          quantity: roundQuantity(item.quantity * multiplier),
           unit: item.materialUnit || "each",
           unitCost,
           unitSell: applyMarkup(unitCost, currentMarkup),
@@ -463,7 +482,7 @@ export function QuoteEditorPanel({
           sectionName: toStoredSectionName(sectionName),
           sourceType: "assembly",
           lineKind: "labor",
-          quantity: selectedAssembly.defaultLaborHours,
+          quantity: roundQuantity(selectedAssembly.defaultLaborHours * multiplier),
           unit: "hr",
           unitCost: currentLaborCostRate,
           unitSell: currentLaborSellRate,
@@ -474,6 +493,7 @@ export function QuoteEditorPanel({
     });
 
     setSelectedAssemblyIds((current) => ({ ...current, [sectionName]: "" }));
+    setSelectedAssemblyQuantities((current) => ({ ...current, [sectionName]: "1" }));
   }
 
   function applyMarkupToMaterialLines() {
@@ -915,7 +935,7 @@ export function QuoteEditorPanel({
                         gap: "10px",
                       }}
                     >
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px", alignItems: "end" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px", alignItems: "end" }}>
                         <label style={{ display: "grid", gap: "6px" }}>
                           <span>Add Material</span>
                           <MaterialSearchSelect
@@ -928,10 +948,29 @@ export function QuoteEditorPanel({
                             }
                           />
                         </label>
+                        <label style={{ display: "grid", gap: "6px" }}>
+                          <span>Qty</span>
+                          <input
+                            type="number"
+                            min="0.001"
+                            step="0.001"
+                            inputMode="decimal"
+                            style={mobileSafeInputStyle}
+                            value={selectedCatalogQuantities[section.name] ?? "1"}
+                            onChange={(event) =>
+                              setSelectedCatalogQuantities((current) => ({ ...current, [section.name]: event.target.value }))
+                            }
+                          />
+                        </label>
                         <button
                           type="button"
                           onClick={() => addCatalogItem(section.name)}
-                          disabled={isPending || isLockedByInvoice || !(selectedCatalogItemIds[section.name] ?? "")}
+                          disabled={
+                            isPending ||
+                            isLockedByInvoice ||
+                            !(selectedCatalogItemIds[section.name] ?? "") ||
+                            Number(selectedCatalogQuantities[section.name] ?? "1") <= 0
+                          }
                         >
                           Add Material
                         </button>
@@ -947,10 +986,29 @@ export function QuoteEditorPanel({
                             }
                           />
                         </label>
+                        <label style={{ display: "grid", gap: "6px" }}>
+                          <span>Qty</span>
+                          <input
+                            type="number"
+                            min="0.001"
+                            step="0.001"
+                            inputMode="decimal"
+                            style={mobileSafeInputStyle}
+                            value={selectedAssemblyQuantities[section.name] ?? "1"}
+                            onChange={(event) =>
+                              setSelectedAssemblyQuantities((current) => ({ ...current, [section.name]: event.target.value }))
+                            }
+                          />
+                        </label>
                         <button
                           type="button"
                           onClick={() => addAssembly(section.name)}
-                          disabled={isPending || isLockedByInvoice || !(selectedAssemblyIds[section.name] ?? "")}
+                          disabled={
+                            isPending ||
+                            isLockedByInvoice ||
+                            !(selectedAssemblyIds[section.name] ?? "") ||
+                            Number(selectedAssemblyQuantities[section.name] ?? "1") <= 0
+                          }
                         >
                           Add Assembly
                         </button>
