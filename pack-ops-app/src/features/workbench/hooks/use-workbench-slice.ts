@@ -702,9 +702,19 @@ export function useWorkbenchSlice(
       note?: string | null;
       sectionName?: string | null;
     }) => service.createManualActualCostLine(input),
-    onSuccess: async () => {
+    onSuccess: async (createdLine) => {
+      const activeWorkspaceKey = [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id, options?.selectedJobId ?? null];
+      queryClient.setQueryData(activeWorkspaceKey, (current: any) =>
+        current
+          ? {
+              ...current,
+              manualActualCostLines: [...(current.manualActualCostLines ?? []), createdLine],
+            }
+          : current,
+      );
       setFeedback({ tone: "success", text: "Manual actual cost added." });
-      await queryClient.invalidateQueries({ queryKey: [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id] });
+      await queryClient.invalidateQueries({ queryKey: activeWorkspaceKey });
+      await queryClient.refetchQueries({ queryKey: activeWorkspaceKey, type: "active" });
     },
     onError: (error) => {
       setFeedback({ tone: "error", text: getFriendlyErrorMessage(error, "Could not add the manual actual cost.") });
@@ -722,9 +732,21 @@ export function useWorkbenchSlice(
       note?: string | null;
       sectionName?: string | null;
     }) => service.updateManualActualCostLine(input),
-    onSuccess: async () => {
+    onSuccess: async (updatedLine) => {
+      const activeWorkspaceKey = [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id, options?.selectedJobId ?? null];
+      queryClient.setQueryData(activeWorkspaceKey, (current: any) =>
+        current
+          ? {
+              ...current,
+              manualActualCostLines: (current.manualActualCostLines ?? []).map((line: any) =>
+                line.id === updatedLine.id ? updatedLine : line,
+              ),
+            }
+          : current,
+      );
       setFeedback({ tone: "success", text: "Manual actual cost updated." });
-      await queryClient.invalidateQueries({ queryKey: [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id] });
+      await queryClient.invalidateQueries({ queryKey: activeWorkspaceKey });
+      await queryClient.refetchQueries({ queryKey: activeWorkspaceKey, type: "active" });
     },
     onError: (error) => {
       setFeedback({ tone: "error", text: getFriendlyErrorMessage(error, "Could not update the manual actual cost.") });
@@ -733,9 +755,19 @@ export function useWorkbenchSlice(
 
   const deleteManualActualCostLine = useMutation({
     mutationFn: (id: string) => service.deleteManualActualCostLine(id),
-    onSuccess: async () => {
+    onSuccess: async (_, deletedId) => {
+      const activeWorkspaceKey = [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id, options?.selectedJobId ?? null];
+      queryClient.setQueryData(activeWorkspaceKey, (current: any) =>
+        current
+          ? {
+              ...current,
+              manualActualCostLines: (current.manualActualCostLines ?? []).filter((line: any) => line.id !== deletedId),
+            }
+          : current,
+      );
       setFeedback({ tone: "success", text: "Manual actual cost removed." });
-      await queryClient.invalidateQueries({ queryKey: [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id] });
+      await queryClient.invalidateQueries({ queryKey: activeWorkspaceKey });
+      await queryClient.refetchQueries({ queryKey: activeWorkspaceKey, type: "active" });
     },
     onError: (error) => {
       setFeedback({ tone: "error", text: getFriendlyErrorMessage(error, "Could not remove the manual actual cost.") });

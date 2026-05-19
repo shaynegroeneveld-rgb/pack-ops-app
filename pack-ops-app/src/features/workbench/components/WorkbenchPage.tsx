@@ -1371,6 +1371,23 @@ export function WorkbenchPage() {
       return;
     }
 
+    function buildDomPath(element: HTMLElement) {
+      const parts: string[] = [];
+      let current: HTMLElement | null = element;
+
+      while (current && parts.length < 6) {
+        const id = current.id ? `#${current.id}` : "";
+        const className =
+          typeof current.className === "string" && current.className.trim()
+            ? `.${current.className.trim().split(/\s+/).slice(0, 2).join(".")}`
+            : "";
+        parts.unshift(`${current.tagName.toLowerCase()}${id}${className}`);
+        current = current.parentElement;
+      }
+
+      return parts.join(" > ");
+    }
+
     const rafId = window.requestAnimationFrame(() => {
       const docWidth = document.documentElement.clientWidth;
       const offenders = Array.from(document.querySelectorAll<HTMLElement>("body *"))
@@ -1380,9 +1397,20 @@ export function WorkbenchPage() {
         .map((element) => ({
           tag: element.tagName.toLowerCase(),
           className: element.className,
+          styleSummary: {
+            display: element.style.display || null,
+            width: element.style.width || null,
+            minWidth: element.style.minWidth || null,
+            maxWidth: element.style.maxWidth || null,
+            whiteSpace: element.style.whiteSpace || null,
+            overflowX: element.style.overflowX || null,
+            flexWrap: element.style.flexWrap || null,
+            gridTemplateColumns: element.style.gridTemplateColumns || null,
+          },
           scrollWidth: element.scrollWidth,
           clientWidth: element.clientWidth,
           text: element.textContent?.trim().slice(0, 80) ?? "",
+          path: buildDomPath(element),
         }));
 
       if (offenders.length > 0) {
@@ -2270,7 +2298,7 @@ export function WorkbenchPage() {
       <section style={cardStyle("#fff")}>
         <div
           ref={manualActualComposerCardRef}
-          style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}
+          style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap", minWidth: 0 }}
         >
           <div>
             <strong>Manual Actual Costs</strong>
@@ -2292,26 +2320,33 @@ export function WorkbenchPage() {
                 display: "grid",
                 gridTemplateColumns: isMobileLayout ? "1fr" : "minmax(140px, 1fr) minmax(220px, 2fr)",
                 gap: "8px",
+                minWidth: 0,
               }}
             >
-              <select
-                value={manualActualCostDraft.category}
-                onChange={(event) => setManualActualCostDraft((current) => ({ ...current, category: event.target.value as JobManualActualCategory }))}
-                style={{ minWidth: 0 }}
-              >
-                <option value="labor">Labour</option>
-                <option value="material">Material</option>
-                <option value="equipment">Equipment</option>
-                <option value="subcontractor">Subcontractor</option>
-                <option value="other">Other</option>
-              </select>
-              <input
-                ref={manualActualDescriptionRef}
-                value={manualActualCostDraft.description}
-                onChange={(event) => setManualActualCostDraft((current) => ({ ...current, description: event.target.value }))}
-                placeholder="Description"
-                style={{ minWidth: 0 }}
-              />
+              <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
+                <span style={{ color: "#5b6475", fontSize: "13px" }}>Category</span>
+                <select
+                  value={manualActualCostDraft.category}
+                  onChange={(event) => setManualActualCostDraft((current) => ({ ...current, category: event.target.value as JobManualActualCategory }))}
+                  style={{ minWidth: 0 }}
+                >
+                  <option value="labor">Labour</option>
+                  <option value="material">Material</option>
+                  <option value="equipment">Equipment</option>
+                  <option value="subcontractor">Subcontractor</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
+                <span style={{ color: "#5b6475", fontSize: "13px" }}>Description</span>
+                <input
+                  ref={manualActualDescriptionRef}
+                  value={manualActualCostDraft.description}
+                  onChange={(event) => setManualActualCostDraft((current) => ({ ...current, description: event.target.value }))}
+                  placeholder="Description"
+                  style={{ minWidth: 0 }}
+                />
+              </label>
             </div>
 
             <div
@@ -2319,81 +2354,97 @@ export function WorkbenchPage() {
                 display: "grid",
                 gridTemplateColumns: isMobileLayout ? "1fr" : "repeat(auto-fit, minmax(120px, 1fr))",
                 gap: "8px",
+                minWidth: 0,
               }}
             >
-              <select
-                value={manualActualCostDraft.sectionName}
-                onChange={(event) => setManualActualCostDraft((current) => ({ ...current, sectionName: event.target.value }))}
-                style={{ minWidth: 0 }}
-              >
-                {actualPartOptions.map((partName) => (
-                  <option key={partName} value={partName === "General" ? "" : partName}>
-                    {partName}
-                  </option>
-                ))}
-              </select>
-              <input
-                value={manualActualCostDraft.quantity}
-                onChange={(event) =>
-                  setManualActualCostDraft((current) => {
-                    const nextQuantity = event.target.value;
-                    const nextQuantityNumber = Number(nextQuantity) || 0;
-                    const unitCostNumber = Number(current.unitCost) || 0;
-                    return {
-                      ...current,
-                      quantity: nextQuantity,
-                      totalCost: String(roundMoney(nextQuantityNumber * unitCostNumber)),
-                    };
-                  })
-                }
-                inputMode="decimal"
-                placeholder="Qty"
-                style={{ minWidth: 0 }}
-              />
-              <input
-                value={manualActualCostDraft.unitCost}
-                onChange={(event) =>
-                  setManualActualCostDraft((current) => {
-                    const nextUnitCost = event.target.value;
-                    const nextUnitCostNumber = Number(nextUnitCost) || 0;
-                    const quantityNumber = Number(current.quantity) || 0;
-                    return {
-                      ...current,
-                      unitCost: nextUnitCost,
-                      totalCost: String(roundMoney(quantityNumber * nextUnitCostNumber)),
-                    };
-                  })
-                }
-                inputMode="decimal"
-                placeholder="Unit cost"
-                style={{ minWidth: 0 }}
-              />
-              <input
-                value={manualActualCostDraft.totalCost}
-                onChange={(event) =>
-                  setManualActualCostDraft((current) => {
-                    const nextTotalCost = event.target.value;
-                    const nextTotalNumber = Number(nextTotalCost) || 0;
-                    const quantityNumber = Number(current.quantity) || 0;
-                    return {
-                      ...current,
-                      totalCost: nextTotalCost,
-                      unitCost: quantityNumber > 0 ? String(roundMoney(nextTotalNumber / quantityNumber)) : current.unitCost,
-                    };
-                  })
-                }
-                inputMode="decimal"
-                placeholder="Total cost"
-                style={{ minWidth: 0 }}
-              />
+              <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
+                <span style={{ color: "#5b6475", fontSize: "13px" }}>Part</span>
+                <select
+                  value={manualActualCostDraft.sectionName}
+                  onChange={(event) => setManualActualCostDraft((current) => ({ ...current, sectionName: event.target.value }))}
+                  style={{ minWidth: 0 }}
+                >
+                  {actualPartOptions.map((partName) => (
+                    <option key={partName} value={partName === "General" ? "" : partName}>
+                      {partName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
+                <span style={{ color: "#5b6475", fontSize: "13px" }}>Quantity</span>
+                <input
+                  value={manualActualCostDraft.quantity}
+                  onChange={(event) =>
+                    setManualActualCostDraft((current) => {
+                      const nextQuantity = event.target.value;
+                      const nextQuantityNumber = Number(nextQuantity) || 0;
+                      const unitCostNumber = Number(current.unitCost) || 0;
+                      return {
+                        ...current,
+                        quantity: nextQuantity,
+                        totalCost: String(roundMoney(nextQuantityNumber * unitCostNumber)),
+                      };
+                    })
+                  }
+                  inputMode="decimal"
+                  placeholder="Qty"
+                  style={{ minWidth: 0 }}
+                />
+              </label>
+              <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
+                <span style={{ color: "#5b6475", fontSize: "13px" }}>Unit Cost</span>
+                <input
+                  value={manualActualCostDraft.unitCost}
+                  onChange={(event) =>
+                    setManualActualCostDraft((current) => {
+                      const nextUnitCost = event.target.value;
+                      const nextUnitCostNumber = Number(nextUnitCost) || 0;
+                      const quantityNumber = Number(current.quantity) || 0;
+                      return {
+                        ...current,
+                        unitCost: nextUnitCost,
+                        totalCost: String(roundMoney(quantityNumber * nextUnitCostNumber)),
+                      };
+                    })
+                  }
+                  inputMode="decimal"
+                  placeholder="Unit cost"
+                  style={{ minWidth: 0 }}
+                />
+              </label>
+              <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
+                <span style={{ color: "#5b6475", fontSize: "13px" }}>Total Cost</span>
+                <input
+                  value={manualActualCostDraft.totalCost}
+                  onChange={(event) =>
+                    setManualActualCostDraft((current) => {
+                      const nextTotalCost = event.target.value;
+                      const nextTotalNumber = Number(nextTotalCost) || 0;
+                      const quantityNumber = Number(current.quantity) || 0;
+                      return {
+                        ...current,
+                        totalCost: nextTotalCost,
+                        unitCost: quantityNumber > 0 ? String(roundMoney(nextTotalNumber / quantityNumber)) : current.unitCost,
+                      };
+                    })
+                  }
+                  inputMode="decimal"
+                  placeholder="Total cost"
+                  style={{ minWidth: 0 }}
+                />
+              </label>
             </div>
 
-            <input
-              value={manualActualCostDraft.note}
-              onChange={(event) => setManualActualCostDraft((current) => ({ ...current, note: event.target.value }))}
-              placeholder="Optional note"
-              style={{ minWidth: 0 }}
-            />
+            <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
+              <span style={{ color: "#5b6475", fontSize: "13px" }}>Note</span>
+              <input
+                value={manualActualCostDraft.note}
+                onChange={(event) => setManualActualCostDraft((current) => ({ ...current, note: event.target.value }))}
+                placeholder="Optional note"
+                style={{ minWidth: 0 }}
+              />
+            </label>
 
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               <button
@@ -2983,20 +3034,20 @@ export function WorkbenchPage() {
           gap: "14px",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap" }}>
-          <div style={{ display: "grid", gap: "4px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap", minWidth: 0 }}>
+          <div style={{ display: "grid", gap: "4px", minWidth: 0, flex: "1 1 240px" }}>
             <button type="button" onClick={() => setSelectedJobId(null)} style={{ justifySelf: "start" }}>
               Back to Jobs
             </button>
             <div style={{ color: "#5b6475", fontSize: "13px", fontWeight: 700 }}>{selectedJob.job.number}</div>
-            <h1 style={{ margin: 0, fontSize: "28px" }}>{selectedJob.job.title}</h1>
+            <h1 style={{ margin: 0, fontSize: "28px", overflowWrap: "anywhere" }}>{selectedJob.job.title}</h1>
             {selectedJob.contactName ? (
-              <div style={{ color: "#172033", fontSize: "16px", fontWeight: 600 }}>
+              <div style={{ color: "#172033", fontSize: "16px", fontWeight: 600, overflowWrap: "anywhere" }}>
                 {selectedJob.contactName}
               </div>
             ) : null}
             {selectedJob.contactSubtitle ? (
-              <div style={{ color: "#5b6475", fontSize: "13px" }}>{selectedJob.contactSubtitle}</div>
+              <div style={{ color: "#5b6475", fontSize: "13px", overflowWrap: "anywhere" }}>{selectedJob.contactSubtitle}</div>
             ) : null}
           </div>
           <div
@@ -3113,7 +3164,7 @@ export function WorkbenchPage() {
         </div>
       </div>
 
-      <section style={cardStyle("#fafcff")}>
+      <section style={{ ...cardStyle("#fafcff"), minWidth: 0 }}>
         <h3 style={{ marginTop: 0, marginBottom: "12px" }}>Overview</h3>
         <div style={{ display: "grid", gap: "10px", marginBottom: "16px" }}>
           <div style={sectionHeadingRow()}>
@@ -3203,7 +3254,7 @@ export function WorkbenchPage() {
         ) : null}
       </section>
 
-      <section style={cardStyle("#fff")}>
+      <section style={{ ...cardStyle("#fff"), minWidth: 0 }}>
         <div style={sectionHeadingRow()}>
           <div>
             <h3 style={{ margin: 0 }}>Activity</h3>
@@ -3253,7 +3304,7 @@ export function WorkbenchPage() {
         </div>
       </section>
 
-      <section style={cardStyle("#fff")}>
+      <section style={{ ...cardStyle("#fff"), minWidth: 0 }}>
         <div style={sectionHeadingRow()}>
           <div>
             <h3 style={{ margin: 0 }}>Materials Needed</h3>
