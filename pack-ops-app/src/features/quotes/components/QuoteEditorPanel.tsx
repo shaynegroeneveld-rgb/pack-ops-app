@@ -203,6 +203,61 @@ export function QuoteEditorPanel({
     return () => window.removeEventListener("resize", updateLayout);
   }, []);
 
+  useEffect(() => {
+    if (!import.meta.env.DEV || !isMobileLayout) {
+      return;
+    }
+
+    function buildDomPath(element: HTMLElement) {
+      const parts: string[] = [];
+      let current: HTMLElement | null = element;
+
+      while (current && parts.length < 6) {
+        const id = current.id ? `#${current.id}` : "";
+        const className =
+          typeof current.className === "string" && current.className.trim()
+            ? `.${current.className.trim().split(/\s+/).slice(0, 2).join(".")}`
+            : "";
+        parts.unshift(`${current.tagName.toLowerCase()}${id}${className}`);
+        current = current.parentElement;
+      }
+
+      return parts.join(" > ");
+    }
+
+    const rafId = window.requestAnimationFrame(() => {
+      const docWidth = document.documentElement.clientWidth;
+      const offenders = Array.from(document.querySelectorAll<HTMLElement>("body *"))
+        .filter((element) => element.clientWidth > 0 && element.scrollWidth - element.clientWidth > 2)
+        .filter((element) => element.scrollWidth > docWidth + 2)
+        .slice(0, 10)
+        .map((element) => ({
+          tag: element.tagName.toLowerCase(),
+          className: element.className,
+          styleSummary: {
+            display: element.style.display || null,
+            width: element.style.width || null,
+            minWidth: element.style.minWidth || null,
+            maxWidth: element.style.maxWidth || null,
+            whiteSpace: element.style.whiteSpace || null,
+            overflowX: element.style.overflowX || null,
+            flexWrap: element.style.flexWrap || null,
+            gridTemplateColumns: element.style.gridTemplateColumns || null,
+          },
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+          text: element.textContent?.trim().slice(0, 80) ?? "",
+          path: buildDomPath(element),
+        }));
+
+      if (offenders.length > 0) {
+        console.warn("[Pack Ops] Quote mobile overflow offenders", offenders);
+      }
+    });
+
+    return () => window.cancelAnimationFrame(rafId);
+  }, [isMobileLayout, draft?.lineItems.length, expandedLineIds.size]);
+
   const totals = useMemo(() => {
     if (!draft) {
       return {
@@ -554,10 +609,11 @@ export function QuoteEditorPanel({
           background: "#fff",
           display: "grid",
           gap: "16px",
+          minWidth: 0,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-          <div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap", minWidth: 0 }}>
+          <div style={{ minWidth: 0 }}>
             <h3 style={{ margin: 0 }}>{currentDraft.quoteId ? "Edit Quote" : "New Quote"}</h3>
             <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
               Build the internal estimate with materials, assemblies, manual lines, and live totals.
@@ -576,17 +632,18 @@ export function QuoteEditorPanel({
             padding: "12px",
             color: "#5b6475",
             fontSize: "14px",
+            minWidth: 0,
           }}
         >
           <strong style={{ color: "#172033" }}>
             {currentDraft.companyName || currentDraft.customerName || "New standalone quote"}
           </strong>
-          <div style={{ marginTop: "4px" }}>
+          <div style={{ marginTop: "4px", overflowWrap: "anywhere" }}>
             {currentDraft.contactName || currentDraft.customerName}
             {currentDraft.phone ? ` · ${currentDraft.phone}` : ""}
             {currentDraft.email ? ` · ${currentDraft.email}` : ""}
           </div>
-          <div style={{ marginTop: "4px" }}>
+          <div style={{ marginTop: "4px", overflowWrap: "anywhere" }}>
             Linked Lead: {currentDraft.linkedLeadLabel ?? "None"}
           </div>
         </div>
@@ -598,6 +655,7 @@ export function QuoteEditorPanel({
             padding: "12px",
             display: "grid",
             gap: "10px",
+            minWidth: 0,
           }}
         >
           <input
@@ -648,7 +706,7 @@ export function QuoteEditorPanel({
                   <button
                     type="button"
                     onClick={() => void onOpenAttachment?.(attachment)}
-                    style={{ border: 0, background: "transparent", padding: 0, textAlign: "left", color: "inherit", cursor: "pointer" }}
+                    style={{ border: 0, background: "transparent", padding: 0, textAlign: "left", color: "inherit", cursor: "pointer", minWidth: 0, overflowWrap: "anywhere" }}
                   >
                     <strong style={{ display: "block" }}>{attachment.fileName}</strong>
                     <span style={{ color: "#5b6475", fontSize: "13px" }}>
@@ -1233,7 +1291,14 @@ export function QuoteEditorPanel({
                                 </div>
                               </div>
 
-                              <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 180px) 1fr", gap: "10px" }}>
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns: isMobileLayout ? "1fr" : "minmax(140px, 180px) 1fr",
+                                  gap: "10px",
+                                  minWidth: 0,
+                                }}
+                              >
                                 <label style={{ display: "grid", gap: "6px" }}>
                                   <span>SKU</span>
                                   <input
@@ -1273,11 +1338,20 @@ export function QuoteEditorPanel({
             background: "#f8fafc",
             display: "grid",
             gap: "10px",
+            minWidth: 0,
           }}
         >
           <strong>Totals</strong>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 1fr) minmax(240px, 320px)", gap: "14px", alignItems: "start" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobileLayout ? "1fr" : "minmax(260px, 1fr) minmax(240px, 320px)",
+              gap: "14px",
+              alignItems: "start",
+              minWidth: 0,
+            }}
+          >
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px", minWidth: 0 }}>
               <div><div style={{ color: "#5b6475", fontSize: "13px" }}>Material Cost</div><strong>${totals.materialCost.toFixed(2)}</strong></div>
               <div><div style={{ color: "#5b6475", fontSize: "13px" }}>Labor Cost</div><strong>${totals.laborCost.toFixed(2)}</strong></div>
               <div><div style={{ color: "#5b6475", fontSize: "13px" }}>Total Cost</div><strong>${totals.totalCost.toFixed(2)}</strong></div>
@@ -1294,17 +1368,18 @@ export function QuoteEditorPanel({
                 background: "#fff",
                 display: "grid",
                 gap: "8px",
+                minWidth: 0,
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
                 <span style={{ color: "#5b6475" }}>Subtotal</span>
                 <strong>${totals.subtotal.toFixed(2)}</strong>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
                 <span style={{ color: "#5b6475" }}>Tax</span>
                 <strong>${totals.tax.toFixed(2)}</strong>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", borderTop: "1px solid #e4e8f1", paddingTop: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", borderTop: "1px solid #e4e8f1", paddingTop: "10px", flexWrap: "wrap" }}>
                 <span style={{ fontWeight: 700 }}>Grand Total</span>
                 <strong style={{ fontSize: "22px" }}>${totals.finalTotal.toFixed(2)}</strong>
               </div>
