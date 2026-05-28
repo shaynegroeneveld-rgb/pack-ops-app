@@ -291,6 +291,7 @@ export function useWorkbenchSlice(
     mutationFn: (input: {
       jobId: string;
       title: string;
+      fieldName?: string | null;
       description: string;
       contactId: string;
       estimatedHours?: number | null;
@@ -659,6 +660,17 @@ export function useWorkbenchSlice(
     },
   });
 
+  const clearNeededMaterials = useMutation({
+    mutationFn: (jobId: string) => service.clearNeededMaterials(jobId),
+    onSuccess: async () => {
+      setFeedback({ tone: "success", text: "Needed materials cleared." });
+      await queryClient.invalidateQueries({ queryKey: [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id] });
+    },
+    onError: (error) => {
+      setFeedback({ tone: "error", text: getFriendlyErrorMessage(error, "Could not clear needed materials.") });
+    },
+  });
+
   const duplicateJobMaterial = useMutation({
     mutationFn: (jobMaterialId: string) => service.duplicateJobMaterial(jobMaterialId),
     onSuccess: async () => {
@@ -985,6 +997,7 @@ export function useWorkbenchSlice(
     createJobMaterial,
     updateJobMaterial,
     deleteJobMaterial,
+    clearNeededMaterials,
     duplicateJobMaterial,
     addAssemblyToActuals,
     createManualActualCostLine,

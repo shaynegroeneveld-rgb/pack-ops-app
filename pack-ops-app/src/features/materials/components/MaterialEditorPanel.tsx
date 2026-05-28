@@ -6,6 +6,7 @@ export interface MaterialEditorDraft {
   itemId?: CatalogItem["id"];
   name: string;
   sku: string;
+  aliases: string;
   unit: string;
   costPrice: string;
   category: string;
@@ -94,6 +95,19 @@ export function MaterialEditorPanel({
             />
           </label>
         </div>
+
+        <label style={{ display: "grid", gap: "6px" }}>
+          <span>Nicknames / Aliases</span>
+          <textarea
+            rows={2}
+            value={draft.aliases}
+            disabled={isPending}
+            placeholder="pot light, marettes, staples"
+            onChange={(event) =>
+              setDraft((current) => (current ? { ...current, aliases: event.target.value } : current))
+            }
+          />
+        </label>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
           <label style={{ display: "grid", gap: "6px" }}>

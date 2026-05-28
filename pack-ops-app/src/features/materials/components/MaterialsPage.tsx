@@ -8,6 +8,7 @@ import { ImportedMaterialsRollbackPanel } from "@/features/materials/components/
 import { MaterialEditorPanel, type MaterialEditorDraft } from "@/features/materials/components/MaterialEditorPanel";
 import { SupplierInvoiceReviewPanel } from "@/features/materials/components/SupplierInvoiceReviewPanel";
 import { useMaterialsSlice } from "@/features/materials/hooks/use-materials-slice";
+import { matchesCatalogItemSearch } from "@/services/materials/material-search";
 import type {
   AssemblyView,
   CatalogCleanupPair,
@@ -28,6 +29,7 @@ function createEmptyMaterialDraft(): MaterialEditorDraft {
   return {
     name: "",
     sku: "",
+    aliases: "",
     unit: "each",
     costPrice: "",
     category: "",
@@ -41,6 +43,7 @@ function toMaterialDraft(item: CatalogItem): MaterialEditorDraft {
     itemId: item.id,
     name: item.name,
     sku: item.sku ?? "",
+    aliases: item.aliases.join(", "),
     unit: item.unit,
     costPrice: item.costPrice?.toString() ?? "",
     category: item.category ?? "",
@@ -187,16 +190,11 @@ export function MaterialsPage() {
     rollbackImportedMaterials.isPending;
 
   const filteredCatalogItems = useMemo(() => {
-    const normalized = catalogSearch.trim().toLowerCase();
-    if (!normalized) {
+    if (!catalogSearch.trim()) {
       return catalogItems;
     }
 
-    return catalogItems.filter((item) => {
-      const nameMatch = item.name.toLowerCase().includes(normalized);
-      const skuMatch = item.sku?.toLowerCase().includes(normalized) ?? false;
-      return nameMatch || skuMatch;
-    });
+    return catalogItems.filter((item) => matchesCatalogItemSearch(item, catalogSearch));
   }, [catalogItems, catalogSearch]);
 
   async function handleMaterialSubmit(draft: MaterialEditorDraft) {
@@ -204,6 +202,10 @@ export function MaterialsPage() {
       const payload = {
         name: draft.name,
         sku: draft.sku || null,
+        aliases: draft.aliases
+          .split(/[\n,]/)
+          .map((value) => value.trim())
+          .filter(Boolean),
         unit: draft.unit || "each",
         costPrice: draft.costPrice ? Number(draft.costPrice) : null,
         category: draft.category || null,

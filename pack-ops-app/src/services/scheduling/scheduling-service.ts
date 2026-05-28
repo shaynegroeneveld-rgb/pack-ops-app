@@ -58,6 +58,7 @@ export interface AutoFillScheduleInput {
   notes?: ScheduleBlock["notes"];
   clearExisting?: boolean;
   findNextAvailable?: boolean;
+  assumeDefaultDayWhenNoEstimate?: boolean;
 }
 
 export interface SchedulingBlockDetail extends UpcomingScheduleBlock {
@@ -157,6 +158,11 @@ function getDefaultStartTimeForBucket(timeBucket: ScheduleBlock["timeBucket"]): 
 
 function hasExplicitStartTime(block: Pick<ScheduleBlock, "startAt" | "timeBucket">): boolean {
   return toLocalTimeValue(block.startAt) !== getDefaultStartTimeForBucket(block.timeBucket);
+}
+
+function deriveFallbackEstimatedHours(assignments: JobAssignment[]): number {
+  const crewCount = Math.max(1, getActiveUniqueAssignments(assignments).length);
+  return crewCount * DEFAULT_WORK_HOURS_PER_PERSON_PER_DAY;
 }
 
 export class SchedulingService {
@@ -278,17 +284,27 @@ export class SchedulingService {
       throw new Error("Job not found.");
     }
 
-    if (!job.estimatedHours || job.estimatedHours <= 0) {
+    const rawAssignments = await this.jobAssignments.list({ filter: { jobId: job.id } });
+    const assignments = getActiveUniqueAssignments(rawAssignments);
+    const estimatedHours =
+      job.estimatedHours && job.estimatedHours > 0
+        ? job.estimatedHours
+        : input.assumeDefaultDayWhenNoEstimate
+          ? deriveFallbackEstimatedHours(assignments)
+          : null;
+
+    if (!estimatedHours || estimatedHours <= 0) {
       throw new Error("Add an estimate to auto-fill days.");
     }
 
-    const startDay = input.findNextAvailable ? await this.findNextAvailableStartDay(input.jobId, input.day) : input.day;
+    const startDay = input.findNextAvailable
+      ? await this.findNextAvailableStartDay(input.jobId, input.day, input.assumeDefaultDayWhenNoEstimate === true)
+      : input.day;
     const planWindowEnd = new Date(`${startDay}T00:00:00`);
     planWindowEnd.setDate(planWindowEnd.getDate() + 90);
     const planWindowEndDay = toLocalDayValue(planWindowEnd.toISOString());
 
-    const [rawAssignments, unavailability, scheduleBlocks] = await Promise.all([
-      this.jobAssignments.list({ filter: { jobId: job.id } }),
+    const [unavailability, scheduleBlocks] = await Promise.all([
       this.workerUnavailability.list({ filter: { from: startDay, to: planWindowEndDay } }),
       this.scheduleBlocks.list({
         filter: {
@@ -297,7 +313,6 @@ export class SchedulingService {
         },
       }),
     ]);
-    const assignments = getActiveUniqueAssignments(rawAssignments);
 
     const existingJobBlocks = scheduleBlocks.filter((block) => block.jobId === job.id);
     if (existingJobBlocks.length > 0 && !input.clearExisting) {
@@ -311,7 +326,7 @@ export class SchedulingService {
     }
 
     const plan = buildAutoFillPlan({
-      estimatedHours: job.estimatedHours,
+      estimatedHours,
       assignments,
       startDay,
       unavailability,
@@ -569,13 +584,28 @@ export class SchedulingService {
   // This keeps dispatch moving rather than waiting for full crew availability.
   // The resulting plan may span more calendar days than the minimum if crew is partially
   // unavailable, and extendedByAvailability will be true in the returned plan metadata.
-  private async findNextAvailableStartDay(jobId: Job["id"], requestedDay: string): Promise<string> {
+  private async findNextAvailableStartDay(
+    jobId: Job["id"],
+    requestedDay: string,
+    assumeDefaultDayWhenNoEstimate = false,
+  ): Promise<string> {
     const job = await this.jobs.getById(jobId);
-    if (!job?.estimatedHours) {
-      throw new Error("Add an estimate to use next available auto-fill.");
+    if (!job) {
+      throw new Error("Job not found.");
     }
 
     const assignments = getActiveUniqueAssignments(await this.jobAssignments.list({ filter: { jobId } }));
+    const estimatedHours =
+      job.estimatedHours && job.estimatedHours > 0
+        ? job.estimatedHours
+        : assumeDefaultDayWhenNoEstimate
+          ? deriveFallbackEstimatedHours(assignments)
+          : null;
+
+    if (!estimatedHours) {
+      throw new Error("Add an estimate to use next available auto-fill.");
+    }
+
     if (assignments.length === 0) {
       throw new Error("Assign crew to use next available auto-fill.");
     }
@@ -597,7 +627,7 @@ export class SchedulingService {
         }),
       ]);
       const plan = buildAutoFillPlan({
-        estimatedHours: job.estimatedHours,
+        estimatedHours,
         assignments,
         startDay: candidate,
         unavailability,

@@ -85,6 +85,7 @@ export interface Job extends AuditedEntity {
   status: JobStatus;
   waitingReason: JobWaitingReason | null;
   title: string;
+  fieldName: string | null;
   description: string | null;
   internalNotes: string | null;
   addressLine1: string | null;
@@ -236,9 +237,12 @@ export interface JobWorkspaceData {
     id: CatalogItemId;
     name: string;
     sku: string | null;
+    aliases: string[];
     unit: string;
     costPrice: number | null;
     unitPrice: number | null;
+    category: string | null;
+    notes: string | null;
   }>;
   assemblyOptions: AssemblyView[];
   estimatedMaterials: JobEstimateMaterialSnapshot[];

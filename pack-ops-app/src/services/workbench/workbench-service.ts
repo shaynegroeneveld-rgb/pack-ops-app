@@ -564,7 +564,7 @@ export class WorkbenchService {
     };
   }
 
-  async createJob(input: { title: string; description: string; contactId: string; estimatedHours?: number | null }): Promise<Job> {
+  async createJob(input: { title: string; fieldName?: string | null; description: string; contactId: string; estimatedHours?: number | null }): Promise<Job> {
     if (!canCreateWorkbenchJob(this.currentUser)) {
       throw new Error("You cannot create jobs.");
     }
@@ -613,6 +613,7 @@ export class WorkbenchService {
       number: data,
       contactId: input.contactId as Job["contactId"],
       title: input.title,
+      fieldName: input.fieldName?.trim() || null,
       description: input.description,
       estimatedHours,
     });
@@ -637,6 +638,7 @@ export class WorkbenchService {
   async updateJobBasics(input: {
     jobId: string;
     title: string;
+    fieldName?: string | null;
     description: string;
     contactId: string;
     estimatedHours?: number | null;
@@ -664,6 +666,7 @@ export class WorkbenchService {
 
     const updatedJob = await this.jobs.update(input.jobId, {
       title: input.title.trim(),
+      fieldName: input.fieldName?.trim() || null,
       description: input.description.trim() || null,
       contactId: input.contactId as Job["contactId"],
       estimatedHours,
@@ -675,6 +678,7 @@ export class WorkbenchService {
       input.jobId,
       (job) =>
         job.title === updatedJob.title &&
+        (job.fieldName ?? null) === (updatedJob.fieldName ?? null) &&
         (job.description ?? null) === (updatedJob.description ?? null) &&
         job.contactId === updatedJob.contactId &&
         (job.estimatedHours ?? null) === (updatedJob.estimatedHours ?? null),
@@ -940,9 +944,12 @@ export class WorkbenchService {
       id: item.id,
       name: item.name,
       sku: item.sku,
+      aliases: item.aliases,
       unit: item.unit,
       costPrice: item.costPrice,
       unitPrice: item.unitPrice,
+      category: item.category,
+      notes: item.notes,
     }));
     const usedMaterials = jobMaterials
       .filter((entry) => entry.kind === "used")
@@ -1226,6 +1233,14 @@ export class WorkbenchService {
 
   async deleteJobMaterial(jobMaterialId: string) {
     await this.jobMaterials.softDelete(jobMaterialId);
+  }
+
+  async clearNeededMaterials(jobId: string) {
+    const neededMaterials = (await this.jobMaterials.list({ filter: { jobId } })).filter((item) => item.kind === "needed");
+    for (const material of neededMaterials) {
+      await this.jobMaterials.softDelete(material.id);
+    }
+    await this.sync.flushPendingQueue();
   }
 
   async createManualActualCostLine(input: {

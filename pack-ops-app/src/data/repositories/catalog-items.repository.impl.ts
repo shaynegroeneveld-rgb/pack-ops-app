@@ -59,6 +59,7 @@ export class CatalogItemsRepositoryImpl implements CatalogItemsRepository {
       updated_at: now,
       name: input.name,
       sku: input.sku ?? null,
+      aliases: input.aliases?.map((alias) => alias.trim()).filter(Boolean) ?? [],
       unit: input.unit?.trim() || "each",
       cost_price: input.costPrice ?? null,
       unit_price: input.unitPrice ?? null,

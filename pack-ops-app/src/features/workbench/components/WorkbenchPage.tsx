@@ -51,6 +51,7 @@ import { useWorkbenchSlice } from "@/features/workbench/hooks/use-workbench-slic
 type JobScreen = "main" | "attachments" | "actuals";
 type EditJobDraft = {
   title: string;
+  fieldName: string;
   contactId: string;
   description: string;
   estimatedHours: string;
@@ -1800,6 +1801,7 @@ export function WorkbenchPage() {
 
     setEditJobDraft({
       title: selectedJob.job.title,
+      fieldName: selectedJob.job.fieldName ?? "",
       contactId: selectedJob.job.contactId,
       description: selectedJob.job.description ?? "",
       estimatedHours:
@@ -1828,6 +1830,7 @@ export function WorkbenchPage() {
     await updateJob.mutateAsync({
       jobId: selectedJob.job.id,
       title: editJobDraft.title.trim() || selectedJob.job.title,
+      fieldName: editJobDraft.fieldName.trim(),
       description: editJobDraft.description.trim(),
       contactId: editJobDraft.contactId,
       estimatedHours,
@@ -2031,6 +2034,11 @@ export function WorkbenchPage() {
                     <div>
                       <div style={{ color: "#5b6475", fontSize: "13px", fontWeight: 700 }}>{item.job.number}</div>
                       <strong style={{ fontSize: "18px" }}>{item.job.title}</strong>
+                      {item.job.fieldName ? (
+                        <div style={{ color: "#0a4f45", fontSize: "13px", fontWeight: 700, marginTop: "4px" }}>
+                          {item.job.fieldName}
+                        </div>
+                      ) : null}
                       {item.contactName ? (
                         <div style={{ color: "#172033", fontSize: "15px", fontWeight: 600, marginTop: "6px" }}>
                           {item.contactName}
@@ -2105,6 +2113,11 @@ export function WorkbenchPage() {
                       <div>
                         <div style={{ color: "#5b6475", fontSize: "13px", fontWeight: 700 }}>{item.job.number}</div>
                         <strong style={{ fontSize: "18px" }}>{item.job.title}</strong>
+                        {item.job.fieldName ? (
+                          <div style={{ color: "#0a4f45", fontSize: "13px", fontWeight: 700, marginTop: "4px" }}>
+                            {item.job.fieldName}
+                          </div>
+                        ) : null}
                         {item.contactName ? (
                           <div style={{ color: "#172033", fontSize: "15px", fontWeight: 600, marginTop: "6px" }}>
                             {item.contactName}
@@ -2596,11 +2609,12 @@ export function WorkbenchPage() {
               orgId: selectedJob.job.orgId,
               name: item.name,
               sku: item.sku,
+              aliases: item.aliases,
               unit: item.unit,
               costPrice: item.costPrice,
               unitPrice: item.unitPrice,
-              category: null,
-              notes: null,
+              category: item.category,
+              notes: item.notes,
               isActive: true,
               createdBy: null,
               createdAt: "",
@@ -2861,6 +2875,11 @@ export function WorkbenchPage() {
             </button>
             <div style={{ color: "#5b6475", fontSize: "13px", fontWeight: 700 }}>{selectedJob.job.number}</div>
             <h1 style={{ margin: 0, fontSize: "28px", overflowWrap: "anywhere" }}>{selectedJob.job.title}</h1>
+            {selectedJob.job.fieldName ? (
+              <div style={{ color: "#0a4f45", fontSize: "14px", fontWeight: 700, overflowWrap: "anywhere" }}>
+                {selectedJob.job.fieldName}
+              </div>
+            ) : null}
             {selectedJob.contactName ? (
               <div style={{ color: "#172033", fontSize: "16px", fontWeight: 600, overflowWrap: "anywhere" }}>
                 {selectedJob.contactName}
@@ -3158,11 +3177,12 @@ export function WorkbenchPage() {
               orgId: selectedJob.job.orgId,
               name: item.name,
               sku: item.sku,
+              aliases: item.aliases,
               unit: item.unit,
               costPrice: item.costPrice,
               unitPrice: item.unitPrice,
-              category: null,
-              notes: null,
+              category: item.category,
+              notes: item.notes,
               isActive: true,
               createdBy: null,
               createdAt: "",
@@ -3732,6 +3752,18 @@ export function WorkbenchPage() {
                 <input
                   value={editJobDraft.title}
                   onChange={(event) => setEditJobDraft((current) => current ? { ...current, title: event.target.value } : current)}
+                  style={{ fontSize: "16px" }}
+                />
+              </label>
+
+              <label style={{ display: "grid", gap: "6px" }}>
+                <span style={{ color: "#5b6475", fontSize: "13px" }}>Field Name / Nickname</span>
+                <input
+                  value={editJobDraft.fieldName}
+                  onChange={(event) =>
+                    setEditJobDraft((current) => current ? { ...current, fieldName: event.target.value } : current)
+                  }
+                  placeholder="Shop, Smith reno, lake cabin, etc."
                   style={{ fontSize: "16px" }}
                 />
               </label>

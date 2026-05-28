@@ -8,10 +8,10 @@ import type { RepositoryMapper } from "@/data/mappers/shared";
 type JobRow = TableRow<"jobs">;
 type JobInsertRecord = Pick<
   JobRow,
-  "number" | "contact_id" | "quote_id" | "title" | "description" | "internal_notes" | "estimated_hours" | "estimate_snapshot" | "requires_full_crew_together" | "scheduled_start" | "scheduled_end"
+  "number" | "contact_id" | "quote_id" | "title" | "field_name" | "description" | "internal_notes" | "estimated_hours" | "estimate_snapshot" | "requires_full_crew_together" | "scheduled_start" | "scheduled_end"
 >;
 type JobUpdateRecord = Partial<
-  Pick<JobRow, "status" | "waiting_reason" | "contact_id" | "title" | "description" | "internal_notes" | "estimated_hours" | "estimate_snapshot" | "requires_full_crew_together" | "scheduled_start" | "scheduled_end">
+  Pick<JobRow, "status" | "waiting_reason" | "contact_id" | "title" | "field_name" | "description" | "internal_notes" | "estimated_hours" | "estimate_snapshot" | "requires_full_crew_together" | "scheduled_start" | "scheduled_end">
 >;
 type JobEstimateSnapshotJson = Exclude<
   Database["public"]["Tables"]["jobs"]["Insert"]["estimate_snapshot"],
@@ -36,6 +36,7 @@ export const jobsMapper: RepositoryMapper<
       status: row.status,
       waitingReason: row.waiting_reason,
       title: row.title,
+      fieldName: row.field_name,
       description: row.description,
       internalNotes: row.internal_notes,
       addressLine1: row.address_line1,
@@ -65,6 +66,7 @@ export const jobsMapper: RepositoryMapper<
       contact_id: input.contactId,
       quote_id: input.quoteId ?? null,
       title: input.title,
+      field_name: input.fieldName ?? null,
       description: input.description ?? null,
       internal_notes: input.internalNotes ?? null,
       estimated_hours: input.estimatedHours ?? null,
@@ -80,6 +82,7 @@ export const jobsMapper: RepositoryMapper<
       ...(input.waitingReason !== undefined ? { waiting_reason: input.waitingReason } : {}),
       ...(input.contactId !== undefined ? { contact_id: input.contactId } : {}),
       ...(input.title !== undefined ? { title: input.title } : {}),
+      ...(input.fieldName !== undefined ? { field_name: input.fieldName } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.internalNotes !== undefined ? { internal_notes: input.internalNotes } : {}),
       ...(input.estimatedHours !== undefined ? { estimated_hours: input.estimatedHours } : {}),

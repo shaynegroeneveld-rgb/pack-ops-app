@@ -11,6 +11,7 @@ import { ExpenseByCategoryPage } from "@/features/finance/components/ExpenseByCa
 import { FinanceMoneyPage } from "@/features/finance/components/FinanceMoneyPage";
 import { FinanceReconciliationPage } from "@/features/finance/components/FinanceReconciliationPage";
 import { FinanceReviewPage } from "@/features/finance/components/FinanceReviewPage";
+import { FieldModePage } from "@/features/field/components/FieldModePage";
 import { GstSummaryPage } from "@/features/finance/components/GstSummaryPage";
 import { JobProfitabilityPage } from "@/features/finance/components/JobProfitabilityPage";
 import { MonthEndPage } from "@/features/finance/components/MonthEndPage";
@@ -38,6 +39,7 @@ const NAV_ITEMS = [
   { label: "Materials", route: APP_ROUTES.materials },
   { label: "Job Performance", route: APP_ROUTES.jobPerformance },
   { label: "Time", route: APP_ROUTES.time },
+  { label: "Field", route: APP_ROUTES.field },
   { label: "Workbench", route: APP_ROUTES.workbench },
   { label: "Scheduling", route: APP_ROUTES.scheduling },
   { label: "Settings", route: APP_ROUTES.settings },
@@ -52,7 +54,7 @@ const FINANCE_NAV_ITEMS = [
   { label: "Payroll Assist", route: APP_ROUTES.financePayrollAssist },
 ] as const;
 
-const FIELD_VISIBLE_ROUTES = [APP_ROUTES.workbench, APP_ROUTES.scheduling] as const;
+const FIELD_VISIBLE_ROUTES = [APP_ROUTES.field, APP_ROUTES.workbench, APP_ROUTES.scheduling] as const;
 const FINANCE_ROUTES = [
   APP_ROUTES.financeTransactions,
   APP_ROUTES.financeReview,
@@ -610,6 +612,8 @@ export function AppShell() {
         <JobPerformancePage />
       ) : activeRoute === APP_ROUTES.time ? (
         <TimePage />
+      ) : activeRoute === APP_ROUTES.field ? (
+        <FieldModePage />
       ) : activeRoute === APP_ROUTES.settings ? (
         <SettingsPage />
       ) : activeRoute === APP_ROUTES.scheduling ? (

@@ -7,6 +7,7 @@ export interface CatalogItemRow {
   org_id: string;
   name: string;
   sku: string | null;
+  aliases: string[] | null;
   description: string | null;
   category: string | null;
   unit: string;
@@ -43,6 +44,7 @@ export const catalogItemsMapper: RepositoryMapper<
       orgId: row.org_id as CatalogItem["orgId"],
       name: row.name,
       sku: row.sku,
+      aliases: row.aliases ?? [],
       unit: row.unit,
       costPrice: row.cost_price,
       unitPrice: row.unit_price,
@@ -59,6 +61,7 @@ export const catalogItemsMapper: RepositoryMapper<
     return {
       name: input.name,
       sku: input.sku ?? null,
+      aliases: input.aliases?.map((alias) => alias.trim()).filter(Boolean) ?? [],
       unit: input.unit?.trim() || "each",
       cost_price: normalizeMoney(input.costPrice),
       unit_price: normalizeMoney(input.unitPrice),
@@ -72,6 +75,7 @@ export const catalogItemsMapper: RepositoryMapper<
     return {
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.sku !== undefined ? { sku: input.sku?.trim() || null } : {}),
+      ...(input.aliases !== undefined ? { aliases: input.aliases.map((alias) => alias.trim()).filter(Boolean) } : {}),
       ...(input.unit !== undefined ? { unit: input.unit?.trim() || "each" } : {}),
       ...(input.costPrice !== undefined ? { cost_price: normalizeMoney(input.costPrice) } : {}),
       ...(input.unitPrice !== undefined ? { unit_price: normalizeMoney(input.unitPrice) } : {}),

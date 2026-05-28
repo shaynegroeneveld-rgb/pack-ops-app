@@ -522,6 +522,7 @@ export type Database = {
       }
       catalog_items: {
         Row: {
+          aliases: string[] | null
           category: string | null
           cost_price: number | null
           created_at: string
@@ -540,6 +541,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          aliases?: string[] | null
           category?: string | null
           cost_price?: number | null
           created_at?: string
@@ -558,6 +560,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          aliases?: string[] | null
           category?: string | null
           cost_price?: number | null
           created_at?: string
@@ -1247,6 +1250,7 @@ export type Database = {
           estimated_cost: number | null
           estimated_hours: number | null
           estimate_snapshot: Json | null
+          field_name: string | null
           id: string
           internal_notes: string | null
           number: string
@@ -1280,6 +1284,7 @@ export type Database = {
           estimated_cost?: number | null
           estimated_hours?: number | null
           estimate_snapshot?: Json | null
+          field_name?: string | null
           id?: string
           internal_notes?: string | null
           number: string
@@ -1313,6 +1318,7 @@ export type Database = {
           estimated_cost?: number | null
           estimated_hours?: number | null
           estimate_snapshot?: Json | null
+          field_name?: string | null
           id?: string
           internal_notes?: string | null
           number?: string

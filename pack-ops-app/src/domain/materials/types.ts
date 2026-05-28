@@ -6,6 +6,7 @@ export interface CatalogItem extends AuditedEntity {
   orgId: OrgId;
   name: string;
   sku: string | null;
+  aliases: string[];
   unit: string;
   costPrice: number | null;
   unitPrice: number | null;
@@ -18,6 +19,7 @@ export interface CatalogItem extends AuditedEntity {
 export interface CreateCatalogItemInput {
   name: string;
   sku?: string | null;
+  aliases?: string[];
   unit?: string | null;
   costPrice?: number | null;
   unitPrice?: number | null;
@@ -29,6 +31,7 @@ export interface CreateCatalogItemInput {
 export interface UpdateCatalogItemInput {
   name?: string;
   sku?: string | null;
+  aliases?: string[];
   unit?: string | null;
   costPrice?: number | null;
   unitPrice?: number | null;

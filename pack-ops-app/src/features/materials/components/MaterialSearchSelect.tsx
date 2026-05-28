@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 
 import type { CatalogItem } from "@/domain/materials/types";
+import { matchesCatalogItemSearch } from "@/services/materials/material-search";
 
 export interface MaterialSearchSelectHandle {
   focus: () => void;
@@ -59,13 +60,8 @@ export const MaterialSearchSelect = forwardRef<MaterialSearchSelectHandle, Mater
     }, [autoFocus]);
 
     const filteredItems = useMemo(() => {
-      const normalized = query.trim().toLowerCase();
-      const baseItems = normalized
-        ? catalogItems.filter((material) => {
-            const nameMatch = material.name.toLowerCase().includes(normalized);
-            const skuMatch = material.sku?.toLowerCase().includes(normalized) ?? false;
-            return nameMatch || skuMatch;
-          })
+      const baseItems = query.trim()
+        ? catalogItems.filter((material) => matchesCatalogItemSearch(material, query))
         : catalogItems;
 
       return baseItems.slice(0, 12);
@@ -77,7 +73,7 @@ export const MaterialSearchSelect = forwardRef<MaterialSearchSelectHandle, Mater
           ref={inputRef}
           style={{ fontSize: "16px", padding: "12px" }}
           value={isOpen ? query : selectedMaterial ? getMaterialLabel(selectedMaterial) : query}
-          placeholder={placeholder}
+          placeholder={placeholder.replace("name or SKU", "name, alias, category, or SKU")}
           disabled={isPending}
           onFocus={() => {
             setIsOpen(true);
@@ -141,6 +137,11 @@ export const MaterialSearchSelect = forwardRef<MaterialSearchSelectHandle, Mater
                     {material.sku ? `${material.sku} · ` : ""}
                     {material.category || "Uncategorized"}
                   </span>
+                  {material.aliases.length > 0 ? (
+                    <span style={{ color: "#7b8698", fontSize: "12px", overflowWrap: "anywhere" }}>
+                      Also found by: {material.aliases.slice(0, 3).join(", ")}
+                    </span>
+                  ) : null}
                 </button>
               ))
             )}
