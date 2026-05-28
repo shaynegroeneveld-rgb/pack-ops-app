@@ -8,10 +8,10 @@ import type { RepositoryMapper } from "@/data/mappers/shared";
 type JobRow = TableRow<"jobs">;
 type JobInsertRecord = Pick<
   JobRow,
-  "number" | "contact_id" | "quote_id" | "title" | "field_name" | "description" | "internal_notes" | "estimated_hours" | "estimate_snapshot" | "requires_full_crew_together" | "scheduled_start" | "scheduled_end"
+  "number" | "contact_id" | "quote_id" | "title" | "field_name" | "description" | "internal_notes" | "address_line1" | "estimated_hours" | "estimate_snapshot" | "requires_full_crew_together" | "scheduled_start" | "scheduled_end"
 >;
 type JobUpdateRecord = Partial<
-  Pick<JobRow, "status" | "waiting_reason" | "contact_id" | "title" | "field_name" | "description" | "internal_notes" | "estimated_hours" | "estimate_snapshot" | "requires_full_crew_together" | "scheduled_start" | "scheduled_end">
+  Pick<JobRow, "status" | "waiting_reason" | "contact_id" | "title" | "field_name" | "description" | "internal_notes" | "address_line1" | "estimated_hours" | "estimate_snapshot" | "requires_full_crew_together" | "scheduled_start" | "scheduled_end">
 >;
 type JobEstimateSnapshotJson = Exclude<
   Database["public"]["Tables"]["jobs"]["Insert"]["estimate_snapshot"],
@@ -67,6 +67,7 @@ export const jobsMapper: RepositoryMapper<
       quote_id: input.quoteId ?? null,
       title: input.title,
       field_name: input.fieldName ?? null,
+      address_line1: input.addressLine1 ?? null,
       description: input.description ?? null,
       internal_notes: input.internalNotes ?? null,
       estimated_hours: input.estimatedHours ?? null,
@@ -83,6 +84,7 @@ export const jobsMapper: RepositoryMapper<
       ...(input.contactId !== undefined ? { contact_id: input.contactId } : {}),
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.fieldName !== undefined ? { field_name: input.fieldName } : {}),
+      ...(input.addressLine1 !== undefined ? { address_line1: input.addressLine1 } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.internalNotes !== undefined ? { internal_notes: input.internalNotes } : {}),
       ...(input.estimatedHours !== undefined ? { estimated_hours: input.estimatedHours } : {}),

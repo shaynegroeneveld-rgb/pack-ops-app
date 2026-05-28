@@ -247,7 +247,14 @@ export function useWorkbenchSlice(
   }, [service]);
 
   const createJob = useMutation({
-    mutationFn: (input: { title: string; description: string; contactId: string; estimatedHours?: number | null }) => {
+    mutationFn: (input: {
+      title: string;
+      fieldName?: string | null;
+      addressLine1?: string | null;
+      description: string;
+      contactId: string;
+      estimatedHours?: number | null;
+    }) => {
       console.info("[useWorkbenchSlice] createJob input", input);
       return service.createJob(input);
     },

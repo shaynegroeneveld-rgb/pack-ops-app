@@ -71,6 +71,13 @@ export interface WorkbenchJobCard {
   contactName: string | null;
   contactSubtitle: string | null;
   assignments: JobAssignment[];
+  neededMaterialsCount: number;
+  neededMaterialsPreview: Array<{
+    id: string;
+    name: string;
+    quantity: number;
+    note: string | null;
+  }>;
   timeEntries: TimeEntry[];
   actionItems: ActionItem[];
   workflow: ReturnType<typeof deriveJobWorkflowFlags>;
@@ -314,14 +321,17 @@ export class WorkbenchService {
   async listJobCards(): Promise<WorkbenchJobCard[]> {
     await this.sync.refreshWorkbench();
 
-    const [jobs, assignments, timeEntries, actionItems, contacts] = await Promise.all([
+    const [jobs, assignments, timeEntries, actionItems, contacts, jobMaterials, catalogItems] = await Promise.all([
       this.jobs.list(),
       this.jobAssignments.list(),
       this.timeEntries.list(),
       this.actionItems.list(),
       this.contacts.list(),
+      this.jobMaterials.list(),
+      this.catalogItems.list({ filter: { includeInactive: true } }),
     ]);
     const contactsById = new Map(contacts.map((contact) => [contact.id, contact]));
+    const catalogItemsById = new Map(catalogItems.map((item) => [String(item.id), item]));
 
     console.info("[WorkbenchService] listJobCards fetched", {
       jobs: jobs.map((job) => ({ id: job.id, title: job.title, orgId: job.orgId, status: job.status })),
@@ -353,6 +363,7 @@ export class WorkbenchService {
       })
       .map((job) => {
         const jobAssignments = assignments.filter((assignment) => assignment.jobId === job.id);
+        const neededMaterials = jobMaterials.filter((entry) => entry.jobId === job.id && entry.kind === "needed");
         const jobTimeEntries = timeEntries.filter((entry) => entry.jobId === job.id);
         const jobTimeEntryIds = new Set(jobTimeEntries.map((entry) => entry.id));
         const jobActionItems = actionItems.filter((item) => {
@@ -407,6 +418,17 @@ export class WorkbenchService {
             .filter(Boolean)
             .join(" · ") || null,
           assignments: jobAssignments,
+          neededMaterialsCount: neededMaterials.length,
+          neededMaterialsPreview: neededMaterials.slice(0, 3).map((item) => ({
+            id: String(item.id),
+            name:
+              item.displayName?.trim() ||
+              item.skuSnapshot?.trim() ||
+              catalogItemsById.get(String(item.catalogItemId))?.name ||
+              "Material",
+            quantity: item.quantity,
+            note: item.note ?? null,
+          })),
           timeEntries: jobTimeEntries,
           actionItems: jobActionItems,
           permissions,
@@ -564,7 +586,14 @@ export class WorkbenchService {
     };
   }
 
-  async createJob(input: { title: string; fieldName?: string | null; description: string; contactId: string; estimatedHours?: number | null }): Promise<Job> {
+  async createJob(input: {
+    title: string;
+    fieldName?: string | null;
+    addressLine1?: string | null;
+    description: string;
+    contactId: string;
+    estimatedHours?: number | null;
+  }): Promise<Job> {
     if (!canCreateWorkbenchJob(this.currentUser)) {
       throw new Error("You cannot create jobs.");
     }
@@ -614,6 +643,7 @@ export class WorkbenchService {
       contactId: input.contactId as Job["contactId"],
       title: input.title,
       fieldName: input.fieldName?.trim() || null,
+      addressLine1: input.addressLine1?.trim() || null,
       description: input.description,
       estimatedHours,
     });
