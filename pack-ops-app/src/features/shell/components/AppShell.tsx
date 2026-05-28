@@ -11,6 +11,7 @@ import { ExpenseByCategoryPage } from "@/features/finance/components/ExpenseByCa
 import { FinanceMoneyPage } from "@/features/finance/components/FinanceMoneyPage";
 import { FinanceReconciliationPage } from "@/features/finance/components/FinanceReconciliationPage";
 import { FinanceReviewPage } from "@/features/finance/components/FinanceReviewPage";
+import { FieldJobPage } from "@/features/field/components/FieldJobPage";
 import { FieldModePage } from "@/features/field/components/FieldModePage";
 import { GstSummaryPage } from "@/features/finance/components/GstSummaryPage";
 import { JobProfitabilityPage } from "@/features/finance/components/JobProfitabilityPage";
@@ -188,6 +189,8 @@ export function AppShell() {
         : null,
     [client, currentUser],
   );
+  const fieldJobRoutePrefix = `${APP_ROUTES.fieldJobs}/`;
+  const isFieldRoute = activeRoute === APP_ROUTES.field || activeRoute.startsWith(`${APP_ROUTES.field}/`);
   const navItems = isFieldUser
     ? NAV_ITEMS.filter((item) => FIELD_VISIBLE_ROUTES.includes(item.route as (typeof FIELD_VISIBLE_ROUTES)[number]))
     : NAV_ITEMS.filter((item) => item.route !== APP_ROUTES.settings || isOwner);
@@ -306,7 +309,11 @@ export function AppShell() {
       return;
     }
 
-    if (currentUser.user.role === "field" && !FIELD_VISIBLE_ROUTES.includes(activeRoute as (typeof FIELD_VISIBLE_ROUTES)[number])) {
+    const isAllowedFieldRoute =
+      FIELD_VISIBLE_ROUTES.includes(activeRoute as (typeof FIELD_VISIBLE_ROUTES)[number]) ||
+      activeRoute.startsWith(`${APP_ROUTES.field}/`);
+
+    if (currentUser.user.role === "field" && !isAllowedFieldRoute) {
       setActiveRoute(APP_ROUTES.workbench);
     }
 
@@ -427,7 +434,15 @@ export function AppShell() {
   }
 
   return (
-    <main style={{ minHeight: "100vh", background: brand.surfaceAlt, width: "100%", overflowX: "hidden" }}>
+    <main
+      style={{
+        minHeight: "100vh",
+        background: isFieldRoute ? undefined : brand.surfaceAlt,
+        width: "100%",
+        overflowX: "hidden",
+      }}
+    >
+      {!isFieldRoute ? (
       <nav
         style={{
           display: "flex",
@@ -559,9 +574,12 @@ export function AppShell() {
           </div>
         ) : null}
       </nav>
+      ) : null}
 
-      {activeRoute === APP_ROUTES.leads ? (
-        <LeadsPage />
+        {activeRoute.startsWith(fieldJobRoutePrefix) ? (
+          <FieldJobPage jobId={activeRoute.slice(fieldJobRoutePrefix.length)} />
+        ) : activeRoute === APP_ROUTES.leads ? (
+          <LeadsPage />
       ) : activeRoute === APP_ROUTES.materials ? (
         <MaterialsPage />
       ) : activeRoute === APP_ROUTES.financeReview ? (
@@ -612,8 +630,8 @@ export function AppShell() {
         <JobPerformancePage />
       ) : activeRoute === APP_ROUTES.time ? (
         <TimePage />
-      ) : activeRoute === APP_ROUTES.field ? (
-        <FieldModePage />
+        ) : activeRoute === APP_ROUTES.field ? (
+          <FieldModePage />
       ) : activeRoute === APP_ROUTES.settings ? (
         <SettingsPage />
       ) : activeRoute === APP_ROUTES.scheduling ? (
@@ -622,7 +640,7 @@ export function AppShell() {
         <WorkbenchPage />
       )}
 
-      {isSyncPanelOpen ? (
+      {!isFieldRoute && isSyncPanelOpen ? (
         <div
           role="presentation"
           onClick={() => setIsSyncPanelOpen(false)}

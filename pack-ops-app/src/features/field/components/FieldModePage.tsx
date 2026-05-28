@@ -1,135 +1,44 @@
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { useAuthContext } from "@/app/contexts/auth-context";
 import { APP_ROUTES } from "@/app/router/routes";
 import { useUiStore } from "@/app/store/ui-store";
 import { getSupabaseClient } from "@/data/supabase/client";
-import type { JobMaterialView } from "@/domain/jobs/types";
-import type { CatalogItem } from "@/domain/materials/types";
-import { MaterialSearchSelect } from "@/features/materials/components/MaterialSearchSelect";
+import {
+  deriveTimeEntryDraftElapsedLabel,
+  deriveTimeEntryDraftHours,
+  updateManualTimeEntryDraftHours,
+  type TimeEntryDraft,
+} from "@/domain/time-entries/draft";
 import { useSchedulingSlice } from "@/features/scheduling/hooks/use-scheduling-slice";
 import { useWorkbenchSlice } from "@/features/workbench/hooks/use-workbench-slice";
 import type { WorkbenchJobCard } from "@/services/workbench/workbench-service";
 
-const RECENT_JOBS_STORAGE_KEY = "pack-ops-field-recent-jobs";
+import {
+  actionButtonStyle,
+  addDays,
+  buildLogoDataUrl,
+  endOfWeek,
+  fieldColors,
+  formatBlockTime,
+  formatElapsed,
+  infoLabelStyle,
+  inputStyle,
+  loadRecentJobIds,
+  noTimerMessagesByDay,
+  shellCardStyle,
+  softCardStyle,
+  startOfWeek,
+  storeRecentJobId,
+  toDayKey,
+  toScheduleRangeIso,
+  toggleButtonStyle,
+  weekdayLabels,
+} from "./field-mode-shared";
 
-const fieldColors = {
-  backgroundTop: "#1f0409",
-  backgroundMid: "#510b14",
-  backgroundBottom: "#280509",
-  card: "rgba(113, 17, 29, 0.58)",
-  cardSoft: "rgba(90, 12, 22, 0.56)",
-  border: "rgba(255, 183, 32, 0.28)",
-  gold: "#ffb100",
-  goldBright: "#ffd24a",
-  goldDeep: "#d48a00",
-  white: "#fff8ef",
-  whiteSoft: "rgba(255, 248, 239, 0.8)",
-  warningBg: "#ffb100",
-  warningText: "#4b1500",
-  green: "#2f8f3c",
-  danger: "#ff7d66",
-};
-
-const noTimerMessagesByDay = {
-  0: "Even rest day jobs need a timer.",
-  1: "New week, same chance to forget your timer.",
-  2: "The tools are out. Is the timer?",
-  3: "Halfway through the week, somehow still forgetting timers.",
-  4: "Your future invoice is quietly judging you.",
-  5: "Don't donate your Friday to the customer.",
-  6: "Weekend work still counts. So does the timer.",
-} as const;
-
-const weekdayLabels = [
-  { label: "SUN", style: { left: "8%", top: "16%" } },
-  { label: "MON", style: { right: "8%", top: "16%" } },
-  { label: "TUE", style: { right: "1%", top: "40%" } },
-  { label: "WED", style: { right: "8%", bottom: "18%" } },
-  { label: "THU", style: { left: "50%", bottom: "2%", transform: "translateX(-50%)" } },
-  { label: "FRI", style: { left: "8%", bottom: "18%" } },
-  { label: "SAT", style: { left: "1%", top: "40%" } },
-] as const;
+const fieldJobRoute = (jobId: string) => `${APP_ROUTES.fieldJobs}/${jobId}`;
 
 type MainAccordionKey = "today" | "tomorrow" | "week" | "jobs";
-type JobAccordionKey = "info" | "timer" | "notes" | "attachments" | "materials";
-
-function buildLogoDataUrl(value: string | null | undefined): string | null {
-  const trimmed = value?.trim() ?? "";
-  if (!trimmed) {
-    return null;
-  }
-  if (trimmed.startsWith("data:image/")) {
-    return trimmed;
-  }
-  return `data:image/png;base64,${trimmed}`;
-}
-
-function toDayKey(date = new Date()): string {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function addDays(day: string, amount: number): string {
-  const date = new Date(`${day}T12:00:00`);
-  date.setDate(date.getDate() + amount);
-  return toDayKey(date);
-}
-
-function startOfWeek(day: string): string {
-  const date = new Date(`${day}T12:00:00`);
-  const currentDay = date.getDay();
-  const offset = currentDay === 0 ? -6 : 1 - currentDay;
-  date.setDate(date.getDate() + offset);
-  return toDayKey(date);
-}
-
-function endOfWeek(day: string): string {
-  return addDays(startOfWeek(day), 6);
-}
-
-function toScheduleRangeIso(day: string, end = false): string {
-  return `${day}T${end ? "23:59:59" : "00:00:00"}.000Z`;
-}
-
-function formatMoney(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) {
-    return "—";
-  }
-  return `$${value.toFixed(2)}`;
-}
-
-function formatHours(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) {
-    return "—";
-  }
-  return `${value.toFixed(2)}h`;
-}
-
-function formatElapsed(startedAt: string, nowMs: number): string {
-  const diffMs = Math.max(0, nowMs - new Date(startedAt).getTime());
-  const totalSeconds = Math.floor(diffMs / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
-}
-
-function formatBlockTime(startAt: string, endAt: string, timeBucket: string): string {
-  const start = new Date(startAt);
-  const end = new Date(endAt);
-  const startText = start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  const endText = end.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  if (timeBucket === "am") {
-    return `${startText}-${endText} · Morning`;
-  }
-  if (timeBucket === "pm") {
-    return `${startText}-${endText} · Afternoon`;
-  }
-  return `${startText}-${endText}`;
-}
 
 function buildJobSearchText(jobCard: WorkbenchJobCard): string {
   const job = jobCard.job;
@@ -150,79 +59,14 @@ function buildJobSearchText(jobCard: WorkbenchJobCard): string {
     .toLowerCase();
 }
 
-function shellCardStyle(): CSSProperties {
-  return {
-    borderRadius: "22px",
-    border: `1px solid ${fieldColors.border}`,
-    background: fieldColors.card,
-    boxShadow: "0 18px 44px rgba(7, 0, 3, 0.28)",
-    backdropFilter: "blur(8px)",
-  };
+function toDateTimeLocalValue(value: string): string {
+  const date = new Date(value);
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return offsetDate.toISOString().slice(0, 16);
 }
 
-function softCardStyle(): CSSProperties {
-  return {
-    borderRadius: "18px",
-    border: `1px solid rgba(255, 183, 32, 0.16)`,
-    background: fieldColors.cardSoft,
-  };
-}
-
-function actionButtonStyle(kind: "primary" | "secondary" = "primary"): CSSProperties {
-  return {
-    minHeight: "46px",
-    borderRadius: "16px",
-    border: `1px solid ${kind === "primary" ? fieldColors.gold : fieldColors.border}`,
-    background: kind === "primary" ? fieldColors.gold : "rgba(0, 0, 0, 0.18)",
-    color: kind === "primary" ? "#411104" : fieldColors.white,
-    padding: "12px 16px",
-    fontSize: "16px",
-    fontWeight: 800,
-    width: "100%",
-    boxShadow: kind === "primary" ? "0 10px 24px rgba(255, 177, 0, 0.2)" : "none",
-  };
-}
-
-function toggleButtonStyle(isOpen: boolean): CSSProperties {
-  return {
-    width: "100%",
-    borderRadius: "20px",
-    border: `1px solid ${fieldColors.border}`,
-    background: "rgba(124, 20, 32, 0.42)",
-    color: fieldColors.white,
-    padding: "18px 18px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "12px",
-    textAlign: "left",
-    fontWeight: 800,
-    fontSize: "15px",
-    letterSpacing: "0.01em",
-    boxShadow: isOpen ? "0 0 0 1px rgba(255, 210, 74, 0.16) inset" : "none",
-  };
-}
-
-function infoLabelStyle(): CSSProperties {
-  return {
-    color: fieldColors.goldBright,
-    fontSize: "12px",
-    fontWeight: 800,
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-  };
-}
-
-function inputStyle(): CSSProperties {
-  return {
-    width: "100%",
-    borderRadius: "16px",
-    border: `1px solid rgba(255, 183, 32, 0.18)`,
-    background: "rgba(20, 4, 8, 0.48)",
-    color: fieldColors.white,
-    padding: "14px 16px",
-    fontSize: "16px",
-  };
+function fromDateTimeLocalValue(value: string): string {
+  return new Date(value).toISOString();
 }
 
 export function FieldModePage() {
@@ -233,7 +77,6 @@ export function FieldModePage() {
   const weekStart = useMemo(() => startOfWeek(today), [today]);
   const weekEnd = useMemo(() => endOfWeek(today), [today]);
   const [jobSearch, setJobSearch] = useState("");
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [recentJobIds, setRecentJobIds] = useState<string[]>([]);
   const [showAddJobForm, setShowAddJobForm] = useState(false);
   const [mainAccordions, setMainAccordions] = useState<Record<MainAccordionKey, boolean>>({
@@ -242,14 +85,6 @@ export function FieldModePage() {
     week: false,
     jobs: false,
   });
-  const [jobAccordions, setJobAccordions] = useState<Record<JobAccordionKey, boolean>>({
-    info: false,
-    timer: false,
-    notes: false,
-    attachments: false,
-    materials: false,
-  });
-  const [noteDraft, setNoteDraft] = useState("");
   const [addJobDraft, setAddJobDraft] = useState({
     title: "",
     fieldName: "",
@@ -257,24 +92,15 @@ export function FieldModePage() {
     address: "",
     description: "",
   });
-  const [usedMaterialDraft, setUsedMaterialDraft] = useState({
-    materialId: "",
-    quantity: "1",
-  });
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [clockNowMs, setClockNowMs] = useState(() => Date.now());
-  const noteInputRef = useRef<HTMLTextAreaElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const client = getSupabaseClient(import.meta.env);
 
   if (!currentUser) {
     return null;
   }
 
-  const workbench = useWorkbenchSlice(currentUser, {
-    selectedJobId,
-    activeTab: "actuals",
-  });
+  const workbench = useWorkbenchSlice(currentUser);
   const scheduling = useSchedulingSlice(currentUser, {
     weekStartIso: toScheduleRangeIso(weekStart),
     weekEndIso: toScheduleRangeIso(weekEnd, true),
@@ -282,44 +108,27 @@ export function FieldModePage() {
 
   const jobCards = workbench.jobsQuery.data ?? [];
   const jobCardById = useMemo(() => new Map(jobCards.map((card) => [String(card.job.id), card])), [jobCards]);
-  const selectedJobCard = selectedJobId ? jobCardById.get(String(selectedJobId)) ?? null : null;
-  const jobWorkspace = workbench.jobWorkspaceQuery.data ?? null;
   const todayMessage = noTimerMessagesByDay[new Date().getDay() as keyof typeof noTimerMessagesByDay];
   const runningDraft = workbench.activeRunningTimerDraft;
+  const timeEntryDraft = workbench.timeEntryDraft;
   const runningJob = runningDraft?.jobId ? jobCardById.get(String(runningDraft.jobId)) ?? null : null;
   const elapsed = runningDraft?.startedAt ? formatElapsed(runningDraft.startedAt, clockNowMs) : null;
-  const selectedNeededMaterials = jobWorkspace?.neededMaterials ?? [];
-  const selectedUsedMaterials = jobWorkspace?.usedMaterials ?? [];
-  const selectedTimeEntries = jobWorkspace?.timeEntries ?? [];
-  const canManageSchedule = currentUser.user.role === "owner" || currentUser.user.role === "office";
-
-  const catalogItems = useMemo<CatalogItem[]>(
-    () =>
-      (jobWorkspace?.materialCatalogOptions ?? []).map((item) => ({
-        id: item.id,
-        orgId: currentUser.user.orgId,
-        name: item.name,
-        sku: item.sku,
-        aliases: item.aliases,
-        unit: item.unit,
-        costPrice: item.costPrice,
-        unitPrice: item.unitPrice,
-        category: item.category,
-        notes: item.notes,
-        isActive: true,
-        createdBy: null,
-        createdAt: "",
-        updatedAt: "",
-        deletedAt: null,
-      })),
-    [currentUser.user.orgId, jobWorkspace?.materialCatalogOptions],
-  );
-
-  const userNamesById = useMemo(
-    () => new Map((workbench.assignableUsersQuery.data ?? []).map((user) => [user.id, user.label])),
-    [workbench.assignableUsersQuery.data],
-  );
   const contactOptions = workbench.contactsQuery.data ?? [];
+  const assignableUsers = workbench.assignableUsersQuery.data ?? [];
+  const userNamesById = useMemo(() => new Map(assignableUsers.map((user) => [user.id, user.label])), [assignableUsers]);
+  const availableWorkerOptions = useMemo(() => {
+    const currentUserOption = {
+      id: String(currentUser.user.id),
+      label: currentUser.user.fullName,
+    };
+    return assignableUsers.some((user) => user.id === currentUserOption.id)
+      ? assignableUsers
+      : [currentUserOption, ...assignableUsers];
+  }, [assignableUsers, currentUser.user.fullName, currentUser.user.id]);
+  const canManageSchedule = currentUser.user.role === "owner" || currentUser.user.role === "office";
+  const draftJobCard = timeEntryDraft?.jobId ? jobCardById.get(String(timeEntryDraft.jobId)) ?? null : null;
+  const timeDraftHours = timeEntryDraft ? deriveTimeEntryDraftHours(timeEntryDraft, new Date(clockNowMs)) : null;
+  const timeDraftElapsed = timeEntryDraft ? deriveTimeEntryDraftElapsedLabel(timeEntryDraft, new Date(clockNowMs)) : null;
 
   const upcomingBlocks = scheduling.upcomingBlocksQuery.data ?? [];
   const todayBlocks = upcomingBlocks.filter((entry) => entry.block.startAt.slice(0, 10) === today);
@@ -342,11 +151,10 @@ export function FieldModePage() {
 
     async function loadLogo() {
       const { data, error } = await client.from("app_settings").select("logo_b64").maybeSingle();
-      if (!isActive) {
-        return;
-      }
-      if (error) {
-        console.error("[FieldModePage] logo load failed", error);
+      if (!isActive || error) {
+        if (error) {
+          console.error("[FieldModePage] logo load failed", error);
+        }
         return;
       }
       setLogoDataUrl(buildLogoDataUrl(data?.logo_b64 ?? null));
@@ -359,34 +167,8 @@ export function FieldModePage() {
   }, [client]);
 
   useEffect(() => {
-    try {
-      const parsed = JSON.parse(window.localStorage.getItem(RECENT_JOBS_STORAGE_KEY) ?? "[]");
-      if (Array.isArray(parsed)) {
-        setRecentJobIds(parsed.filter((value): value is string => typeof value === "string"));
-      }
-    } catch {
-      setRecentJobIds([]);
-    }
+    setRecentJobIds(loadRecentJobIds());
   }, []);
-
-  useEffect(() => {
-    if (!selectedJobId) {
-      return;
-    }
-
-    setRecentJobIds((current) => {
-      const next = [selectedJobId, ...current.filter((value) => value !== selectedJobId)].slice(0, 6);
-      window.localStorage.setItem(RECENT_JOBS_STORAGE_KEY, JSON.stringify(next));
-      return next;
-    });
-    setJobAccordions({
-      info: false,
-      timer: false,
-      notes: false,
-      attachments: false,
-      materials: false,
-    });
-  }, [selectedJobId]);
 
   const filteredJobs = useMemo(() => {
     if (!jobSearch.trim()) {
@@ -407,68 +189,16 @@ export function FieldModePage() {
     setMainAccordions((current) => ({ ...current, [key]: !current[key] }));
   }
 
-  function toggleJobAccordion(key: JobAccordionKey) {
-    setJobAccordions((current) => ({ ...current, [key]: !current[key] }));
-  }
-
-  function toggleJobSelection(jobId: string) {
-    setSelectedJobId((current) => (current === jobId ? null : jobId));
-  }
-
   function getCrewNames(jobCard: WorkbenchJobCard): string[] {
     return jobCard.assignments.map((assignment) => userNamesById.get(assignment.userId) ?? "Crew");
   }
 
-  async function handleAddUsedMaterial() {
-    if (!selectedJobCard || !usedMaterialDraft.materialId) {
-      return;
-    }
-    const quantity = Number(usedMaterialDraft.quantity || 0);
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      return;
-    }
-
-    const item = catalogItems.find((entry) => entry.id === usedMaterialDraft.materialId);
-    await workbench.createJobMaterial.mutateAsync({
-      jobId: selectedJobCard.job.id,
-      catalogItemId: usedMaterialDraft.materialId,
-      kind: "used",
-      quantity,
-      displayName: item?.name ?? null,
-      skuSnapshot: item?.sku ?? null,
-      unitSnapshot: item?.unit ?? null,
-      unitCost: item?.costPrice ?? null,
-      unitSell: item?.unitPrice ?? null,
-      markupPercent: null,
-    });
-    setUsedMaterialDraft({ materialId: "", quantity: "1" });
+  function openFieldJob(jobId: string) {
+    setRecentJobIds(storeRecentJobId(jobId));
+    setActiveRoute(fieldJobRoute(jobId));
   }
 
-  async function handleAddNote() {
-    if (!selectedJobCard || !noteDraft.trim()) {
-      return;
-    }
-    await workbench.addJobNote.mutateAsync({
-      jobId: selectedJobCard.job.id,
-      body: noteDraft.trim(),
-    });
-    setNoteDraft("");
-  }
-
-  async function handleUploadAttachment(file: File | null) {
-    if (!selectedJobCard || !file) {
-      return;
-    }
-    await workbench.uploadJobAttachment.mutateAsync({
-      jobId: selectedJobCard.job.id,
-      file,
-    });
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  }
-
-  async function handleAutoFillNextAvailable(jobCard: { job: WorkbenchJobCard["job"] }) {
+  async function handleAutoFillNextAvailable(jobCard: WorkbenchJobCard) {
     await scheduling.autoFillScheduleBlocks.mutateAsync({
       jobId: jobCard.job.id,
       day: today,
@@ -487,8 +217,7 @@ export function FieldModePage() {
 
     const normalizedContactName = addJobDraft.contactName.trim();
     let contactId = contactOptions.find(
-      (contact) =>
-        contact.label.trim().toLowerCase() === normalizedContactName.toLowerCase(),
+      (contact) => contact.label.trim().toLowerCase() === normalizedContactName.toLowerCase(),
     )?.id;
 
     if (!contactId) {
@@ -515,20 +244,63 @@ export function FieldModePage() {
     });
     setShowAddJobForm(false);
     setMainAccordions((current) => ({ ...current, jobs: true }));
-    setSelectedJobId(String(createdJob.id));
+    openFieldJob(String(createdJob.id));
   }
 
   function renderBrandHeader() {
     return (
-      <header style={{ display: "grid", gap: "18px" }}>
+      <header style={{ display: "grid", gap: "10px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
-          <div style={{ flex: 1, minWidth: 0, display: "grid", justifyItems: "center" }}>
+          <div style={{ flex: 1, minWidth: 0, display: "grid", justifyItems: "center", paddingTop: "2px" }}>
             {logoDataUrl ? (
-              <img
-                src={logoDataUrl}
-                alt="Pack Ops logo"
-                style={{ width: "min(260px, 68vw)", maxWidth: "100%", objectFit: "contain" }}
-              />
+              <div
+                style={{
+                  width: "min(280px, 72vw)",
+                  maxWidth: "100%",
+                  display: "grid",
+                  justifyItems: "center",
+                  gap: "2px",
+                }}
+              >
+                <img
+                  src={logoDataUrl}
+                  alt="Pack Ops dog logo"
+                  style={{
+                    width: "min(120px, 32vw)",
+                    maxWidth: "100%",
+                    objectFit: "contain",
+                    display: "block",
+                    mixBlendMode: "multiply",
+                    filter: "brightness(1.12) saturate(1.22) contrast(1.06)",
+                    isolation: "isolate",
+                  }}
+                />
+                <div style={{ textAlign: "center", color: fieldColors.gold }}>
+                  <div
+                    style={{
+                      fontSize: "60px",
+                      lineHeight: 0.92,
+                      fontWeight: 900,
+                      letterSpacing: "-0.06em",
+                      textTransform: "uppercase",
+                      textShadow: "0 8px 28px rgba(0,0,0,0.38)",
+                    }}
+                  >
+                    PACK
+                  </div>
+                  <div
+                    style={{
+                      marginTop: "3px",
+                      fontSize: "28px",
+                      fontWeight: 800,
+                      letterSpacing: "0.24em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    OPS
+                  </div>
+                </div>
+              </div>
             ) : (
               <div style={{ textAlign: "center", color: fieldColors.gold }}>
                 <div
@@ -570,7 +342,17 @@ export function FieldModePage() {
             </div>
           </div>
 
-          <button type="button" onClick={() => setActiveRoute(APP_ROUTES.workbench)} style={{ ...actionButtonStyle("secondary"), width: "auto", minWidth: "132px" }}>
+          <button
+            type="button"
+            onClick={() => setActiveRoute(APP_ROUTES.workbench)}
+            style={{
+              ...actionButtonStyle("secondary"),
+              width: "auto",
+              minWidth: "132px",
+              padding: "10px 14px",
+              minHeight: "42px",
+            }}
+          >
             Back to Main Page
           </button>
         </div>
@@ -681,6 +463,168 @@ export function FieldModePage() {
     );
   }
 
+  function renderFinishTimerPanel() {
+    if (!timeEntryDraft) {
+      return null;
+    }
+
+    const canSave =
+      Boolean(timeEntryDraft.jobId) &&
+      Boolean(timeEntryDraft.startedAt) &&
+      Boolean(timeEntryDraft.endedAt) &&
+      (timeDraftHours ?? 0) > 0;
+
+    return (
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 50,
+          background: "rgba(10, 1, 4, 0.72)",
+          display: "grid",
+          alignItems: "end",
+          padding: "12px",
+        }}
+      >
+        <div
+          style={{
+            ...shellCardStyle(),
+            borderTopLeftRadius: "28px",
+            borderTopRightRadius: "28px",
+            padding: "18px 16px 20px",
+            display: "grid",
+            gap: "12px",
+            maxHeight: "88vh",
+            overflowY: "auto",
+          }}
+        >
+          <div style={{ display: "grid", gap: "6px" }}>
+            <strong style={{ fontSize: "24px", color: fieldColors.white }}>Finish Timer</strong>
+            <span style={{ color: fieldColors.whiteSoft }}>
+              Review this timer entry before saving it to the job history.
+            </span>
+          </div>
+
+          <label style={{ display: "grid", gap: "6px" }}>
+            <span style={infoLabelStyle()}>Job</span>
+            <select
+              value={timeEntryDraft.jobId}
+              onChange={(event) => workbench.updateTimeEntryDraft({ jobId: event.target.value as TimeEntryDraft["jobId"] })}
+              style={inputStyle()}
+            >
+              {jobCards
+                .filter((jobCard) => jobCard.permissions.canCreateTimeEntry)
+                .map((jobCard) => (
+                  <option key={jobCard.job.id} value={jobCard.job.id}>
+                    {jobCard.job.number ? `${jobCard.job.number} · ` : ""}
+                    {jobCard.job.fieldName || jobCard.job.title}
+                  </option>
+                ))}
+            </select>
+          </label>
+
+          <label style={{ display: "grid", gap: "6px" }}>
+            <span style={infoLabelStyle()}>Worked By</span>
+            <select
+              value={timeEntryDraft.userId}
+              onChange={(event) => workbench.updateTimeEntryDraft({ userId: event.target.value as TimeEntryDraft["userId"] })}
+              style={inputStyle()}
+            >
+              {availableWorkerOptions.map((worker) => (
+                <option key={worker.id} value={worker.id}>
+                  {worker.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px" }}>
+            <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
+              <span style={infoLabelStyle()}>Start Time</span>
+              <input
+                type="datetime-local"
+                value={toDateTimeLocalValue(timeEntryDraft.startedAt)}
+                onChange={(event) => workbench.updateTimeEntryDraft({ startedAt: fromDateTimeLocalValue(event.target.value) })}
+                style={inputStyle()}
+              />
+            </label>
+            <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
+              <span style={infoLabelStyle()}>Stop Time</span>
+              <input
+                type="datetime-local"
+                value={timeEntryDraft.endedAt ? toDateTimeLocalValue(timeEntryDraft.endedAt) : ""}
+                onChange={(event) => workbench.updateTimeEntryDraft({ endedAt: fromDateTimeLocalValue(event.target.value) })}
+                style={inputStyle()}
+              />
+            </label>
+          </div>
+
+          <label style={{ display: "grid", gap: "6px" }}>
+            <span style={infoLabelStyle()}>Total Hours</span>
+            <input
+              type="number"
+              min="0.05"
+              max="24"
+              step="0.05"
+              value={timeDraftHours?.toFixed(2) ?? ""}
+              onChange={(event) => {
+                const nextHours = Number(event.target.value);
+                if (!Number.isFinite(nextHours) || nextHours <= 0) {
+                  return;
+                }
+                const nextDraft = updateManualTimeEntryDraftHours(timeEntryDraft, nextHours);
+                workbench.updateTimeEntryDraft({
+                  startedAt: nextDraft.startedAt,
+                  endedAt: nextDraft.endedAt,
+                });
+              }}
+              style={inputStyle()}
+            />
+          </label>
+
+          <label style={{ display: "grid", gap: "6px" }}>
+            <span style={infoLabelStyle()}>Note / Description</span>
+            <textarea
+              rows={3}
+              value={timeEntryDraft.description}
+              onChange={(event) => workbench.updateTimeEntryDraft({ description: event.target.value })}
+              style={inputStyle()}
+            />
+          </label>
+
+          <div style={{ ...softCardStyle(), padding: "12px 14px", display: "grid", gap: "4px" }}>
+            <span style={infoLabelStyle()}>Summary</span>
+            <strong style={{ color: fieldColors.white, overflowWrap: "anywhere" }}>
+              {draftJobCard ? (draftJobCard.job.fieldName || draftJobCard.job.title) : "Selected job"}
+            </strong>
+            <span style={{ color: fieldColors.goldBright }}>
+              {timeDraftHours?.toFixed(2) ?? "0.00"}h {timeDraftElapsed ? `· ${timeDraftElapsed}` : ""}
+            </span>
+          </div>
+
+          <div style={{ display: "grid", gap: "10px" }}>
+            <button
+              type="button"
+              style={actionButtonStyle()}
+              disabled={!canSave || workbench.isSavingTimeEntryDraft}
+              onClick={() => void workbench.saveTimeEntryDraft()}
+            >
+              {workbench.isSavingTimeEntryDraft ? "Saving..." : "Save Time Entry"}
+            </button>
+            <button
+              type="button"
+              style={actionButtonStyle("secondary")}
+              disabled={workbench.isSavingTimeEntryDraft}
+              onClick={() => void workbench.discardTimeEntryDraft()}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function renderMainAccordion(
     key: MainAccordionKey,
     title: string,
@@ -784,55 +728,40 @@ export function FieldModePage() {
           </>
         ) : null}
 
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <button type="button" style={actionButtonStyle("secondary")} onClick={() => toggleJobSelection(jobCard.job.id)}>
-            {selectedJobId === jobCard.job.id ? "Hide Job Details" : "Open Job"}
+        <div style={{ display: "grid", gap: "10px" }}>
+          <button type="button" style={actionButtonStyle("secondary")} onClick={() => openFieldJob(jobCard.job.id)}>
+            Open Job
           </button>
+          {canManageSchedule ? (
+            <button
+              type="button"
+              style={actionButtonStyle()}
+              disabled={scheduling.autoFillScheduleBlocks.isPending}
+              onClick={() => void handleAutoFillNextAvailable(jobCard)}
+            >
+              {jobCard.job.estimatedHours ? "Auto-fill Next Available" : "No estimated time set — schedule as 1 day?"}
+            </button>
+          ) : null}
         </div>
       </div>
     );
   }
 
-  function renderSectionCard(key: JobAccordionKey, title: string, children: ReactNode) {
-    const isOpen = jobAccordions[key];
+  function renderJobListCard(jobCard: WorkbenchJobCard) {
     return (
-      <div style={{ display: "grid", gap: "8px" }}>
-        <button type="button" onClick={() => toggleJobAccordion(key)} style={toggleButtonStyle(isOpen)}>
-          <span style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-            <span style={{ fontSize: "20px" }}>
-              {key === "info" ? "ℹ️" : key === "timer" ? "⏱️" : key === "notes" ? "📝" : key === "attachments" ? "📎" : "📦"}
-            </span>
-            <span>{title}</span>
-          </span>
-          <span style={{ color: fieldColors.goldBright, fontSize: "18px" }}>{isOpen ? "▾" : "▸"}</span>
-        </button>
-        {isOpen ? <div style={{ ...softCardStyle(), padding: "14px" }}>{children}</div> : null}
-      </div>
-    );
-  }
-
-  function renderSelectedJobDetails(jobCard: WorkbenchJobCard) {
-    if (selectedJobId !== jobCard.job.id || !selectedJobCard || selectedJobCard.job.id !== jobCard.job.id) {
-      return null;
-    }
-
-    const crewNames = getCrewNames(jobCard);
-
-    return (
-      <div style={{ ...shellCardStyle(), padding: "16px", display: "grid", gap: "12px" }}>
+      <div key={jobCard.job.id} style={{ ...shellCardStyle(), padding: "16px", display: "grid", gap: "12px" }}>
         <div style={{ display: "grid", gap: "6px" }}>
-          <strong style={{ color: fieldColors.white, fontSize: "24px", lineHeight: 1.1, overflowWrap: "anywhere" }}>
+          <strong style={{ fontSize: "24px", lineHeight: 1.1, color: fieldColors.white, overflowWrap: "anywhere" }}>
             {jobCard.job.fieldName || jobCard.job.title}
           </strong>
-          <div style={{ color: fieldColors.goldBright, fontSize: "14px", fontWeight: 800 }}>{jobCard.job.number}</div>
-          <div style={{ color: fieldColors.whiteSoft, overflowWrap: "anywhere" }}>
-            {[jobCard.job.addressLine1, jobCard.job.addressLine2, jobCard.job.city, jobCard.job.region, jobCard.job.postalCode]
-              .filter(Boolean)
-              .join(", ") || "No address added"}
-          </div>
+          <span style={{ color: fieldColors.goldBright, fontSize: "14px", fontWeight: 800 }}>{jobCard.job.number || "No job number"}</span>
+          <span style={{ color: fieldColors.white, overflowWrap: "anywhere" }}>{jobCard.contactName ?? "No customer linked"}</span>
+          <span style={{ color: fieldColors.whiteSoft, fontSize: "13px", overflowWrap: "anywhere" }}>
+            {[jobCard.job.addressLine1, jobCard.job.city, jobCard.job.region].filter(Boolean).join(", ") || "No address added"}
+          </span>
         </div>
 
-        {selectedNeededMaterials.length > 0 ? (
+        {jobCard.neededMaterialsCount > 0 ? (
           <div
             style={{
               borderRadius: "14px",
@@ -847,235 +776,9 @@ export function FieldModePage() {
           </div>
         ) : null}
 
-        {renderSectionCard(
-          "info",
-          "Info",
-          <div style={{ display: "grid", gap: "12px" }}>
-            <div>
-              <div style={infoLabelStyle()}>Customer</div>
-              <div style={{ color: fieldColors.white, overflowWrap: "anywhere" }}>{jobCard.contactName ?? "No customer linked"}</div>
-            </div>
-            <div>
-              <div style={infoLabelStyle()}>Contact</div>
-              <div style={{ color: fieldColors.whiteSoft, overflowWrap: "anywhere" }}>{jobCard.contactSubtitle ?? "No contact details"}</div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>
-              <div style={{ ...softCardStyle(), padding: "12px" }}>
-                <div style={infoLabelStyle()}>Assigned Crew</div>
-                <div style={{ color: fieldColors.whiteSoft, overflowWrap: "anywhere" }}>{crewNames.join(", ") || "No crew assigned"}</div>
-              </div>
-              <div style={{ ...softCardStyle(), padding: "12px" }}>
-                <div style={infoLabelStyle()}>Estimated Hours</div>
-                <div style={{ color: fieldColors.white }}>{formatHours(jobCard.job.estimatedHours)}</div>
-              </div>
-              <div style={{ ...softCardStyle(), padding: "12px" }}>
-                <div style={infoLabelStyle()}>Actual Cost</div>
-                <div style={{ color: fieldColors.white }}>{formatMoney(jobWorkspace?.performance?.totalActualCost ?? null)}</div>
-              </div>
-            </div>
-            {canManageSchedule ? (
-              <button
-                type="button"
-                style={actionButtonStyle()}
-                disabled={scheduling.autoFillScheduleBlocks.isPending}
-                onClick={() => void handleAutoFillNextAvailable(jobCard)}
-              >
-                {jobCard.job.estimatedHours ? "Auto-fill Next Available" : "No estimated time set — schedule as 1 day?"}
-              </button>
-            ) : null}
-          </div>,
-        )}
-
-        {renderSectionCard(
-          "timer",
-          "Timer",
-          <div style={{ display: "grid", gap: "12px" }}>
-            <button
-              type="button"
-              style={actionButtonStyle()}
-              onClick={() =>
-                runningDraft?.jobId === jobCard.job.id
-                  ? void workbench.stopTimer()
-                  : void workbench.startTimer(jobCard.job.id)
-              }
-            >
-              {runningDraft?.jobId === jobCard.job.id ? "Stop Timer" : "Start Timer"}
-            </button>
-            {runningDraft?.jobId === jobCard.job.id && elapsed ? (
-              <div style={{ ...softCardStyle(), padding: "12px" }}>
-                <div style={infoLabelStyle()}>Elapsed</div>
-                <div style={{ color: fieldColors.goldBright, fontSize: "24px", fontWeight: 900 }}>{elapsed}</div>
-              </div>
-            ) : null}
-            {selectedTimeEntries.slice(0, 4).map((entry) => (
-              <div key={entry.id} style={{ ...softCardStyle(), padding: "12px" }}>
-                <strong style={{ display: "block", color: fieldColors.white }}>{formatHours(entry.hours)}</strong>
-                <span style={{ color: fieldColors.whiteSoft, fontSize: "13px", overflowWrap: "anywhere" }}>
-                  {entry.description ?? "Field labour"} · {entry.workDate}
-                </span>
-              </div>
-            ))}
-          </div>,
-        )}
-
-        {renderSectionCard(
-          "notes",
-          "Notes",
-          <div style={{ display: "grid", gap: "12px" }}>
-            <label style={{ display: "grid", gap: "6px" }}>
-              <span style={infoLabelStyle()}>New Note</span>
-              <textarea
-                ref={noteInputRef}
-                rows={3}
-                value={noteDraft}
-                onChange={(event) => setNoteDraft(event.target.value)}
-                style={inputStyle()}
-              />
-            </label>
-            <button type="button" style={actionButtonStyle()} onClick={() => void handleAddNote()} disabled={!noteDraft.trim()}>
-              Save Note
-            </button>
-            {(jobWorkspace?.notes ?? []).slice(0, 8).map((note) => (
-              <div key={note.id} style={{ ...softCardStyle(), padding: "12px" }}>
-                <p style={{ margin: 0, color: fieldColors.white, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-                  {note.body}
-                </p>
-                <div style={{ color: fieldColors.whiteSoft, fontSize: "12px", marginTop: "6px" }}>
-                  {new Date(note.createdAt).toLocaleString()}
-                </div>
-              </div>
-            ))}
-          </div>,
-        )}
-
-        {renderSectionCard(
-          "attachments",
-          "Attachments",
-          <div style={{ display: "grid", gap: "12px" }}>
-            <input ref={fileInputRef} type="file" hidden onChange={(event) => void handleUploadAttachment(event.target.files?.[0] ?? null)} />
-            <button type="button" style={actionButtonStyle()} onClick={() => fileInputRef.current?.click()}>
-              Upload Attachment
-            </button>
-            {(jobWorkspace?.attachments ?? []).length === 0 ? (
-              <div style={{ ...softCardStyle(), padding: "12px", color: fieldColors.whiteSoft }}>No attachments yet.</div>
-            ) : (
-              (jobWorkspace?.attachments ?? []).map((attachment) => (
-                <button
-                  key={attachment.id}
-                  type="button"
-                  onClick={() => void workbench.openAttachment(attachment.storagePath).then((url) => window.open(url, "_blank"))}
-                  style={{ ...softCardStyle(), padding: "12px", textAlign: "left", color: fieldColors.white }}
-                >
-                  <strong style={{ display: "block", overflowWrap: "anywhere" }}>{attachment.fileName}</strong>
-                  <span style={{ color: fieldColors.whiteSoft, fontSize: "12px" }}>
-                    {new Date(attachment.createdAt).toLocaleString()}
-                  </span>
-                </button>
-              ))
-            )}
-          </div>,
-        )}
-
-        {renderSectionCard(
-          "materials",
-          "Materials",
-          <div style={{ display: "grid", gap: "14px" }}>
-            {selectedNeededMaterials.length > 0 ? (
-              <div
-                style={{
-                  borderRadius: "14px",
-                  background: fieldColors.warningBg,
-                  color: fieldColors.warningText,
-                  padding: "12px 14px",
-                  fontWeight: 900,
-                  fontSize: "15px",
-                }}
-              >
-                Material is needed — don&apos;t forget!
-              </div>
-            ) : null}
-
-            <div style={{ display: "grid", gap: "10px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-                <strong style={{ color: fieldColors.white }}>Material Needed</strong>
-                <button
-                  type="button"
-                  style={{ ...actionButtonStyle(), width: "auto", minWidth: "180px" }}
-                  disabled={selectedNeededMaterials.length === 0 || workbench.clearNeededMaterials.isPending}
-                  onClick={() => void workbench.clearNeededMaterials.mutateAsync(jobCard.job.id)}
-                >
-                  Mark all picked up
-                </button>
-              </div>
-              {selectedNeededMaterials.length === 0 ? (
-                <div style={{ ...softCardStyle(), padding: "12px", color: fieldColors.whiteSoft }}>No needed materials right now.</div>
-              ) : (
-                selectedNeededMaterials.map((material) => (
-                  <div key={material.id} style={{ ...softCardStyle(), padding: "12px" }}>
-                    <strong style={{ display: "block", color: fieldColors.white, overflowWrap: "anywhere" }}>
-                      {material.displayName ?? material.materialName}
-                    </strong>
-                    <span style={{ color: fieldColors.goldBright, fontSize: "13px" }}>
-                      {material.quantity} {material.unitSnapshot ?? material.materialUnit}
-                    </span>
-                    {material.note ? (
-                      <div style={{ color: fieldColors.whiteSoft, fontSize: "12px", marginTop: "4px", overflowWrap: "anywhere" }}>
-                        {material.note}
-                      </div>
-                    ) : null}
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div style={{ display: "grid", gap: "10px" }}>
-              <strong style={{ color: fieldColors.white }}>Material Used</strong>
-              <label style={{ display: "grid", gap: "6px" }}>
-                <span style={infoLabelStyle()}>Search Material</span>
-                <MaterialSearchSelect
-                  catalogItems={catalogItems}
-                  selectedMaterialId={usedMaterialDraft.materialId}
-                  isPending={workbench.createJobMaterial.isPending}
-                  placeholder="Search materials or nicknames"
-                  onSelect={(materialId) => setUsedMaterialDraft((current) => ({ ...current, materialId }))}
-                />
-              </label>
-              <label style={{ display: "grid", gap: "6px" }}>
-                <span style={infoLabelStyle()}>Quantity</span>
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={usedMaterialDraft.quantity}
-                  onChange={(event) => setUsedMaterialDraft((current) => ({ ...current, quantity: event.target.value }))}
-                  style={inputStyle()}
-                />
-              </label>
-              <button
-                type="button"
-                style={actionButtonStyle()}
-                disabled={!usedMaterialDraft.materialId || workbench.createJobMaterial.isPending}
-                onClick={() => void handleAddUsedMaterial()}
-              >
-                Add Material Used
-              </button>
-              {selectedUsedMaterials.length === 0 ? (
-                <div style={{ ...softCardStyle(), padding: "12px", color: fieldColors.whiteSoft }}>No used materials yet.</div>
-              ) : (
-                selectedUsedMaterials.map((material: JobMaterialView) => (
-                  <div key={material.id} style={{ ...softCardStyle(), padding: "12px" }}>
-                    <strong style={{ display: "block", color: fieldColors.white, overflowWrap: "anywhere" }}>
-                      {material.displayName ?? material.materialName}
-                    </strong>
-                    <span style={{ color: fieldColors.green, fontSize: "13px", fontWeight: 800 }}>
-                      {material.quantity} {material.unitSnapshot ?? material.materialUnit}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>,
-        )}
+        <button type="button" onClick={() => openFieldJob(jobCard.job.id)} style={actionButtonStyle()}>
+          Open Job
+        </button>
       </div>
     );
   }
@@ -1086,7 +789,7 @@ export function FieldModePage() {
         minHeight: "100vh",
         background: `linear-gradient(180deg, ${fieldColors.backgroundTop} 0%, ${fieldColors.backgroundMid} 48%, ${fieldColors.backgroundBottom} 100%)`,
         color: fieldColors.white,
-        padding: "18px 14px 32px",
+        padding: "8px 12px 32px",
         overflowX: "hidden",
       }}
     >
@@ -1242,7 +945,7 @@ export function FieldModePage() {
                     <button
                       key={jobCard.job.id}
                       type="button"
-                      onClick={() => toggleJobSelection(jobCard.job.id)}
+                      onClick={() => openFieldJob(jobCard.job.id)}
                       style={{ ...softCardStyle(), padding: "12px", textAlign: "left", color: fieldColors.white }}
                     >
                       <strong style={{ display: "block", overflowWrap: "anywhere" }}>{jobCard.job.fieldName || jobCard.job.title}</strong>
@@ -1254,36 +957,14 @@ export function FieldModePage() {
             ) : null}
 
             <div style={{ display: "grid", gap: "8px" }}>
-              <div style={{ ...infoLabelStyle(), justifySelf: "center" }}>Expand a job to view details</div>
-              {filteredJobs.map((jobCard) => (
-                <div key={jobCard.job.id} style={{ display: "grid", gap: "10px" }}>
-                  <button
-                    type="button"
-                    onClick={() => toggleJobSelection(jobCard.job.id)}
-                    style={{ ...shellCardStyle(), padding: "16px", textAlign: "left", color: fieldColors.white }}
-                  >
-                    <div style={{ display: "grid", gap: "6px" }}>
-                      <strong style={{ fontSize: "24px", lineHeight: 1.1, overflowWrap: "anywhere" }}>
-                        {jobCard.job.fieldName || jobCard.job.title}
-                      </strong>
-                      <div style={{ color: fieldColors.goldBright, fontSize: "14px", fontWeight: 800 }}>{jobCard.job.number}</div>
-                      <div style={{ color: fieldColors.white, fontSize: "15px", overflowWrap: "anywhere" }}>
-                        {jobCard.contactName ?? "No customer linked"}
-                      </div>
-                      <div style={{ color: fieldColors.whiteSoft, fontSize: "13px", overflowWrap: "anywhere" }}>
-                        {[jobCard.job.addressLine1, jobCard.job.addressLine2, jobCard.job.city, jobCard.job.region, jobCard.job.postalCode]
-                          .filter(Boolean)
-                          .join(", ") || "No address added"}
-                      </div>
-                    </div>
-                  </button>
-                  {renderSelectedJobDetails(jobCard)}
-                </div>
-              ))}
+              <div style={{ ...infoLabelStyle(), justifySelf: "center" }}>Tap a job to open details</div>
+              {filteredJobs.map((jobCard) => renderJobListCard(jobCard))}
             </div>
           </div>,
+          <span style={{ fontSize: "24px" }}>🔎</span>,
         )}
       </div>
+      {renderFinishTimerPanel()}
     </div>
   );
 }

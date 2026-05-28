@@ -103,7 +103,9 @@ export function useWorkbenchSlice(
 
   const jobWorkspaceQuery = useQuery({
     queryKey: [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id, options?.selectedJobId ?? null],
-    enabled: Boolean(options?.selectedJobId),
+    enabled:
+      Boolean(options?.selectedJobId) &&
+      Boolean(jobsQuery.data?.some((item) => item.job.id === options?.selectedJobId)),
     queryFn: async () => {
       const selectedJob = jobsQuery.data?.find((item) => item.job.id === options?.selectedJobId)?.job;
       if (!selectedJob) {
@@ -844,7 +846,7 @@ export function useWorkbenchSlice(
   }
 
   function updateTimeEntryDraft(
-    patch: Partial<Pick<TimeEntryDraft, "jobId" | "startedAt" | "endedAt" | "description">>,
+    patch: Partial<Pick<TimeEntryDraft, "jobId" | "userId" | "startedAt" | "endedAt" | "description">>,
   ) {
     setTimeEntryDraft((currentDraft) => {
       if (!currentDraft) {
@@ -867,7 +869,7 @@ export function useWorkbenchSlice(
   }
 
   function updateActiveRunningTimerDraft(
-    patch: Partial<Pick<TimeEntryDraft, "jobId" | "startedAt" | "endedAt" | "description">>,
+    patch: Partial<Pick<TimeEntryDraft, "jobId" | "userId" | "startedAt" | "endedAt" | "description">>,
   ) {
     setActiveRunningTimerDraft((currentDraft) => {
       if (!currentDraft) {

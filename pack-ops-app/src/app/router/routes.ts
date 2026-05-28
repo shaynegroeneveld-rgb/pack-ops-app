@@ -28,6 +28,7 @@ export const APP_ROUTES = {
   settings: "/settings",
   time: "/time",
   field: "/field",
+  fieldJobs: "/field/jobs",
   pipeline: "/pipeline",
   workbench: "/workbench",
   money: "/money",
