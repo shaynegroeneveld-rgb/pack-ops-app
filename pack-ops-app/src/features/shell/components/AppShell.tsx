@@ -81,6 +81,7 @@ const FINANCE_ROUTES = [
 ] as const;
 const SETTINGS_UPDATED_EVENT = "pack-settings-updated";
 const MOBILE_SHELL_MAX_WIDTH = 820;
+const MOBILE_FIELD_DESKTOP_OVERRIDE_KEY = "pack-ops-mobile-desktop-override";
 
 interface SyncIndicatorState {
   pendingCount: number;
@@ -285,6 +286,23 @@ export function AppShell() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    if (!currentUser || !isMobileShellLayout) {
+      return;
+    }
+
+    if (activeRoute !== APP_ROUTES.workbench) {
+      return;
+    }
+
+    const hasDesktopOverride =
+      typeof window !== "undefined" && window.sessionStorage.getItem(MOBILE_FIELD_DESKTOP_OVERRIDE_KEY) === "1";
+
+    if (!hasDesktopOverride) {
+      setActiveRoute(APP_ROUTES.field);
+    }
+  }, [activeRoute, currentUser, isMobileShellLayout, setActiveRoute]);
 
   useEffect(() => {
     function handleOnline() {

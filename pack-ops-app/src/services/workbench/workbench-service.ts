@@ -48,6 +48,7 @@ import {
   canEditWorkbenchTimeEntry,
   canCreateWorkbenchTimeEntry,
   canResolveWorkbenchActionItem,
+  canUpdateWorkbenchJobStatus,
   canViewWorkbenchJob,
 } from "@/services/permissions/workbench-permissions";
 import { computeJobPerformanceSummary } from "@/services/jobs/job-performance";
@@ -729,13 +730,15 @@ export class WorkbenchService {
       },
     });
 
-    if (!canCreateWorkbenchJob(this.currentUser)) {
-      throw new Error("You cannot update job status.");
-    }
-
     const currentJob = await this.jobs.getById(input.jobId);
     if (!currentJob) {
       throw new Error("Job not found.");
+    }
+
+    const assignments = await this.jobAssignments.list({ filter: { jobId: currentJob.id } });
+
+    if (!canUpdateWorkbenchJobStatus(this.currentUser, currentJob, assignments)) {
+      throw new Error("You cannot update job status.");
     }
     if (
       currentJob.status === input.status &&

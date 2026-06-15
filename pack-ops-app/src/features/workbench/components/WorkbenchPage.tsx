@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useAuthContext } from "@/app/contexts/auth-context";
 import { useUiStore } from "@/app/store/ui-store";
 import { getSupabaseClient } from "@/data/supabase/client";
-import { JOB_WAITING_REASONS, type JobStatus } from "@/domain/enums";
+import { JOB_STATUSES, JOB_WAITING_REASONS, type JobStatus } from "@/domain/enums";
 import type {
   ActualInvoiceControls,
   ActualsInvoicePreviewBase,
@@ -840,6 +840,7 @@ export function WorkbenchPage() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [jobScreen, setJobScreen] = useState<JobScreen>("main");
   const [showCreateJob, setShowCreateJob] = useState(false);
+  const [jobStatusFilter, setJobStatusFilter] = useState<"all" | JobStatus>("all");
   const [showAssignPeople, setShowAssignPeople] = useState(false);
   const [showHiddenJobs, setShowHiddenJobs] = useState(() => {
     if (typeof window === "undefined") {
@@ -965,8 +966,9 @@ export function WorkbenchPage() {
   });
 
   const jobs = jobsQuery.data ?? [];
-  const activeJobs = jobs.filter((item) => !HIDDEN_JOB_STATUSES.includes(item.job.status));
-  const hiddenJobs = jobs.filter((item) => HIDDEN_JOB_STATUSES.includes(item.job.status));
+  const statusFilteredJobs = jobs.filter((item) => jobStatusFilter === "all" || item.job.status === jobStatusFilter);
+  const activeJobs = statusFilteredJobs.filter((item) => !HIDDEN_JOB_STATUSES.includes(item.job.status));
+  const hiddenJobs = statusFilteredJobs.filter((item) => HIDDEN_JOB_STATUSES.includes(item.job.status));
   const contacts = contactsQuery.data ?? [];
   const assignableUsers = assignableUsersQuery.data ?? [];
   const activeTimers = activeTimersQuery.data ?? [];
@@ -2002,6 +2004,35 @@ export function WorkbenchPage() {
         </div>
       ) : null}
 
+      {jobs.length > 0 ? (
+        <section style={{ ...cardStyle("#fafcff"), display: "grid", gap: "10px" }}>
+          <div style={sectionHeadingRow()}>
+            <div>
+              <strong style={{ display: "block" }}>Filter Jobs</strong>
+              <span style={{ color: "#5b6475", fontSize: "13px" }}>
+                Search the Workbench list by status while keeping the active vs completed grouping.
+              </span>
+            </div>
+            <span style={{ color: "#5b6475", fontSize: "13px" }}>{statusFilteredJobs.length}</span>
+          </div>
+          <label style={{ display: "grid", gap: "6px", maxWidth: "280px" }}>
+            <span style={{ color: "#5b6475", fontSize: "13px" }}>Job status</span>
+            <select
+              value={jobStatusFilter}
+              onChange={(event) => setJobStatusFilter(event.target.value as "all" | JobStatus)}
+              style={{ minHeight: "44px", borderRadius: "12px", padding: "10px 12px" }}
+            >
+              <option value="all">All statuses</option>
+              {JOB_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {getJobStatusLabel(status)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
+      ) : null}
+
       {activeJobs.length > 0 ? (
         <section style={{ display: "grid", gap: "12px" }}>
           <div style={sectionHeadingRow()}>
@@ -2062,7 +2093,7 @@ export function WorkbenchPage() {
             ))}
           </div>
         </section>
-      ) : jobs.length > 0 ? (
+      ) : statusFilteredJobs.length > 0 ? (
         <section style={{ ...cardStyle("#fafcff"), borderStyle: "dashed", color: "#5b6475" }}>
           No active jobs right now.
         </section>

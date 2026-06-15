@@ -19,6 +19,22 @@ export function canCreateWorkbenchJob(user: User): boolean {
   return user.role === "owner" || user.role === "office";
 }
 
+export function canUpdateWorkbenchJobStatus(
+  user: User,
+  job: Job,
+  assignments: JobAssignment[],
+): boolean {
+  if (user.role === "owner" || user.role === "office") {
+    return true;
+  }
+
+  if (user.role === "field") {
+    return assignments.some((assignment) => assignment.jobId === job.id && assignment.userId === user.id);
+  }
+
+  return false;
+}
+
 export function canAssignCurrentUserToWorkbenchJob(user: User): boolean {
   return user.role === "owner" || user.role === "office";
 }

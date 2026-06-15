@@ -213,13 +213,16 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
       <div
         style={{
           minHeight: "100vh",
+          width: "100%",
+          maxWidth: "100vw",
+          boxSizing: "border-box",
           background: `linear-gradient(180deg, ${fieldColors.backgroundTop} 0%, ${fieldColors.backgroundMid} 48%, ${fieldColors.backgroundBottom} 100%)`,
           color: fieldColors.white,
           padding: "12px",
         }}
       >
-        <div style={{ width: "100%", maxWidth: "760px", margin: "0 auto", display: "grid", gap: "16px" }}>
-          <button type="button" style={{ ...actionButtonStyle("secondary"), width: "auto" }} onClick={() => setActiveRoute(APP_ROUTES.field)}>
+        <div style={{ width: "min(100%, 760px)", maxWidth: "calc(100vw - 24px)", boxSizing: "border-box", margin: "0 auto", display: "grid", gap: "16px", minWidth: 0 }}>
+          <button type="button" style={{ ...actionButtonStyle("secondary"), width: "auto", maxWidth: "100%", boxSizing: "border-box" }} onClick={() => setActiveRoute(APP_ROUTES.field)}>
             Back
           </button>
           <div style={{ ...shellCardStyle(), padding: "18px", display: "grid", gap: "8px" }}>
@@ -236,13 +239,16 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
       <div
         style={{
           minHeight: "100vh",
+          width: "100%",
+          maxWidth: "100vw",
+          boxSizing: "border-box",
           background: `linear-gradient(180deg, ${fieldColors.backgroundTop} 0%, ${fieldColors.backgroundMid} 48%, ${fieldColors.backgroundBottom} 100%)`,
           color: fieldColors.white,
           padding: "12px",
         }}
       >
-        <div style={{ width: "100%", maxWidth: "760px", margin: "0 auto", display: "grid", gap: "16px" }}>
-          <button type="button" style={{ ...actionButtonStyle("secondary"), width: "auto" }} onClick={() => setActiveRoute(APP_ROUTES.field)}>
+        <div style={{ width: "min(100%, 760px)", maxWidth: "calc(100vw - 24px)", boxSizing: "border-box", margin: "0 auto", display: "grid", gap: "16px", minWidth: 0 }}>
+          <button type="button" style={{ ...actionButtonStyle("secondary"), width: "auto", maxWidth: "100%", boxSizing: "border-box" }} onClick={() => setActiveRoute(APP_ROUTES.field)}>
             Back
           </button>
           <div style={{ ...shellCardStyle(), padding: "18px", display: "grid", gap: "8px" }}>
@@ -258,17 +264,20 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
     <div
       style={{
         minHeight: "100vh",
+        width: "100%",
+        maxWidth: "100vw",
+        boxSizing: "border-box",
         background: `linear-gradient(180deg, ${fieldColors.backgroundTop} 0%, ${fieldColors.backgroundMid} 48%, ${fieldColors.backgroundBottom} 100%)`,
         color: fieldColors.white,
         padding: "10px 12px 32px",
         overflowX: "hidden",
       }}
     >
-      <div style={{ width: "100%", maxWidth: "760px", margin: "0 auto", display: "grid", gap: "14px", minWidth: 0 }}>
-        <header style={{ ...shellCardStyle(), padding: "16px", display: "grid", gap: "10px" }}>
+      <div style={{ width: "min(100%, 760px)", maxWidth: "calc(100vw - 24px)", boxSizing: "border-box", margin: "0 auto", display: "grid", gap: "14px", minWidth: 0 }}>
+        <header style={{ ...shellCardStyle(), padding: "16px", display: "grid", gap: "10px", minWidth: 0 }}>
           <button
             type="button"
-            style={{ ...actionButtonStyle("secondary"), width: "auto", justifySelf: "start", minWidth: "120px" }}
+            style={{ ...actionButtonStyle("secondary"), width: "auto", justifySelf: "start", minWidth: "min(120px, 100%)", maxWidth: "100%", boxSizing: "border-box" }}
             onClick={() => setActiveRoute(APP_ROUTES.field)}
           >
             Back

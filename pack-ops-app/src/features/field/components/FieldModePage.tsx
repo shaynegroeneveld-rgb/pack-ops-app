@@ -4,6 +4,7 @@ import { useAuthContext } from "@/app/contexts/auth-context";
 import { APP_ROUTES } from "@/app/router/routes";
 import { useUiStore } from "@/app/store/ui-store";
 import { getSupabaseClient } from "@/data/supabase/client";
+import { getAllowedNextJobStatuses } from "@/domain/jobs/status";
 import {
   deriveTimeEntryDraftElapsedLabel,
   deriveTimeEntryDraftHours,
@@ -37,6 +38,7 @@ import {
 } from "./field-mode-shared";
 
 const fieldJobRoute = (jobId: string) => `${APP_ROUTES.fieldJobs}/${jobId}`;
+const MOBILE_FIELD_DESKTOP_OVERRIDE_KEY = "pack-ops-mobile-desktop-override";
 
 type MainAccordionKey = "today" | "tomorrow" | "week" | "jobs";
 
@@ -79,6 +81,9 @@ export function FieldModePage() {
   const [jobSearch, setJobSearch] = useState("");
   const [recentJobIds, setRecentJobIds] = useState<string[]>([]);
   const [showAddJobForm, setShowAddJobForm] = useState(false);
+  const [showTimerStartEditor, setShowTimerStartEditor] = useState(false);
+  const [timerStartDraft, setTimerStartDraft] = useState("");
+  const [timerStartError, setTimerStartError] = useState<string | null>(null);
   const [mainAccordions, setMainAccordions] = useState<Record<MainAccordionKey, boolean>>({
     today: false,
     tomorrow: false,
@@ -185,6 +190,32 @@ export function FieldModePage() {
     [jobCards, recentJobIds],
   );
 
+  useEffect(() => {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const docWidth = document.documentElement.clientWidth;
+      const offenders = Array.from(document.body.querySelectorAll<HTMLElement>("*"))
+        .filter((element) => element.clientWidth > 0 && element.scrollWidth - element.clientWidth > 2)
+        .filter((element) => element.scrollWidth > docWidth + 2)
+        .map((element) => ({
+          tag: element.tagName.toLowerCase(),
+          className: element.className,
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+          text: (element.textContent ?? "").trim().slice(0, 80),
+        }));
+
+      if (offenders.length > 0) {
+        console.info("[FieldModePage] mobile overflow offenders", offenders);
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [mainAccordions, recentJobs.length, filteredJobs.length, showAddJobForm, showTimerStartEditor]);
+
   function toggleMainAccordion(key: MainAccordionKey) {
     setMainAccordions((current) => ({ ...current, [key]: !current[key] }));
   }
@@ -247,16 +278,59 @@ export function FieldModePage() {
     openFieldJob(String(createdJob.id));
   }
 
+  async function handleSaveRunningTimerStart() {
+    if (!runningDraft) {
+      return;
+    }
+
+    const nextStartedAt = fromDateTimeLocalValue(timerStartDraft);
+    const nextStartedAtMs = new Date(nextStartedAt).getTime();
+
+    if (!Number.isFinite(nextStartedAtMs)) {
+      setTimerStartError("Start time is invalid.");
+      return;
+    }
+
+    if (nextStartedAtMs > Date.now()) {
+      setTimerStartError("Start time cannot be in the future.");
+      return;
+    }
+
+    setTimerStartError(null);
+    workbench.updateActiveRunningTimerDraft({ startedAt: nextStartedAt });
+    setShowTimerStartEditor(false);
+  }
+
+  async function handleMarkJobComplete(jobCard: WorkbenchJobCard) {
+    if (!getAllowedNextJobStatuses(jobCard.job.status).includes("work_complete")) {
+      window.alert("This job cannot be marked complete from its current status yet.");
+      return;
+    }
+
+    const confirmed = window.confirm(`Mark ${jobCard.job.title} as complete?`);
+    if (!confirmed) {
+      return;
+    }
+
+    await workbench.updateJobStatus.mutateAsync({
+      jobId: jobCard.job.id,
+      status: "work_complete",
+      waitingReason: null,
+    });
+  }
+
   function renderBrandHeader() {
     return (
-      <header style={{ display: "grid", gap: "10px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
+      <header style={{ display: "grid", gap: "10px", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap", width: "100%", maxWidth: "100%", minWidth: 0 }}>
           <div style={{ flex: 1, minWidth: 0, display: "grid", justifyItems: "center", paddingTop: "2px" }}>
             {logoDataUrl ? (
               <div
                 style={{
-                  width: "min(280px, 72vw)",
+                  width: "min(280px, calc(100vw - 72px))",
                   maxWidth: "100%",
+                  minWidth: 0,
+                  boxSizing: "border-box",
                   display: "grid",
                   justifyItems: "center",
                   gap: "2px",
@@ -344,13 +418,20 @@ export function FieldModePage() {
 
           <button
             type="button"
-            onClick={() => setActiveRoute(APP_ROUTES.workbench)}
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.sessionStorage.setItem(MOBILE_FIELD_DESKTOP_OVERRIDE_KEY, "1");
+              }
+              setActiveRoute(APP_ROUTES.workbench);
+            }}
             style={{
               ...actionButtonStyle("secondary"),
               width: "auto",
-              minWidth: "132px",
+              maxWidth: "100%",
+              minWidth: "min(132px, 100%)",
               padding: "10px 14px",
               minHeight: "42px",
+              boxSizing: "border-box",
             }}
           >
             Back to Main Page
@@ -372,7 +453,7 @@ export function FieldModePage() {
           overflow: "hidden",
         }}
       >
-        <div style={{ position: "relative", width: "100%", maxWidth: "390px", minHeight: "300px", display: "grid", placeItems: "center" }}>
+        <div style={{ position: "relative", width: "min(100%, 390px)", maxWidth: "calc(100vw - 56px)", minWidth: 0, minHeight: "300px", display: "grid", placeItems: "center", boxSizing: "border-box" }}>
           {weekdayLabels.map((entry) => (
             <span
               key={entry.label}
@@ -390,8 +471,9 @@ export function FieldModePage() {
           ))}
           <div
             style={{
-              width: "260px",
-              height: "260px",
+              width: "min(260px, calc(100vw - 92px))",
+              height: "min(260px, calc(100vw - 92px))",
+              maxWidth: "100%",
               borderRadius: "999px",
               border: `12px solid ${fieldColors.gold}`,
               background: "radial-gradient(circle at 50% 40%, rgba(130, 16, 33, 0.56), rgba(25, 3, 8, 0.82))",
@@ -416,6 +498,48 @@ export function FieldModePage() {
                 <div style={{ color: fieldColors.goldBright, fontSize: "32px", fontWeight: 900, letterSpacing: "0.04em" }}>
                   {elapsed}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTimerStartDraft(toDateTimeLocalValue(runningDraft.startedAt));
+                    setTimerStartError(null);
+                    setShowTimerStartEditor((current) => !current);
+                  }}
+                  style={{ ...actionButtonStyle("secondary"), minHeight: "38px", padding: "10px 12px" }}
+                >
+                  Edit Start Time
+                </button>
+                {showTimerStartEditor ? (
+                  <div style={{ ...softCardStyle(), padding: "10px 12px", display: "grid", gap: "8px" }}>
+                    <label style={{ display: "grid", gap: "6px", textAlign: "left" }}>
+                      <span style={infoLabelStyle()}>Running Timer Start</span>
+                      <input
+                        type="datetime-local"
+                        value={timerStartDraft}
+                        onChange={(event) => setTimerStartDraft(event.target.value)}
+                        style={inputStyle()}
+                      />
+                    </label>
+                    {timerStartError ? (
+                      <div style={{ color: fieldColors.danger, fontSize: "13px", textAlign: "left" }}>{timerStartError}</div>
+                    ) : null}
+                    <div style={{ display: "grid", gap: "8px" }}>
+                      <button type="button" onClick={() => void handleSaveRunningTimerStart()} style={actionButtonStyle()}>
+                        Save Start Time
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowTimerStartEditor(false);
+                          setTimerStartError(null);
+                        }}
+                        style={actionButtonStyle("secondary")}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 <button type="button" onClick={() => void workbench.stopTimer()} style={actionButtonStyle()}>
                   Stop Timer
                 </button>
@@ -496,6 +620,10 @@ export function FieldModePage() {
             gap: "12px",
             maxHeight: "88vh",
             overflowY: "auto",
+            width: "min(100%, 760px)",
+            maxWidth: "calc(100vw - 24px)",
+            boxSizing: "border-box",
+            justifySelf: "center",
           }}
         >
           <div style={{ display: "grid", gap: "6px" }}>
@@ -732,6 +860,16 @@ export function FieldModePage() {
           <button type="button" style={actionButtonStyle("secondary")} onClick={() => openFieldJob(jobCard.job.id)}>
             Open Job
           </button>
+          {getAllowedNextJobStatuses(jobCard.job.status).includes("work_complete") ? (
+            <button
+              type="button"
+              style={actionButtonStyle()}
+              disabled={workbench.updateJobStatus.isPending}
+              onClick={() => void handleMarkJobComplete(jobCard)}
+            >
+              {workbench.updateJobStatus.isPending ? "Completing..." : "Job Complete"}
+            </button>
+          ) : null}
           {canManageSchedule ? (
             <button
               type="button"
@@ -779,6 +917,16 @@ export function FieldModePage() {
         <button type="button" onClick={() => openFieldJob(jobCard.job.id)} style={actionButtonStyle()}>
           Open Job
         </button>
+        {getAllowedNextJobStatuses(jobCard.job.status).includes("work_complete") ? (
+          <button
+            type="button"
+            onClick={() => void handleMarkJobComplete(jobCard)}
+            style={actionButtonStyle("secondary")}
+            disabled={workbench.updateJobStatus.isPending}
+          >
+            {workbench.updateJobStatus.isPending ? "Completing..." : "Job Complete"}
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -787,13 +935,16 @@ export function FieldModePage() {
     <div
       style={{
         minHeight: "100vh",
+        width: "100%",
+        maxWidth: "100vw",
+        boxSizing: "border-box",
         background: `linear-gradient(180deg, ${fieldColors.backgroundTop} 0%, ${fieldColors.backgroundMid} 48%, ${fieldColors.backgroundBottom} 100%)`,
         color: fieldColors.white,
         padding: "8px 12px 32px",
         overflowX: "hidden",
       }}
     >
-      <div style={{ width: "100%", maxWidth: "760px", margin: "0 auto", display: "grid", gap: "16px", minWidth: 0 }}>
+      <div style={{ width: "min(100%, 760px)", maxWidth: "calc(100vw - 24px)", boxSizing: "border-box", margin: "0 auto", display: "grid", gap: "16px", minWidth: 0 }}>
         {renderBrandHeader()}
         {renderTimerHero()}
 

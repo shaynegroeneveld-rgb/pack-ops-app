@@ -119,6 +119,9 @@ export function formatBlockTime(startAt: string, endAt: string, timeBucket: stri
 
 export function shellCardStyle(): CSSProperties {
   return {
+    width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     borderRadius: "22px",
     border: `1px solid ${fieldColors.border}`,
     background: fieldColors.card,
@@ -129,6 +132,9 @@ export function shellCardStyle(): CSSProperties {
 
 export function softCardStyle(): CSSProperties {
   return {
+    width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     borderRadius: "18px",
     border: `1px solid rgba(255, 183, 32, 0.16)`,
     background: fieldColors.cardSoft,
@@ -146,6 +152,8 @@ export function actionButtonStyle(kind: "primary" | "secondary" = "primary"): CS
     fontSize: "16px",
     fontWeight: 800,
     width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     boxShadow: kind === "primary" ? "0 10px 24px rgba(255, 177, 0, 0.2)" : "none",
   };
 }
@@ -153,6 +161,8 @@ export function actionButtonStyle(kind: "primary" | "secondary" = "primary"): CS
 export function toggleButtonStyle(isOpen: boolean): CSSProperties {
   return {
     width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     borderRadius: "20px",
     border: `1px solid ${fieldColors.border}`,
     background: "rgba(124, 20, 32, 0.42)",
@@ -183,6 +193,8 @@ export function infoLabelStyle(): CSSProperties {
 export function inputStyle(): CSSProperties {
   return {
     width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     borderRadius: "16px",
     border: `1px solid rgba(255, 183, 32, 0.18)`,
     background: "rgba(20, 4, 8, 0.48)",
