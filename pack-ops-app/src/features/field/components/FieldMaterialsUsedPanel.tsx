@@ -77,6 +77,7 @@ export function FieldMaterialsUsedPanel({
   const [activeTab, setActiveTab] = useState<MaterialsUsedTab>("materials");
   const [search, setSearch] = useState("");
   const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
+  const hasSearch = search.trim().length > 0;
 
   useEffect(() => {
     setQuantityDrafts((current) => {
@@ -91,16 +92,13 @@ export function FieldMaterialsUsedPanel({
   const catalogItemsById = useMemo(() => new Map(catalogItems.map((item) => [String(item.id), item])), [catalogItems]);
 
   const filteredMaterials = useMemo(
-    () =>
-      search.trim()
-        ? catalogItems.filter((item) => matchesCatalogItemSearch(item, search)).slice(0, 10)
-        : catalogItems.slice(0, 10),
-    [catalogItems, search],
+    () => (hasSearch ? catalogItems.filter((item) => matchesCatalogItemSearch(item, search)).slice(0, 10) : []),
+    [catalogItems, hasSearch, search],
   );
 
   const filteredAssemblies = useMemo(
-    () => (search.trim() ? assemblies.filter((assembly) => assemblyMatchesSearch(assembly, search)) : assemblies).slice(0, 8),
-    [assemblies, search],
+    () => (hasSearch ? assemblies.filter((assembly) => assemblyMatchesSearch(assembly, search)) : []).slice(0, 8),
+    [assemblies, hasSearch, search],
   );
 
   const recentItems = useMemo(() => {
@@ -171,6 +169,7 @@ export function FieldMaterialsUsedPanel({
       sourceAssemblyName: options?.sourceAssemblyName ?? null,
       sourceAssemblyMultiplier: options?.sourceAssemblyMultiplier ?? null,
     });
+    setSearch("");
   }
 
   async function handleAddAssembly(assembly: AssemblyView) {
@@ -247,7 +246,12 @@ export function FieldMaterialsUsedPanel({
 
   return (
     <div style={{ display: "grid", gap: "12px" }}>
-      <strong style={{ color: fieldColors.white }}>Materials Used</strong>
+      <div style={{ display: "grid", gap: "4px" }}>
+        <strong style={{ color: fieldColors.white }}>Materials Used</strong>
+        <span style={{ color: fieldColors.whiteSoft, fontSize: "13px" }}>
+          Search materials or assemblies, then tap once to add them to actual usage.
+        </span>
+      </div>
       <label style={{ display: "grid", gap: "6px" }}>
         <span style={infoLabelStyle()}>Quick Search</span>
         <input
@@ -271,7 +275,13 @@ export function FieldMaterialsUsedPanel({
         </button>
       </div>
 
-      {activeTab === "materials" ? (
+      {!hasSearch && activeTab !== "recent" ? (
+        <div style={{ ...softCardStyle(), padding: "12px", color: fieldColors.whiteSoft }}>
+          Search materials or assemblies.
+        </div>
+      ) : null}
+
+      {activeTab === "materials" && hasSearch ? (
         <div style={{ display: "grid", gap: "8px" }}>
           {filteredMaterials.length === 0 ? (
             <div style={{ ...softCardStyle(), padding: "12px", color: fieldColors.whiteSoft }}>No materials matched that search.</div>
@@ -317,7 +327,7 @@ export function FieldMaterialsUsedPanel({
         </div>
       ) : null}
 
-      {activeTab === "assemblies" ? (
+      {activeTab === "assemblies" && hasSearch ? (
         <div style={{ display: "grid", gap: "8px" }}>
           {filteredAssemblies.length === 0 ? (
             <div style={{ ...softCardStyle(), padding: "12px", color: fieldColors.whiteSoft }}>No assemblies matched that search.</div>
@@ -397,52 +407,55 @@ export function FieldMaterialsUsedPanel({
         </div>
       ) : null}
 
-      {usedMaterials.length === 0 ? (
-        <div style={{ ...softCardStyle(), padding: "12px", color: fieldColors.whiteSoft }}>No used materials yet.</div>
-      ) : (
-        usedMaterials.map((line) => (
-          <div key={line.id} style={{ ...softCardStyle(), padding: "12px", display: "grid", gap: "10px" }}>
-            <div style={{ display: "grid", gap: "2px" }}>
-              <strong style={{ color: fieldColors.white, overflowWrap: "anywhere" }}>{line.displayName ?? line.materialName}</strong>
-              <span style={{ color: fieldColors.green, fontSize: "13px", fontWeight: 800 }}>
-                {line.quantity} {line.unitSnapshot ?? line.materialUnit}
-              </span>
-              {line.sourceAssemblyName ? (
-                <span style={{ color: fieldColors.goldBright, fontSize: "12px", overflowWrap: "anywhere" }}>
-                  From assembly: {line.sourceAssemblyName}
+      <div style={{ display: "grid", gap: "8px" }}>
+        <div style={infoLabelStyle()}>Used Materials</div>
+        {usedMaterials.length === 0 ? (
+          <div style={{ ...softCardStyle(), padding: "12px", color: fieldColors.whiteSoft }}>No used materials yet.</div>
+        ) : (
+          usedMaterials.map((line) => (
+            <div key={line.id} style={{ ...softCardStyle(), padding: "12px", display: "grid", gap: "10px" }}>
+              <div style={{ display: "grid", gap: "2px" }}>
+                <strong style={{ color: fieldColors.white, overflowWrap: "anywhere" }}>{line.displayName ?? line.materialName}</strong>
+                <span style={{ color: fieldColors.green, fontSize: "13px", fontWeight: 800 }}>
+                  {line.quantity} {line.unitSnapshot ?? line.materialUnit}
                 </span>
-              ) : null}
+                {line.sourceAssemblyName ? (
+                  <span style={{ color: fieldColors.goldBright, fontSize: "12px", overflowWrap: "anywhere" }}>
+                    From assembly: {line.sourceAssemblyName}
+                  </span>
+                ) : null}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" }}>
+                <button type="button" disabled={isPending} style={actionButtonStyle("secondary")} onClick={() => void handleQuantityDelta(line, -1)}>
+                  -1
+                </button>
+                <button type="button" disabled={isPending} style={actionButtonStyle("secondary")} onClick={() => void handleQuantityDelta(line, 1)}>
+                  +1
+                </button>
+                <button type="button" disabled={isPending} style={actionButtonStyle("secondary")} onClick={() => void onDeleteUsedMaterial(line.id)}>
+                  Remove
+                </button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "8px", alignItems: "end" }}>
+                <label style={{ display: "grid", gap: "6px" }}>
+                  <span style={infoLabelStyle()}>Exact Quantity</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={quantityDrafts[line.id] ?? String(line.quantity)}
+                    onChange={(event) => setQuantityDrafts((current) => ({ ...current, [line.id]: event.target.value }))}
+                    style={inputStyle()}
+                  />
+                </label>
+                <button type="button" disabled={isPending} style={{ ...actionButtonStyle(), width: "auto", minWidth: "90px" }} onClick={() => void handleSetQuantity(line)}>
+                  Set
+                </button>
+              </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" }}>
-              <button type="button" disabled={isPending} style={actionButtonStyle("secondary")} onClick={() => void handleQuantityDelta(line, -1)}>
-                -1
-              </button>
-              <button type="button" disabled={isPending} style={actionButtonStyle("secondary")} onClick={() => void handleQuantityDelta(line, 1)}>
-                +1
-              </button>
-              <button type="button" disabled={isPending} style={actionButtonStyle("secondary")} onClick={() => void onDeleteUsedMaterial(line.id)}>
-                Remove
-              </button>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "8px", alignItems: "end" }}>
-              <label style={{ display: "grid", gap: "6px" }}>
-                <span style={infoLabelStyle()}>Exact Quantity</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={quantityDrafts[line.id] ?? String(line.quantity)}
-                  onChange={(event) => setQuantityDrafts((current) => ({ ...current, [line.id]: event.target.value }))}
-                  style={inputStyle()}
-                />
-              </label>
-              <button type="button" disabled={isPending} style={{ ...actionButtonStyle(), width: "auto", minWidth: "90px" }} onClick={() => void handleSetQuantity(line)}>
-                Set
-              </button>
-            </div>
-          </div>
-        ))
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
 }

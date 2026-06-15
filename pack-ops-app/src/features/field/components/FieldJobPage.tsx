@@ -450,8 +450,8 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
               </div>
             ) : null}
 
-            <div style={{ display: "grid", gap: "10px" }}>
-              <strong style={{ color: fieldColors.white }}>Material Needed</strong>
+            <div style={{ ...softCardStyle(), padding: "14px", display: "grid", gap: "10px" }}>
+              <strong style={{ color: fieldColors.white }}>Materials Needed</strong>
               <label style={{ display: "grid", gap: "6px" }}>
                 <span style={infoLabelStyle()}>Search Material</span>
                 <MaterialSearchSelect
@@ -521,7 +521,7 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
               )}
             </div>
 
-            <div style={{ display: "grid", gap: "10px" }}>
+            <div style={{ ...softCardStyle(), padding: "14px", display: "grid", gap: "10px" }}>
               <FieldMaterialsUsedPanel
                 jobId={selectedJobCard.job.id}
                 catalogItems={catalogItems}
