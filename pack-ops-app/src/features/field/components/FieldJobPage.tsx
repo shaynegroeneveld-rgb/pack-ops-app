@@ -7,6 +7,7 @@ import type { JobMaterialView } from "@/domain/jobs/types";
 import type { CatalogItem } from "@/domain/materials/types";
 import { MaterialSearchSelect } from "@/features/materials/components/MaterialSearchSelect";
 import { useWorkbenchSlice } from "@/features/workbench/hooks/use-workbench-slice";
+import { matchesCatalogItemSearch } from "@/services/materials/material-search";
 
 import {
   actionButtonStyle,
@@ -43,6 +44,7 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
     materialId: "",
     quantity: "1",
   });
+  const [usedMaterialSearch, setUsedMaterialSearch] = useState("");
   const [neededMaterialDraft, setNeededMaterialDraft] = useState({
     materialId: "",
     quantity: "1",
@@ -51,6 +53,7 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
   const [clockNowMs, setClockNowMs] = useState(() => Date.now());
   const noteInputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const usedMaterialSearchRef = useRef<HTMLInputElement | null>(null);
 
   if (!currentUser) {
     return null;
@@ -98,6 +101,33 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
       })),
     [currentUser.user.orgId, jobWorkspace?.materialCatalogOptions],
   );
+  const catalogItemsById = useMemo(() => new Map(catalogItems.map((item) => [item.id, item])), [catalogItems]);
+  const selectedQuickUsedMaterial = usedMaterialDraft.materialId
+    ? catalogItemsById.get(usedMaterialDraft.materialId as CatalogItem["id"]) ?? null
+    : null;
+  const usedMaterialSearchResults = useMemo(
+    () =>
+      usedMaterialSearch.trim()
+        ? catalogItems.filter((item) => matchesCatalogItemSearch(item, usedMaterialSearch)).slice(0, 8)
+        : [],
+    [catalogItems, usedMaterialSearch],
+  );
+  const recentUsedCatalogItems = useMemo(() => {
+    const seen = new Set<string>();
+    const recent: CatalogItem[] = [];
+    for (const line of selectedUsedMaterials) {
+      const item = catalogItemsById.get(line.catalogItemId);
+      if (!item || seen.has(item.id)) {
+        continue;
+      }
+      seen.add(item.id);
+      recent.push(item);
+      if (recent.length >= 6) {
+        break;
+      }
+    }
+    return recent;
+  }, [catalogItemsById, selectedUsedMaterials]);
 
   useEffect(() => {
     storeRecentJobId(jobId);
@@ -156,6 +186,55 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
       markupPercent: null,
     });
     setUsedMaterialDraft({ materialId: "", quantity: "1" });
+    setUsedMaterialSearch("");
+    window.requestAnimationFrame(() => {
+      usedMaterialSearchRef.current?.focus();
+    });
+  }
+
+  async function handleQuickAddUsedMaterial(item: CatalogItem, quantity: number) {
+    setUsedMaterialDraft({
+      materialId: item.id,
+      quantity: String(quantity),
+    });
+    await workbench.createJobMaterial.mutateAsync({
+      jobId: selectedJobCard!.job.id,
+      catalogItemId: item.id,
+      kind: "used",
+      quantity,
+      displayName: item.name,
+      skuSnapshot: item.sku ?? null,
+      unitSnapshot: item.unit ?? null,
+      unitCost: item.costPrice ?? null,
+      unitSell: item.unitPrice ?? null,
+      markupPercent: null,
+    });
+    setUsedMaterialDraft({ materialId: "", quantity: "1" });
+    setUsedMaterialSearch("");
+    window.requestAnimationFrame(() => {
+      usedMaterialSearchRef.current?.focus();
+    });
+  }
+
+  async function handleChangeUsedMaterialQuantity(material: JobMaterialView, nextQuantity: number) {
+    if (nextQuantity <= 0) {
+      await workbench.deleteJobMaterial.mutateAsync(material.id);
+      return;
+    }
+
+    await workbench.updateJobMaterial.mutateAsync({
+      jobMaterialId: material.id,
+      catalogItemId: material.catalogItemId,
+      quantity: Math.round(nextQuantity * 100) / 100,
+      note: material.note,
+      displayName: material.displayName ?? material.materialName,
+      skuSnapshot: material.skuSnapshot ?? material.materialSku,
+      unitSnapshot: material.unitSnapshot ?? material.materialUnit,
+      unitCost: material.unitCost ?? material.currentCatalogCost ?? null,
+      unitSell: material.unitSell ?? material.currentCatalogUnitPrice ?? null,
+      markupPercent: material.markupPercent,
+      sectionName: material.sectionName,
+    });
   }
 
   async function handleAddNeededMaterial() {
@@ -552,45 +631,151 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
             <div style={{ display: "grid", gap: "10px" }}>
               <strong style={{ color: fieldColors.white }}>Material Used</strong>
               <label style={{ display: "grid", gap: "6px" }}>
-                <span style={infoLabelStyle()}>Search Material</span>
-                <MaterialSearchSelect
-                  catalogItems={catalogItems}
-                  selectedMaterialId={usedMaterialDraft.materialId}
-                  isPending={workbench.createJobMaterial.isPending}
-                  placeholder="Search materials or nicknames"
-                  onSelect={(materialId) => setUsedMaterialDraft((current) => ({ ...current, materialId }))}
-                />
-              </label>
-              <label style={{ display: "grid", gap: "6px" }}>
-                <span style={infoLabelStyle()}>Quantity</span>
+                <span style={infoLabelStyle()}>Quick Search</span>
                 <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={usedMaterialDraft.quantity}
-                  onChange={(event) => setUsedMaterialDraft((current) => ({ ...current, quantity: event.target.value }))}
+                  ref={usedMaterialSearchRef}
+                  type="text"
+                  value={usedMaterialSearch}
+                  onChange={(event) => setUsedMaterialSearch(event.target.value)}
+                  placeholder="Search name, SKU, or nickname"
                   style={inputStyle()}
                 />
               </label>
-              <button
-                type="button"
-                style={actionButtonStyle()}
-                disabled={!usedMaterialDraft.materialId || workbench.createJobMaterial.isPending}
-                onClick={() => void handleAddUsedMaterial()}
-              >
-                Add Material Used
-              </button>
+              {recentUsedCatalogItems.length > 0 && !usedMaterialSearch.trim() ? (
+                <div style={{ display: "grid", gap: "8px" }}>
+                  <div style={infoLabelStyle()}>Recently Used</div>
+                  <div style={{ display: "grid", gap: "8px" }}>
+                    {recentUsedCatalogItems.map((item) => (
+                      <div key={`recent-${item.id}`} style={{ ...softCardStyle(), padding: "12px", display: "grid", gap: "8px" }}>
+                        <div style={{ display: "grid", gap: "2px" }}>
+                          <strong style={{ color: fieldColors.white, overflowWrap: "anywhere" }}>{item.name}</strong>
+                          <span style={{ color: fieldColors.whiteSoft, fontSize: "12px", overflowWrap: "anywhere" }}>
+                            {[item.sku, item.aliases[0]].filter(Boolean).join(" · ") || item.category || "Catalog item"}
+                          </span>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "8px" }}>
+                          <button type="button" style={actionButtonStyle("secondary")} onClick={() => void handleQuickAddUsedMaterial(item, 1)}>
+                            +1
+                          </button>
+                          <button type="button" style={actionButtonStyle("secondary")} onClick={() => void handleQuickAddUsedMaterial(item, 5)}>
+                            +5
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {usedMaterialSearch.trim() ? (
+                <div style={{ display: "grid", gap: "8px" }}>
+                  <div style={infoLabelStyle()}>Search Results</div>
+                  {usedMaterialSearchResults.length === 0 ? (
+                    <div style={{ ...softCardStyle(), padding: "12px", color: fieldColors.whiteSoft }}>
+                      No materials matched that search.
+                    </div>
+                  ) : (
+                    usedMaterialSearchResults.map((item) => (
+                      <div key={item.id} style={{ ...softCardStyle(), padding: "12px", display: "grid", gap: "8px" }}>
+                        <div style={{ display: "grid", gap: "2px" }}>
+                          <strong style={{ color: fieldColors.white, overflowWrap: "anywhere" }}>{item.name}</strong>
+                          <span style={{ color: fieldColors.whiteSoft, fontSize: "12px", overflowWrap: "anywhere" }}>
+                            {[item.sku, item.aliases.join(", ")].filter(Boolean).join(" · ") || item.category || "Catalog item"}
+                          </span>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" }}>
+                          <button type="button" style={actionButtonStyle("secondary")} onClick={() => void handleQuickAddUsedMaterial(item, 1)}>
+                            +1
+                          </button>
+                          <button type="button" style={actionButtonStyle("secondary")} onClick={() => void handleQuickAddUsedMaterial(item, 5)}>
+                            +5
+                          </button>
+                          <button
+                            type="button"
+                            style={actionButtonStyle("secondary")}
+                            onClick={() => {
+                              setUsedMaterialDraft({ materialId: item.id, quantity: "1" });
+                            }}
+                          >
+                            Custom
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : null}
+              {selectedQuickUsedMaterial ? (
+                <div style={{ ...softCardStyle(), padding: "12px", display: "grid", gap: "10px" }}>
+                  <div style={{ display: "grid", gap: "2px" }}>
+                    <strong style={{ color: fieldColors.white, overflowWrap: "anywhere" }}>{selectedQuickUsedMaterial.name}</strong>
+                    <span style={{ color: fieldColors.whiteSoft, fontSize: "12px", overflowWrap: "anywhere" }}>
+                      {[selectedQuickUsedMaterial.sku, selectedQuickUsedMaterial.aliases.join(", ")]
+                        .filter(Boolean)
+                        .join(" · ") || selectedQuickUsedMaterial.category || "Catalog item"}
+                    </span>
+                  </div>
+                  <label style={{ display: "grid", gap: "6px" }}>
+                    <span style={infoLabelStyle()}>Custom Quantity</span>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={usedMaterialDraft.quantity}
+                      onChange={(event) => setUsedMaterialDraft((current) => ({ ...current, quantity: event.target.value }))}
+                      style={inputStyle()}
+                    />
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "8px" }}>
+                    <button
+                      type="button"
+                      style={actionButtonStyle()}
+                      disabled={!usedMaterialDraft.materialId || workbench.createJobMaterial.isPending}
+                      onClick={() => void handleAddUsedMaterial()}
+                    >
+                      Add Material Used
+                    </button>
+                    <button
+                      type="button"
+                      style={actionButtonStyle("secondary")}
+                      onClick={() => setUsedMaterialDraft({ materialId: "", quantity: "1" })}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               {selectedUsedMaterials.length === 0 ? (
                 <div style={{ ...softCardStyle(), padding: "12px", color: fieldColors.whiteSoft }}>No used materials yet.</div>
               ) : (
                 selectedUsedMaterials.map((material: JobMaterialView) => (
-                  <div key={material.id} style={{ ...softCardStyle(), padding: "12px" }}>
-                    <strong style={{ display: "block", color: fieldColors.white, overflowWrap: "anywhere" }}>
-                      {material.displayName ?? material.materialName}
-                    </strong>
-                    <span style={{ color: fieldColors.green, fontSize: "13px", fontWeight: 800 }}>
-                      {material.quantity} {material.unitSnapshot ?? material.materialUnit}
-                    </span>
+                  <div key={material.id} style={{ ...softCardStyle(), padding: "12px", display: "grid", gap: "8px" }}>
+                    <div style={{ display: "grid", gap: "2px" }}>
+                      <strong style={{ display: "block", color: fieldColors.white, overflowWrap: "anywhere" }}>
+                        {material.displayName ?? material.materialName}
+                      </strong>
+                      <span style={{ color: fieldColors.green, fontSize: "13px", fontWeight: 800 }}>
+                        {material.quantity} {material.unitSnapshot ?? material.materialUnit}
+                      </span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" }}>
+                      <button
+                        type="button"
+                        style={actionButtonStyle("secondary")}
+                        onClick={() => void handleChangeUsedMaterialQuantity(material, material.quantity - 1)}
+                      >
+                        -1
+                      </button>
+                      <button
+                        type="button"
+                        style={actionButtonStyle("secondary")}
+                        onClick={() => void handleChangeUsedMaterialQuantity(material, material.quantity + 1)}
+                      >
+                        +1
+                      </button>
+                      <button type="button" style={actionButtonStyle("secondary")} onClick={() => void workbench.deleteJobMaterial.mutateAsync(material.id)}>
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 ))
               )}

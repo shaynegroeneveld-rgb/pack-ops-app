@@ -30,6 +30,26 @@ function normalizeMoney(value: number | null | undefined): number | null {
   return Math.round(value * 100) / 100;
 }
 
+function normalizeAliases(value: string[] | null | undefined): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const alias of value ?? []) {
+    const trimmed = alias.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const dedupeKey = trimmed.toLowerCase();
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+    normalized.push(trimmed);
+  }
+
+  return normalized;
+}
+
 export const catalogItemsMapper: RepositoryMapper<
   CatalogItemRow,
   CatalogItem,
@@ -44,7 +64,7 @@ export const catalogItemsMapper: RepositoryMapper<
       orgId: row.org_id as CatalogItem["orgId"],
       name: row.name,
       sku: row.sku,
-      aliases: row.aliases ?? [],
+      aliases: normalizeAliases(row.aliases),
       unit: row.unit,
       costPrice: row.cost_price,
       unitPrice: row.unit_price,
@@ -61,7 +81,7 @@ export const catalogItemsMapper: RepositoryMapper<
     return {
       name: input.name,
       sku: input.sku ?? null,
-      aliases: input.aliases?.map((alias) => alias.trim()).filter(Boolean) ?? [],
+      aliases: normalizeAliases(input.aliases),
       unit: input.unit?.trim() || "each",
       cost_price: normalizeMoney(input.costPrice),
       unit_price: normalizeMoney(input.unitPrice),
@@ -75,7 +95,7 @@ export const catalogItemsMapper: RepositoryMapper<
     return {
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.sku !== undefined ? { sku: input.sku?.trim() || null } : {}),
-      ...(input.aliases !== undefined ? { aliases: input.aliases.map((alias) => alias.trim()).filter(Boolean) } : {}),
+      ...(input.aliases !== undefined ? { aliases: normalizeAliases(input.aliases) } : {}),
       ...(input.unit !== undefined ? { unit: input.unit?.trim() || "each" } : {}),
       ...(input.costPrice !== undefined ? { cost_price: normalizeMoney(input.costPrice) } : {}),
       ...(input.unitPrice !== undefined ? { unit_price: normalizeMoney(input.unitPrice) } : {}),

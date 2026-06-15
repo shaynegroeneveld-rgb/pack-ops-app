@@ -732,6 +732,12 @@ export function MaterialsPage() {
                 <span>Cost: {formatMoney(item.costPrice)}</span>
               </div>
 
+              {item.aliases.length > 0 ? (
+                <div style={{ color: "#5b6475", fontSize: "13px", overflowWrap: "anywhere" }}>
+                  <strong style={{ color: "#172033" }}>Aliases:</strong> {item.aliases.join(", ")}
+                </div>
+              ) : null}
+
               {item.notes ? <div style={{ color: "#5b6475" }}>{item.notes}</div> : null}
 
               {canManage ? (

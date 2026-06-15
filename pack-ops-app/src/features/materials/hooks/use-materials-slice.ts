@@ -60,22 +60,37 @@ export function useMaterialsSlice(authenticatedUser: AuthenticatedUser) {
     enabled: canManage,
   });
 
+  const catalogQueryKey = [...MATERIALS_QUERY_KEY, authenticatedUser.user.id];
+  const assembliesQueryKey = [...ASSEMBLIES_QUERY_KEY, authenticatedUser.user.id];
+
+  const patchCatalogItems = (updater: (items: CatalogItem[]) => CatalogItem[]) => {
+    queryClient.setQueryData(catalogQueryKey, (current: CatalogItem[] | undefined) =>
+      current ? updater(current) : current,
+    );
+  };
+
   const invalidate = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: [...MATERIALS_QUERY_KEY, authenticatedUser.user.id] }),
-      queryClient.invalidateQueries({ queryKey: [...ASSEMBLIES_QUERY_KEY, authenticatedUser.user.id] }),
+      queryClient.invalidateQueries({ queryKey: catalogQueryKey }),
+      queryClient.invalidateQueries({ queryKey: assembliesQueryKey }),
     ]);
   };
 
   const createCatalogItem = useMutation({
     mutationFn: (input: Parameters<MaterialsService["createCatalogItem"]>[0]) => service.createCatalogItem(input),
-    onSuccess: invalidate,
+    onSuccess: async (createdItem) => {
+      patchCatalogItems((items) => [...items.filter((item) => item.id !== createdItem.id), createdItem]);
+      await invalidate();
+    },
   });
 
   const updateCatalogItem = useMutation({
     mutationFn: (input: { itemId: CatalogItem["id"] } & Parameters<MaterialsService["updateCatalogItem"]>[1]) =>
       service.updateCatalogItem(input.itemId, input),
-    onSuccess: invalidate,
+    onSuccess: async (updatedItem) => {
+      patchCatalogItems((items) => items.map((item) => (item.id === updatedItem.id ? updatedItem : item)));
+      await invalidate();
+    },
   });
 
   const archiveCatalogItem = useMutation({

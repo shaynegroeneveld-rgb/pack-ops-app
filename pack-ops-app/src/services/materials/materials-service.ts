@@ -169,6 +169,26 @@ function invoiceDerivedCatalogCost(unitPrice: number | null | undefined): number
   return Math.round(unitPrice * 1.12 * 100) / 100;
 }
 
+function normalizeAliases(value: string[] | null | undefined): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const alias of value ?? []) {
+    const trimmed = alias.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const dedupeKey = trimmed.toLowerCase();
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+    normalized.push(trimmed);
+  }
+
+  return normalized;
+}
+
 function isInvoiceFooterRow(sku: string, name: string): boolean {
   if (sku.trim()) {
     return false;
@@ -269,6 +289,7 @@ export class MaterialsService {
       return await this.catalogItems.create({
         name: requireName(input.name, "Material name"),
         sku: input.sku?.trim() || null,
+        aliases: normalizeAliases(input.aliases),
         unit: input.unit?.trim() || "each",
         costPrice: normalizeMoney(input.costPrice, "Cost"),
         unitPrice: normalizeMoney(input.unitPrice, "Sell price"),
@@ -292,6 +313,7 @@ export class MaterialsService {
       return await this.catalogItems.update(itemId, {
         ...(input.name !== undefined ? { name: requireName(input.name, "Material name") } : {}),
         ...(input.sku !== undefined ? { sku: input.sku?.trim() || null } : {}),
+        ...(input.aliases !== undefined ? { aliases: normalizeAliases(input.aliases) } : {}),
         ...(input.unit !== undefined ? { unit: input.unit?.trim() || "each" } : {}),
         ...(input.costPrice !== undefined ? { costPrice: normalizeMoney(input.costPrice, "Cost") } : {}),
         ...(input.unitPrice !== undefined ? { unitPrice: normalizeMoney(input.unitPrice, "Sell price") } : {}),

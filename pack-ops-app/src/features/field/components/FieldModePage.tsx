@@ -447,13 +447,29 @@ export function FieldModePage() {
         style={{
           ...shellCardStyle(),
           padding: "18px 16px 20px",
-          display: "grid",
-          justifyItems: "center",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
           gap: "16px",
-          overflow: "hidden",
+          height: "auto",
+          minHeight: "unset",
+          overflow: "visible",
         }}
       >
-        <div style={{ position: "relative", width: "min(100%, 390px)", maxWidth: "calc(100vw - 56px)", minWidth: 0, minHeight: "300px", display: "grid", placeItems: "center", boxSizing: "border-box" }}>
+        <div
+          style={{
+            position: "relative",
+            width: "min(100%, 390px)",
+            maxWidth: "calc(100vw - 56px)",
+            minWidth: 0,
+            aspectRatio: "1 / 1",
+            display: "grid",
+            placeItems: "center",
+            boxSizing: "border-box",
+            overflow: "visible",
+            flex: "0 0 auto",
+          }}
+        >
           {weekdayLabels.map((entry) => (
             <span
               key={entry.label}
@@ -471,8 +487,8 @@ export function FieldModePage() {
           ))}
           <div
             style={{
-              width: "min(260px, calc(100vw - 92px))",
-              height: "min(260px, calc(100vw - 92px))",
+              width: "min(72vw, 340px)",
+              aspectRatio: "1 / 1",
               maxWidth: "100%",
               borderRadius: "999px",
               border: `12px solid ${fieldColors.gold}`,
@@ -482,6 +498,7 @@ export function FieldModePage() {
               placeItems: "center",
               padding: "28px",
               textAlign: "center",
+              boxSizing: "border-box",
             }}
           >
             {runningDraft && runningJob ? (
@@ -498,51 +515,6 @@ export function FieldModePage() {
                 <div style={{ color: fieldColors.goldBright, fontSize: "32px", fontWeight: 900, letterSpacing: "0.04em" }}>
                   {elapsed}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTimerStartDraft(toDateTimeLocalValue(runningDraft.startedAt));
-                    setTimerStartError(null);
-                    setShowTimerStartEditor((current) => !current);
-                  }}
-                  style={{ ...actionButtonStyle("secondary"), minHeight: "38px", padding: "10px 12px" }}
-                >
-                  Edit Start Time
-                </button>
-                {showTimerStartEditor ? (
-                  <div style={{ ...softCardStyle(), padding: "10px 12px", display: "grid", gap: "8px" }}>
-                    <label style={{ display: "grid", gap: "6px", textAlign: "left" }}>
-                      <span style={infoLabelStyle()}>Running Timer Start</span>
-                      <input
-                        type="datetime-local"
-                        value={timerStartDraft}
-                        onChange={(event) => setTimerStartDraft(event.target.value)}
-                        style={inputStyle()}
-                      />
-                    </label>
-                    {timerStartError ? (
-                      <div style={{ color: fieldColors.danger, fontSize: "13px", textAlign: "left" }}>{timerStartError}</div>
-                    ) : null}
-                    <div style={{ display: "grid", gap: "8px" }}>
-                      <button type="button" onClick={() => void handleSaveRunningTimerStart()} style={actionButtonStyle()}>
-                        Save Start Time
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowTimerStartEditor(false);
-                          setTimerStartError(null);
-                        }}
-                        style={actionButtonStyle("secondary")}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-                <button type="button" onClick={() => void workbench.stopTimer()} style={actionButtonStyle()}>
-                  Stop Timer
-                </button>
               </div>
             ) : (
               <div style={{ display: "grid", gap: "10px" }}>
@@ -565,6 +537,98 @@ export function FieldModePage() {
             )}
           </div>
         </div>
+
+        {runningDraft && runningJob ? (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                setTimerStartDraft(toDateTimeLocalValue(runningDraft.startedAt));
+                setTimerStartError(null);
+                setShowTimerStartEditor((current) => !current);
+              }}
+              style={{
+                ...actionButtonStyle("secondary"),
+                width: "min(100%, 430px)",
+                maxWidth: "100%",
+                minHeight: "42px",
+                padding: "10px 12px",
+                position: "static",
+                transform: "none",
+                boxSizing: "border-box",
+              }}
+            >
+              Edit Start Time
+            </button>
+            {showTimerStartEditor ? (
+              <div
+                style={{
+                  ...softCardStyle(),
+                  width: "min(100%, 430px)",
+                  maxWidth: "100%",
+                  padding: "12px 14px",
+                  display: "grid",
+                  gap: "8px",
+                  position: "static",
+                  transform: "none",
+                  boxSizing: "border-box",
+                }}
+              >
+                <label style={{ display: "grid", gap: "6px", textAlign: "left" }}>
+                  <span style={infoLabelStyle()}>Running Timer Start</span>
+                  <input
+                    type="datetime-local"
+                    value={timerStartDraft}
+                    onChange={(event) => setTimerStartDraft(event.target.value)}
+                    style={inputStyle()}
+                  />
+                </label>
+                {timerStartError ? (
+                  <div style={{ color: fieldColors.danger, fontSize: "13px", textAlign: "left" }}>{timerStartError}</div>
+                ) : null}
+                <div style={{ display: "grid", gap: "8px" }}>
+                  <button type="button" onClick={() => void handleSaveRunningTimerStart()} style={actionButtonStyle()}>
+                    Save Start Time
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTimerStartEditor(false);
+                      setTimerStartError(null);
+                    }}
+                    style={actionButtonStyle("secondary")}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div
+                style={{
+                  ...softCardStyle(),
+                  width: "min(100%, 430px)",
+                  maxWidth: "100%",
+                  padding: "12px 14px",
+                  display: "grid",
+                  gap: "4px",
+                  boxSizing: "border-box",
+                }}
+              >
+                <div style={infoLabelStyle()}>Running Timer Start</div>
+                <div style={{ color: fieldColors.white, fontWeight: 700 }}>
+                  {new Date(runningDraft.startedAt).toLocaleString()}
+                </div>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => void workbench.stopTimer()}
+              style={{ ...actionButtonStyle(), width: "min(100%, 430px)", maxWidth: "100%", boxSizing: "border-box" }}
+            >
+              Stop Timer
+            </button>
+          </>
+        ) : null}
 
         {workbench.feedback ? (
           <div

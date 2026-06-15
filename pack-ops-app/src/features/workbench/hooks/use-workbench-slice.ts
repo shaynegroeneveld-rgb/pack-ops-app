@@ -116,6 +116,32 @@ export function useWorkbenchSlice(
     },
   });
 
+  const activeWorkspaceKey = [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id, options?.selectedJobId ?? null];
+
+  const patchActiveWorkspace = (updater: (current: any) => any) => {
+    queryClient.setQueryData(activeWorkspaceKey, (current: any) => (current ? updater(current) : current));
+  };
+
+  const toWorkspaceJobMaterialView = (material: any, fallback: any) => ({
+    ...material,
+    materialName: material.displayName ?? fallback.displayName ?? "Material",
+    materialSku: material.skuSnapshot ?? fallback.skuSnapshot ?? null,
+    materialUnit: material.unitSnapshot ?? fallback.unitSnapshot ?? "",
+    currentCatalogCost: material.unitCost ?? fallback.unitCost ?? null,
+    currentCatalogUnitPrice: material.unitSell ?? fallback.unitSell ?? null,
+  });
+
+  const updateWorkspaceMaterialCollection = (kind: "used" | "needed", material: any, fallback: any) => {
+    const collectionKey = kind === "used" ? "usedMaterials" : "neededMaterials";
+    patchActiveWorkspace((current) => ({
+      ...current,
+      [collectionKey]: [
+        ...((current[collectionKey] ?? []).filter((line: any) => line.id !== material.id)),
+        toWorkspaceJobMaterialView(material, fallback),
+      ],
+    }));
+  };
+
   const attachmentPreviewUrlsQuery = useQuery({
     queryKey: [
       ...JOB_WORKSPACE_QUERY_KEY,
@@ -620,12 +646,14 @@ export function useWorkbenchSlice(
       sourceAssemblyName?: string | null;
       sourceAssemblyMultiplier?: number | null;
     }) => service.createJobMaterial(input),
-    onSuccess: async (_, input) => {
+    onSuccess: async (createdLine, input) => {
+      updateWorkspaceMaterialCollection(input.kind, createdLine, input);
       setFeedback({
         tone: "success",
         text: input.kind === "used" ? "Actual material added." : "Material needed added.",
       });
-      await queryClient.invalidateQueries({ queryKey: [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id] });
+      await queryClient.invalidateQueries({ queryKey: activeWorkspaceKey });
+      await queryClient.refetchQueries({ queryKey: activeWorkspaceKey, type: "active" });
     },
     onError: (error) => {
       setFeedback({ tone: "error", text: getFriendlyErrorMessage(error, "Could not save the material entry.") });
@@ -646,9 +674,19 @@ export function useWorkbenchSlice(
       markupPercent?: number | null;
       sectionName?: string | null;
     }) => service.updateJobMaterial(input),
-    onSuccess: async () => {
+    onSuccess: async (updatedLine, input) => {
+      patchActiveWorkspace((current) => ({
+        ...current,
+        usedMaterials: (current.usedMaterials ?? []).map((line: any) =>
+          line.id === updatedLine.id ? toWorkspaceJobMaterialView(updatedLine, input) : line,
+        ),
+        neededMaterials: (current.neededMaterials ?? []).map((line: any) =>
+          line.id === updatedLine.id ? toWorkspaceJobMaterialView(updatedLine, input) : line,
+        ),
+      }));
       setFeedback({ tone: "success", text: "Material entry updated." });
-      await queryClient.invalidateQueries({ queryKey: [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id] });
+      await queryClient.invalidateQueries({ queryKey: activeWorkspaceKey });
+      await queryClient.refetchQueries({ queryKey: activeWorkspaceKey, type: "active" });
     },
     onError: (error) => {
       setFeedback({ tone: "error", text: getFriendlyErrorMessage(error, "Could not update the material entry.") });
@@ -657,9 +695,15 @@ export function useWorkbenchSlice(
 
   const deleteJobMaterial = useMutation({
     mutationFn: (jobMaterialId: string) => service.deleteJobMaterial(jobMaterialId),
-    onSuccess: async () => {
+    onSuccess: async (_, deletedId) => {
+      patchActiveWorkspace((current) => ({
+        ...current,
+        usedMaterials: (current.usedMaterials ?? []).filter((line: any) => line.id !== deletedId),
+        neededMaterials: (current.neededMaterials ?? []).filter((line: any) => line.id !== deletedId),
+      }));
       setFeedback({ tone: "success", text: "Material entry removed." });
-      await queryClient.invalidateQueries({ queryKey: [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id] });
+      await queryClient.invalidateQueries({ queryKey: activeWorkspaceKey });
+      await queryClient.refetchQueries({ queryKey: activeWorkspaceKey, type: "active" });
     },
     onError: (error) => {
       setFeedback({
@@ -672,8 +716,13 @@ export function useWorkbenchSlice(
   const clearNeededMaterials = useMutation({
     mutationFn: (jobId: string) => service.clearNeededMaterials(jobId),
     onSuccess: async () => {
+      patchActiveWorkspace((current) => ({
+        ...current,
+        neededMaterials: [],
+      }));
       setFeedback({ tone: "success", text: "Needed materials cleared." });
-      await queryClient.invalidateQueries({ queryKey: [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id] });
+      await queryClient.invalidateQueries({ queryKey: activeWorkspaceKey });
+      await queryClient.refetchQueries({ queryKey: activeWorkspaceKey, type: "active" });
     },
     onError: (error) => {
       setFeedback({ tone: "error", text: getFriendlyErrorMessage(error, "Could not clear needed materials.") });
@@ -724,7 +773,6 @@ export function useWorkbenchSlice(
       sectionName?: string | null;
     }) => service.createManualActualCostLine(input),
     onSuccess: async (createdLine) => {
-      const activeWorkspaceKey = [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id, options?.selectedJobId ?? null];
       queryClient.setQueryData(activeWorkspaceKey, (current: any) =>
         current
           ? {
@@ -754,7 +802,6 @@ export function useWorkbenchSlice(
       sectionName?: string | null;
     }) => service.updateManualActualCostLine(input),
     onSuccess: async (updatedLine) => {
-      const activeWorkspaceKey = [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id, options?.selectedJobId ?? null];
       queryClient.setQueryData(activeWorkspaceKey, (current: any) =>
         current
           ? {
@@ -777,7 +824,6 @@ export function useWorkbenchSlice(
   const deleteManualActualCostLine = useMutation({
     mutationFn: (id: string) => service.deleteManualActualCostLine(id),
     onSuccess: async (_, deletedId) => {
-      const activeWorkspaceKey = [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id, options?.selectedJobId ?? null];
       queryClient.setQueryData(activeWorkspaceKey, (current: any) =>
         current
           ? {
