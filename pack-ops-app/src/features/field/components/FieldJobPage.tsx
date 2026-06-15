@@ -527,11 +527,6 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
                 catalogItems={catalogItems}
                 assemblies={jobWorkspace?.assemblyOptions ?? []}
                 usedMaterials={selectedUsedMaterials}
-                isPending={
-                  workbench.createJobMaterial.isPending ||
-                  workbench.updateJobMaterial.isPending ||
-                  workbench.deleteJobMaterial.isPending
-                }
                 onCreateUsedMaterial={(input) => workbench.createJobMaterial.mutateAsync(input)}
                 onUpdateUsedMaterial={(input) => workbench.updateJobMaterial.mutateAsync(input)}
                 onDeleteUsedMaterial={(jobMaterialId) => workbench.deleteJobMaterial.mutateAsync(jobMaterialId)}
