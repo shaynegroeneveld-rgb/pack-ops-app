@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>Pack Ops</title>
+  <rect width="512" height="512" rx="112" fill="#0b1220" />
+  <rect x="52" y="52" width="408" height="408" rx="92" fill="#101a2e" stroke="#22314f" stroke-width="8" />
+  <path d="M146 150h136c62 0 104 35 104 90 0 57-42 92-108 92h-58v80h-74V150zm74 124h51c28 0 43-14 43-33 0-20-15-33-43-33h-51v66z" fill="#f8fafc"/>
+  <path d="M144 385h224" stroke="#38b2a3" stroke-width="26" stroke-linecap="round"/>
+  <circle cx="385" cy="127" r="31" fill="#38b2a3"/>
+</svg>

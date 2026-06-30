@@ -3,6 +3,7 @@ export const APP_ROUTES = {
   leads: "/leads",
   quotes: "/quotes",
   materials: "/materials",
+  electricalTakeoff: "/electrical-takeoff",
   financeReview: "/finance/review",
   financeMoney: "/finance/money",
   financeReceivablesPayables: "/finance/receivables-payables",

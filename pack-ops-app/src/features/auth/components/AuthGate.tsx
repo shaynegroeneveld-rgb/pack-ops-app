@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useAuthContext } from "@/app/contexts/auth-context";
 import { AppShell } from "@/features/shell/components/AppShell";
+import { ElectricalTakeoffPage } from "@/features/takeoff/components/ElectricalTakeoffPage";
 
 export function AuthGate() {
   const {
@@ -19,6 +20,11 @@ export function AuthGate() {
   const [mode, setMode] = useState<"password" | "magic">("password");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [isTakeoffPreviewOpen, setIsTakeoffPreviewOpen] = useState(false);
+
+  if (import.meta.env.DEV && isTakeoffPreviewOpen) {
+    return <ElectricalTakeoffPage />;
+  }
 
   if (isLoading) {
     return <main style={{ padding: "24px", fontFamily: "ui-sans-serif, system-ui" }}>Loading session…</main>;
@@ -112,6 +118,14 @@ export function AuthGate() {
 
         {error ? <p style={{ color: "#b42318" }}>{error}</p> : null}
         {message ? <p style={{ color: "#027a48" }}>{message}</p> : null}
+
+        {import.meta.env.DEV ? (
+          <div style={{ marginTop: "18px", borderTop: "1px solid #d9dfeb", paddingTop: "16px" }}>
+            <button type="button" onClick={() => setIsTakeoffPreviewOpen(true)}>
+              Open Takeoff Preview
+            </button>
+          </div>
+        ) : null}
       </section>
     </main>
   );

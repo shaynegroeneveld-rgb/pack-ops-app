@@ -166,6 +166,49 @@ function getJobStatusLabel(status: JobStatus) {
   return status.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function normalizeJobSearchText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function matchesWorkbenchJobSearch(
+  item: {
+    job: Job;
+    contactName: string | null;
+    contactSubtitle: string | null;
+  },
+  query: string,
+): boolean {
+  const normalizedQuery = normalizeJobSearchText(query);
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  const searchText = normalizeJobSearchText(
+    [
+      item.job.number,
+      item.job.title,
+      item.job.fieldName ?? "",
+      item.contactName ?? "",
+      item.contactSubtitle ?? "",
+      item.job.addressLine1 ?? "",
+      item.job.addressLine2 ?? "",
+      item.job.city ?? "",
+      item.job.region ?? "",
+      item.job.postalCode ?? "",
+      item.job.description ?? "",
+      item.job.tags.join(" "),
+      getJobStatusLabel(item.job.status),
+    ].join(" "),
+  );
+
+  if (searchText.includes(normalizedQuery)) {
+    return true;
+  }
+
+  const queryTokens = normalizedQuery.split(" ").filter(Boolean);
+  return queryTokens.every((token) => searchText.includes(token));
+}
+
 function buildMaterialSummary(
   items: Array<{
     catalogItemId: string | null;
@@ -841,6 +884,7 @@ export function WorkbenchPage() {
   const [jobScreen, setJobScreen] = useState<JobScreen>("main");
   const [showCreateJob, setShowCreateJob] = useState(false);
   const [jobStatusFilter, setJobStatusFilter] = useState<"all" | JobStatus>("all");
+  const [jobSearch, setJobSearch] = useState("");
   const [showAssignPeople, setShowAssignPeople] = useState(false);
   const [showHiddenJobs, setShowHiddenJobs] = useState(() => {
     if (typeof window === "undefined") {
@@ -967,8 +1011,9 @@ export function WorkbenchPage() {
 
   const jobs = jobsQuery.data ?? [];
   const statusFilteredJobs = jobs.filter((item) => jobStatusFilter === "all" || item.job.status === jobStatusFilter);
-  const activeJobs = statusFilteredJobs.filter((item) => !HIDDEN_JOB_STATUSES.includes(item.job.status));
-  const hiddenJobs = statusFilteredJobs.filter((item) => HIDDEN_JOB_STATUSES.includes(item.job.status));
+  const searchFilteredJobs = statusFilteredJobs.filter((item) => matchesWorkbenchJobSearch(item, jobSearch));
+  const activeJobs = searchFilteredJobs.filter((item) => !HIDDEN_JOB_STATUSES.includes(item.job.status));
+  const hiddenJobs = searchFilteredJobs.filter((item) => HIDDEN_JOB_STATUSES.includes(item.job.status));
   const contacts = contactsQuery.data ?? [];
   const assignableUsers = assignableUsersQuery.data ?? [];
   const activeTimers = activeTimersQuery.data ?? [];
@@ -2010,26 +2055,37 @@ export function WorkbenchPage() {
             <div>
               <strong style={{ display: "block" }}>Filter Jobs</strong>
               <span style={{ color: "#5b6475", fontSize: "13px" }}>
-                Search the Workbench list by status while keeping the active vs completed grouping.
+                Search by number, title, field name, customer, or address while keeping the active vs completed grouping.
               </span>
             </div>
-            <span style={{ color: "#5b6475", fontSize: "13px" }}>{statusFilteredJobs.length}</span>
+            <span style={{ color: "#5b6475", fontSize: "13px" }}>{searchFilteredJobs.length}</span>
           </div>
-          <label style={{ display: "grid", gap: "6px", maxWidth: "280px" }}>
-            <span style={{ color: "#5b6475", fontSize: "13px" }}>Job status</span>
-            <select
-              value={jobStatusFilter}
-              onChange={(event) => setJobStatusFilter(event.target.value as "all" | JobStatus)}
-              style={{ minHeight: "44px", borderRadius: "12px", padding: "10px 12px" }}
-            >
-              <option value="all">All statuses</option>
-              {JOB_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {getJobStatusLabel(status)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
+            <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
+              <span style={{ color: "#5b6475", fontSize: "13px" }}>Search jobs</span>
+              <input
+                value={jobSearch}
+                onChange={(event) => setJobSearch(event.target.value)}
+                placeholder="Job #, title, customer, address..."
+                style={{ minHeight: "44px", borderRadius: "12px", padding: "10px 12px", fontSize: "16px" }}
+              />
+            </label>
+            <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
+              <span style={{ color: "#5b6475", fontSize: "13px" }}>Job status</span>
+              <select
+                value={jobStatusFilter}
+                onChange={(event) => setJobStatusFilter(event.target.value as "all" | JobStatus)}
+                style={{ minHeight: "44px", borderRadius: "12px", padding: "10px 12px" }}
+              >
+                <option value="all">All statuses</option>
+                {JOB_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {getJobStatusLabel(status)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </section>
       ) : null}
 
@@ -2093,9 +2149,13 @@ export function WorkbenchPage() {
             ))}
           </div>
         </section>
-      ) : statusFilteredJobs.length > 0 ? (
+      ) : searchFilteredJobs.length > 0 ? (
         <section style={{ ...cardStyle("#fafcff"), borderStyle: "dashed", color: "#5b6475" }}>
           No active jobs right now.
+        </section>
+      ) : jobs.length > 0 ? (
+        <section style={{ ...cardStyle("#fafcff"), borderStyle: "dashed", color: "#5b6475" }}>
+          No jobs matched that search.
         </section>
       ) : null}
 

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>Pack Ops Maskable</title>
+  <rect width="512" height="512" fill="#0b1220" />
+  <rect x="64" y="64" width="384" height="384" rx="88" fill="#101a2e" stroke="#22314f" stroke-width="8" />
+  <path d="M158 162h128c59 0 98 33 98 84 0 55-40 89-102 89h-50v66h-74V162zm74 115h43c25 0 39-12 39-31s-14-31-39-31h-43v62z" fill="#f8fafc"/>
+  <path d="M160 392h192" stroke="#38b2a3" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="369" cy="145" r="28" fill="#38b2a3"/>
+</svg>

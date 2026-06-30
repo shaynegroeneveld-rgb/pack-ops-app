@@ -13,6 +13,7 @@ import { FinanceReconciliationPage } from "@/features/finance/components/Finance
 import { FinanceReviewPage } from "@/features/finance/components/FinanceReviewPage";
 import { FieldJobPage } from "@/features/field/components/FieldJobPage";
 import { FieldModePage } from "@/features/field/components/FieldModePage";
+import { ElectricalTakeoffPage } from "@/features/takeoff/components/ElectricalTakeoffPage";
 import { GstSummaryPage } from "@/features/finance/components/GstSummaryPage";
 import { JobProfitabilityPage } from "@/features/finance/components/JobProfitabilityPage";
 import { MonthEndPage } from "@/features/finance/components/MonthEndPage";
@@ -37,6 +38,7 @@ import { WorkbenchService, type WorkbenchFailedSyncItem } from "@/services/workb
 const NAV_ITEMS = [
   { label: "Leads", route: APP_ROUTES.leads },
   { label: "Quotes", route: APP_ROUTES.quotes },
+  { label: "Takeoff", route: APP_ROUTES.electricalTakeoff },
   { label: "Materials", route: APP_ROUTES.materials },
   { label: "Job Performance", route: APP_ROUTES.jobPerformance },
   { label: "Time", route: APP_ROUTES.time },
@@ -600,6 +602,8 @@ export function AppShell() {
           <LeadsPage />
       ) : activeRoute === APP_ROUTES.materials ? (
         <MaterialsPage />
+      ) : activeRoute === APP_ROUTES.electricalTakeoff ? (
+        <ElectricalTakeoffPage />
       ) : activeRoute === APP_ROUTES.financeReview ? (
         <FinanceReviewPage />
       ) : activeRoute === APP_ROUTES.financeImports ? (

@@ -5,6 +5,14 @@ import { APP_ROUTES } from "@/app/router/routes";
 import { useUiStore } from "@/app/store/ui-store";
 import type { JobMaterialView } from "@/domain/jobs/types";
 import type { CatalogItem } from "@/domain/materials/types";
+import {
+  deriveTimeEntryDraftDateValue,
+  deriveTimeEntryDraftHours,
+  isTimeEntryDraftRunning,
+  updateManualTimeEntryDraftDate,
+  updateManualTimeEntryDraftHours,
+  validateTimeEntryDraft,
+} from "@/domain/time-entries/draft";
 import { MaterialSearchSelect } from "@/features/materials/components/MaterialSearchSelect";
 import { useWorkbenchSlice } from "@/features/workbench/hooks/use-workbench-slice";
 
@@ -70,9 +78,29 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
   const selectedNeededMaterials = jobWorkspace?.neededMaterials ?? [];
   const selectedUsedMaterials = jobWorkspace?.usedMaterials ?? [];
   const selectedTimeEntries = jobWorkspace?.timeEntries ?? [];
+  const selectedFieldDraft = workbench.timeEntryDraft?.jobId === selectedJobCard?.job.id ? workbench.timeEntryDraft : null;
+  const manualOrStoppedDraft =
+    selectedFieldDraft && (!isTimeEntryDraftRunning(selectedFieldDraft) || selectedFieldDraft.source === "manual")
+      ? selectedFieldDraft
+      : null;
   const crewNames = selectedJobCard
     ? selectedJobCard.assignments.map((assignment) => userNamesById.get(assignment.userId) ?? "Crew")
     : [];
+  const timerWorkerOptions = useMemo(() => {
+    const options = selectedJobCard
+      ? selectedJobCard.assignments.map((assignment) => ({
+          id: String(assignment.userId),
+          label: userNamesById.get(assignment.userId) ?? "Crew",
+        }))
+      : [];
+
+    const currentUserOption = {
+      id: String(currentUser.user.id),
+      label: currentUser.user.fullName,
+    };
+
+    return options.some((option) => option.id === currentUserOption.id) ? options : [currentUserOption, ...options];
+  }, [currentUser.user.fullName, currentUser.user.id, selectedJobCard, userNamesById]);
 
   const catalogItems = useMemo<CatalogItem[]>(
     () =>
@@ -178,6 +206,16 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  }
+
+  function toDateTimeLocalValue(value: string): string {
+    const date = new Date(value);
+    const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return offsetDate.toISOString().slice(0, 16);
+  }
+
+  function fromDateTimeLocalValue(value: string): string {
+    return new Date(value).toISOString();
   }
 
   if (isJobLookupLoading) {
@@ -345,21 +383,145 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
           "timer",
           "Timer",
           <div style={{ display: "grid", gap: "12px" }}>
-            <button
-              type="button"
-              style={actionButtonStyle()}
-              onClick={() =>
-                runningDraft?.jobId === selectedJobCard.job.id
-                  ? void workbench.stopTimer()
-                  : void workbench.startTimer(selectedJobCard.job.id)
-              }
-            >
-              {runningDraft?.jobId === selectedJobCard.job.id ? "Stop Timer" : "Start Timer"}
-            </button>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
+              <button
+                type="button"
+                style={actionButtonStyle()}
+                disabled={!selectedJobCard.permissions.canCreateTimeEntry}
+                onClick={() =>
+                  runningDraft?.jobId === selectedJobCard.job.id
+                    ? void workbench.stopTimer()
+                    : void workbench.startTimer(selectedJobCard.job.id)
+                }
+              >
+                {runningDraft?.jobId === selectedJobCard.job.id ? "Stop Timer" : "Start Timer"}
+              </button>
+              <button
+                type="button"
+                style={actionButtonStyle("secondary")}
+                disabled={!selectedJobCard.permissions.canCreateTimeEntry}
+                onClick={() => workbench.startManualEntry(selectedJobCard.job.id)}
+              >
+                Add Time
+              </button>
+            </div>
             {runningDraft?.jobId === selectedJobCard.job.id && elapsed ? (
               <div style={{ ...softCardStyle(), padding: "12px" }}>
                 <div style={infoLabelStyle()}>Elapsed</div>
                 <div style={{ color: fieldColors.goldBright, fontSize: "24px", fontWeight: 900 }}>{elapsed}</div>
+              </div>
+            ) : null}
+            {manualOrStoppedDraft ? (
+              <div style={{ ...softCardStyle(), padding: "12px", display: "grid", gap: "10px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+                  <strong style={{ color: fieldColors.white }}>
+                    {manualOrStoppedDraft.source === "manual" ? "Manual Time Entry" : "Finish Time Entry"}
+                  </strong>
+                  <span style={{ color: fieldColors.goldBright, fontSize: "13px", fontWeight: 800 }}>
+                    {deriveTimeEntryDraftHours(manualOrStoppedDraft).toFixed(2)}h
+                  </span>
+                </div>
+                <label style={{ display: "grid", gap: "6px" }}>
+                  <span style={infoLabelStyle()}>Worked By</span>
+                  <select
+                    value={String(manualOrStoppedDraft.userId)}
+                    onChange={(event) =>
+                      workbench.updateTimeEntryDraft({
+                        userId: event.target.value as typeof manualOrStoppedDraft.userId,
+                      })
+                    }
+                    style={inputStyle()}
+                  >
+                    {timerWorkerOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: "grid", gap: "6px" }}>
+                  <span style={infoLabelStyle()}>Work Date</span>
+                  <input
+                    type="date"
+                    value={deriveTimeEntryDraftDateValue(manualOrStoppedDraft)}
+                    onChange={(event) => {
+                      const nextDraft = updateManualTimeEntryDraftDate(manualOrStoppedDraft, event.target.value);
+                      workbench.updateTimeEntryDraft({
+                        startedAt: nextDraft.startedAt,
+                        endedAt: nextDraft.endedAt,
+                      });
+                    }}
+                    style={inputStyle()}
+                  />
+                </label>
+                <label style={{ display: "grid", gap: "6px" }}>
+                  <span style={infoLabelStyle()}>Hours</span>
+                  <input
+                    type="number"
+                    min="0.05"
+                    max="24"
+                    step="0.05"
+                    value={deriveTimeEntryDraftHours(manualOrStoppedDraft).toFixed(2)}
+                    onChange={(event) => {
+                      const nextDraft = updateManualTimeEntryDraftHours(
+                        manualOrStoppedDraft,
+                        Number(event.target.value || 0.05),
+                      );
+                      workbench.updateTimeEntryDraft({
+                        startedAt: nextDraft.startedAt,
+                        endedAt: nextDraft.endedAt,
+                      });
+                    }}
+                    style={inputStyle()}
+                  />
+                </label>
+                <label style={{ display: "grid", gap: "6px" }}>
+                  <span style={infoLabelStyle()}>Note</span>
+                  <textarea
+                    rows={3}
+                    value={manualOrStoppedDraft.description}
+                    onChange={(event) => workbench.updateTimeEntryDraft({ description: event.target.value })}
+                    style={inputStyle()}
+                  />
+                </label>
+                {manualOrStoppedDraft.source === "timer" ? (
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    <span style={infoLabelStyle()}>Started At</span>
+                    <input
+                      type="datetime-local"
+                      value={toDateTimeLocalValue(manualOrStoppedDraft.startedAt)}
+                      onChange={(event) =>
+                        workbench.updateTimeEntryDraft({
+                          startedAt: fromDateTimeLocalValue(event.target.value),
+                        })
+                      }
+                      style={inputStyle()}
+                    />
+                  </div>
+                ) : null}
+                {validateTimeEntryDraft(manualOrStoppedDraft) ? (
+                  <div style={{ color: fieldColors.danger, fontSize: "13px" }}>
+                    {validateTimeEntryDraft(manualOrStoppedDraft)}
+                  </div>
+                ) : null}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
+                  <button
+                    type="button"
+                    style={actionButtonStyle()}
+                    disabled={workbench.isSavingTimeEntryDraft || Boolean(validateTimeEntryDraft(manualOrStoppedDraft))}
+                    onClick={() => void workbench.saveTimeEntryDraft()}
+                  >
+                    {workbench.isSavingTimeEntryDraft ? "Saving..." : "Save Time"}
+                  </button>
+                  <button
+                    type="button"
+                    style={actionButtonStyle("secondary")}
+                    disabled={workbench.isSavingTimeEntryDraft}
+                    onClick={() => void workbench.discardTimeEntryDraft()}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             ) : null}
             {selectedTimeEntries.slice(0, 4).map((entry) => (
