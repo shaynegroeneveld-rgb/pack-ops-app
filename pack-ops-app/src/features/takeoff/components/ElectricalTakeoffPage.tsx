@@ -855,12 +855,12 @@ function readTakeoffMaterialLines(iframe: HTMLIFrameElement | null): TakeoffMate
   }
 
   const sections = Array.from(document.querySelectorAll(".material-section"));
-  return sections.flatMap((section) => {
+  const materialLines = sections.flatMap((section) => {
     const sectionName = section.querySelector("h3")?.textContent?.trim() || "Materials";
     return Array.from(section.querySelectorAll(".takeoff.compact > div")).flatMap((row) => {
       const item = row.querySelector("span")?.textContent?.trim();
       const quantityText = row.querySelector("strong")?.textContent?.trim() ?? "";
-      const quantity = Number(quantityText.replace(/,/g, ""));
+      const quantity = parseTakeoffQuantity(quantityText);
 
       if (!item || !Number.isFinite(quantity) || quantity <= 0) {
         return [];
@@ -869,6 +869,25 @@ function readTakeoffMaterialLines(iframe: HTMLIFrameElement | null): TakeoffMate
       return [{ section: sectionName, item, quantity }];
     });
   });
+
+  if (materialLines.some((line) => line.section.toLowerCase() === "wire")) {
+    return materialLines;
+  }
+
+  const wireLines = Array.from(document.querySelectorAll(".wire-results .wire-row")).flatMap((row) => {
+    const label = row.querySelector("span")?.textContent?.trim() ?? "";
+    const quantityText = row.querySelector("strong")?.textContent?.trim() ?? "";
+    const wireType = label.split(" - ").pop()?.trim();
+    const quantity = parseTakeoffQuantity(quantityText);
+
+    if (!wireType || !Number.isFinite(quantity) || quantity <= 0) {
+      return [];
+    }
+
+    return [{ section: "Wire", item: `${wireType} wire (m)`, quantity }];
+  });
+
+  return rollUpTakeoffMaterialLines([...materialLines, ...wireLines]);
 }
 
 function readTakeoffLabourLines(iframe: HTMLIFrameElement | null): TakeoffLabourLine[] {
@@ -885,7 +904,7 @@ function readTakeoffLabourLines(iframe: HTMLIFrameElement | null): TakeoffLabour
       return [];
     }
 
-    const hours = Number(quantityText.replace(/hr/gi, "").trim());
+    const hours = parseTakeoffQuantity(quantityText);
     if (!Number.isFinite(hours) || hours <= 0) {
       return [];
     }
@@ -1023,19 +1042,18 @@ function buildQuoteLineItems(input: {
         sourceType: line.match ? "material" : "manual",
         lineKind: "item",
         quantity: roundQuantity(line.quantity),
-        unit: line.match?.unit ?? "each",
+        unit: line.match?.unit ?? inferTakeoffUnit(line),
         unitCost,
         unitSell: roundMoney(unitCost * (1 + input.materialMarkup / 100)),
       });
     });
 
-  input.labourLines
-    .filter((line) => line.hours > 0)
+  rollUpLabourForQuote(input.labourLines)
     .forEach((line, index) => {
       lineItems.push({
         sortOrder: lineItems.length + index,
-        description: line.item,
-        note: `Takeoff labour phase: ${line.phase}`,
+        description: `${line.phase} labour`,
+        note: line.item,
         sectionName: normalizeQuoteSection(line.phase),
         sourceType: "manual",
         lineKind: "labor",
@@ -1057,7 +1075,56 @@ function normalizeQuoteSection(section: string): string {
   if (lower.includes("panel") || lower.includes("service") || lower.includes("breaker")) {
     return "Service";
   }
+  if (lower.includes("device") || lower.includes("fixture") || lower.includes("plate")) {
+    return "Finish";
+  }
   return "Rough-in";
+}
+
+function rollUpTakeoffMaterialLines(lines: TakeoffMaterialLine[]): TakeoffMaterialLine[] {
+  const rolledUp = new Map<string, TakeoffMaterialLine>();
+  for (const line of lines) {
+    const key = `${line.section.toLowerCase()}::${line.item.toLowerCase()}`;
+    const current = rolledUp.get(key);
+    rolledUp.set(key, current
+      ? { ...current, quantity: roundQuantity(current.quantity + line.quantity) }
+      : line);
+  }
+  return [...rolledUp.values()];
+}
+
+function rollUpLabourForQuote(lines: TakeoffLabourLine[]): TakeoffLabourLine[] {
+  const grouped = new Map<string, TakeoffLabourLine>();
+  for (const line of lines) {
+    if (line.hours <= 0) {
+      continue;
+    }
+    const phase = normalizeQuoteSection(line.phase);
+    const current = grouped.get(phase);
+    grouped.set(phase, current
+      ? {
+          phase,
+          item: [current.item, line.item].filter(Boolean).join("; "),
+          hours: roundQuantity(current.hours + line.hours),
+        }
+      : { phase, item: line.item, hours: roundQuantity(line.hours) });
+  }
+  return ["Service", "Rough-in", "Finish"]
+    .map((phase) => grouped.get(phase))
+    .filter((line): line is TakeoffLabourLine => Boolean(line));
+}
+
+function inferTakeoffUnit(line: TakeoffMaterialLine): string {
+  const lower = `${line.section} ${line.item}`.toLowerCase();
+  if (lower.includes("wire") || lower.includes("nmd") || lower.includes("cable") || lower.includes("awg")) {
+    return "m";
+  }
+  return "each";
+}
+
+function parseTakeoffQuantity(value: string): number {
+  const match = value.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : Number.NaN;
 }
 
 function roundMoney(value: number): number {
