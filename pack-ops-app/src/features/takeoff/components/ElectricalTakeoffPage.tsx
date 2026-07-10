@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { useAuthContext } from "@/app/contexts/auth-context";
 import type { CatalogItem } from "@/domain/materials/types";
@@ -72,6 +72,8 @@ const emptyAdjustmentDraft: ManualAdjustmentDraft = {
   note: "",
 };
 
+const TAKEOFF_CATALOG_STORAGE_KEY = "packops-takeoff-material-catalog-v1";
+
 export function ElectricalTakeoffPage() {
   const { currentUser } = useAuthContext();
   if (!currentUser) {
@@ -90,6 +92,21 @@ export function ElectricalTakeoffPage() {
     () => catalogItems.filter((item) => item.isActive && item.costPrice !== null),
     [catalogItems],
   );
+  const takeoffCatalogItems = useMemo(
+    () =>
+      catalogItems
+        .filter((item) => item.isActive)
+        .map((item) => ({
+          id: item.id,
+          name: item.name,
+          sku: item.sku,
+          unit: item.unit,
+          category: item.category,
+          costPrice: item.costPrice,
+          aliases: item.aliases,
+        })),
+    [catalogItems],
+  );
 
   const matchedReviewLines = useMemo(
     () => buildReviewLines(reviewLines ?? [], manualAdjustments, pricedCatalogItems),
@@ -104,6 +121,18 @@ export function ElectricalTakeoffPage() {
       totalCost: lines.reduce((total, line) => total + (line.lineCost ?? 0), 0),
     };
   }, [matchedReviewLines]);
+
+  function syncTakeoffCatalog() {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(TAKEOFF_CATALOG_STORAGE_KEY, JSON.stringify(takeoffCatalogItems));
+  }
+
+  useEffect(() => {
+    syncTakeoffCatalog();
+  }, [takeoffCatalogItems]);
 
   function handleReviewMaterials() {
     const lines = readTakeoffMaterialLines(iframeRef.current);
@@ -243,6 +272,7 @@ export function ElectricalTakeoffPage() {
           src="/takeoff/index.html"
           title="Residential Electrical Takeoff"
           style={frameStyle}
+          onLoad={syncTakeoffCatalog}
         />
 
         {reviewLines ? (
