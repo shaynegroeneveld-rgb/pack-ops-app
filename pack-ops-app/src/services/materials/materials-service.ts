@@ -383,8 +383,8 @@ export class MaterialsService {
 
     const candidateIds = unpricedItems.map((item) => item.id as string);
     const [assemblyCounts, quoteLineCounts, jobMaterialCounts, financeLineCounts] = await Promise.all([
-      this.countCatalogReferences("assembly_items", "catalog_item_id", candidateIds),
-      this.countCatalogReferences("quote_line_items", "catalog_item_id", candidateIds),
+      this.countCatalogReferences("assembly_items", "catalog_item_id", candidateIds, { hasDeletedAt: false }),
+      this.countCatalogReferences("quote_line_items", "catalog_item_id", candidateIds, { hasDeletedAt: false }),
       this.countCatalogReferences("job_materials", "catalog_item_id", candidateIds),
       this.countFinanceLineReferences(candidateIds),
     ]);
@@ -434,14 +434,20 @@ export class MaterialsService {
     tableName: "assembly_items" | "quote_line_items" | "job_materials",
     columnName: "catalog_item_id",
     catalogItemIds: string[],
+    options?: { hasDeletedAt?: boolean },
   ): Promise<Map<string, number>> {
     const counts = new Map<string, number>();
-    const { data, error } = await this.client
+    let query = this.client
       .from(tableName)
       .select(columnName)
       .eq("org_id", this.context.orgId)
-      .is("deleted_at", null)
       .in(columnName, catalogItemIds);
+
+    if (options?.hasDeletedAt !== false) {
+      query = query.is("deleted_at", null);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw error;
