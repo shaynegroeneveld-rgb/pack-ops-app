@@ -83,6 +83,7 @@ export function ElectricalTakeoffPage() {
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [manualAdjustments, setManualAdjustments] = useState<ManualAdjustment[]>([]);
   const [manualAdjustmentDraft, setManualAdjustmentDraft] = useState<ManualAdjustmentDraft>(emptyAdjustmentDraft);
+  const [isAdjustmentsOpen, setIsAdjustmentsOpen] = useState(false);
   const { catalogQuery } = useMaterialsSlice(currentUser);
   const catalogItems = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
   const pricedCatalogItems = useMemo(
@@ -208,6 +209,9 @@ export function ElectricalTakeoffPage() {
           <button type="button" style={toolbarButtonStyle} onClick={handleReviewMaterials}>
             Review Takeoff Materials
           </button>
+          <button type="button" style={toolbarButtonStyle} onClick={() => setIsAdjustmentsOpen(true)}>
+            Add / Modify Devices
+          </button>
           {reviewLines?.length ? (
             <button type="button" style={toolbarButtonStyle} onClick={() => void handleCopyCsv()}>
               Copy CSV
@@ -278,120 +282,21 @@ export function ElectricalTakeoffPage() {
                 borderRadius: "12px",
                 padding: "10px",
                 background: brand.surfaceAlt,
-                display: "grid",
-                gap: "8px",
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "10px",
+                alignItems: "center",
               }}
             >
-              <strong style={{ color: brand.text }}>Manual adjustments</strong>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
-                  Type
-                  <select
-                    value={manualAdjustmentDraft.adjustmentKind}
-                    onChange={(event) =>
-                      setManualAdjustmentDraft((draft) => ({
-                        ...draft,
-                        adjustmentKind: event.target.value as ManualAdjustmentDraft["adjustmentKind"],
-                      }))
-                    }
-                    style={inputStyle}
-                  >
-                    <option value="material">Material</option>
-                    <option value="device">Device</option>
-                  </select>
-                </label>
-                <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
-                  Qty +/-
-                  <input
-                    value={manualAdjustmentDraft.quantity}
-                    onChange={(event) => setManualAdjustmentDraft((draft) => ({ ...draft, quantity: event.target.value }))}
-                    type="number"
-                    step="0.25"
-                    style={inputStyle}
-                  />
-                </label>
+              <div>
+                <strong style={{ display: "block", color: brand.text }}>Manual adjustments</strong>
+                <span style={{ color: brand.textSoft, fontSize: "13px" }}>
+                  {manualAdjustments.length} device/material change{manualAdjustments.length === 1 ? "" : "s"} included.
+                </span>
               </div>
-              <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
-                Catalog material/device
-                <select
-                  value={manualAdjustmentDraft.catalogItemId}
-                  onChange={(event) =>
-                    setManualAdjustmentDraft((draft) => ({
-                      ...draft,
-                      catalogItemId: event.target.value,
-                      customItem: event.target.value ? "" : draft.customItem,
-                    }))
-                  }
-                  style={inputStyle}
-                >
-                  <option value="">Custom / unmatched</option>
-                  {catalogItems
-                    .filter((item) => item.isActive)
-                    .map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}{item.sku ? ` (${item.sku})` : ""}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              {!manualAdjustmentDraft.catalogItemId ? (
-                <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
-                  Custom item
-                  <input
-                    value={manualAdjustmentDraft.customItem}
-                    onChange={(event) => setManualAdjustmentDraft((draft) => ({ ...draft, customItem: event.target.value }))}
-                    placeholder="Example: 1-gang box"
-                    style={inputStyle}
-                  />
-                </label>
-              ) : null}
-              <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
-                Note
-                <input
-                  value={manualAdjustmentDraft.note}
-                  onChange={(event) => setManualAdjustmentDraft((draft) => ({ ...draft, note: event.target.value }))}
-                  placeholder="Optional reason"
-                  style={inputStyle}
-                />
-              </label>
-              <button type="button" style={toolbarButtonStyle} onClick={handleAddManualAdjustment}>
-                Add adjustment
+              <button type="button" style={toolbarButtonStyle} onClick={() => setIsAdjustmentsOpen(true)}>
+                Open
               </button>
-
-              {manualAdjustments.length ? (
-                <div style={{ display: "grid", gap: "6px" }}>
-                  {manualAdjustments.map((adjustment) => (
-                    <div
-                      key={adjustment.id}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr auto auto",
-                        gap: "8px",
-                        alignItems: "center",
-                        color: brand.textSoft,
-                        fontSize: "13px",
-                      }}
-                    >
-                      <span>
-                        {adjustment.adjustmentKind === "device" ? "Device" : "Material"} · {adjustment.item}
-                        {adjustment.note ? ` · ${adjustment.note}` : ""}
-                      </span>
-                      <strong style={{ color: adjustment.quantity < 0 ? "#9a3412" : brand.primaryDark }}>
-                        {adjustment.quantity > 0 ? "+" : ""}{adjustment.quantity}
-                      </strong>
-                      <button
-                        type="button"
-                        style={{ ...toolbarButtonStyle, padding: "5px 8px" }}
-                        onClick={() =>
-                          setManualAdjustments((current) => current.filter((item) => item.id !== adjustment.id))
-                        }
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
             </section>
 
             <div style={{ display: "grid", gap: "8px" }}>
@@ -432,6 +337,202 @@ export function ElectricalTakeoffPage() {
               ))}
             </div>
           </aside>
+        ) : null}
+
+        {isAdjustmentsOpen ? (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="takeoff-adjustments-title"
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.36)",
+              display: "grid",
+              placeItems: "center",
+              padding: "18px",
+              zIndex: 8,
+            }}
+          >
+            <section
+              style={{
+                width: "min(720px, 100%)",
+                maxHeight: "min(760px, 100%)",
+                overflow: "auto",
+                border: `1px solid ${brand.border}`,
+                borderRadius: "14px",
+                background: "#ffffff",
+                boxShadow: "0 24px 70px rgba(15, 23, 42, 0.28)",
+                padding: "16px",
+                display: "grid",
+                gap: "14px",
+              }}
+            >
+              <header style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
+                <div>
+                  <h2 id="takeoff-adjustments-title" style={{ margin: 0, fontSize: "20px", color: brand.text }}>
+                    Device & Material Adjustments
+                  </h2>
+                  <p style={{ margin: "4px 0 0", color: brand.textSoft, fontSize: "13px" }}>
+                    Add or subtract one-off devices and materials. These roll into the review, CSV, and quote prep list.
+                  </p>
+                </div>
+                <button type="button" style={toolbarButtonStyle} onClick={() => setIsAdjustmentsOpen(false)}>
+                  Done
+                </button>
+              </header>
+
+              <div
+                style={{
+                  border: `1px solid ${brand.border}`,
+                  borderRadius: "12px",
+                  padding: "12px",
+                  background: brand.surfaceAlt,
+                  display: "grid",
+                  gap: "10px",
+                }}
+              >
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                    Type
+                    <select
+                      value={manualAdjustmentDraft.adjustmentKind}
+                      onChange={(event) =>
+                        setManualAdjustmentDraft((draft) => ({
+                          ...draft,
+                          adjustmentKind: event.target.value as ManualAdjustmentDraft["adjustmentKind"],
+                        }))
+                      }
+                      style={inputStyle}
+                    >
+                      <option value="material">Material</option>
+                      <option value="device">Device</option>
+                    </select>
+                  </label>
+                  <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                    Quantity +/-
+                    <input
+                      value={manualAdjustmentDraft.quantity}
+                      onChange={(event) => setManualAdjustmentDraft((draft) => ({ ...draft, quantity: event.target.value }))}
+                      type="number"
+                      step="0.25"
+                      style={inputStyle}
+                    />
+                  </label>
+                </div>
+
+                <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                  Catalog material/device
+                  <select
+                    value={manualAdjustmentDraft.catalogItemId}
+                    onChange={(event) =>
+                      setManualAdjustmentDraft((draft) => ({
+                        ...draft,
+                        catalogItemId: event.target.value,
+                        customItem: event.target.value ? "" : draft.customItem,
+                      }))
+                    }
+                    style={inputStyle}
+                  >
+                    <option value="">Custom / unmatched</option>
+                    {catalogItems
+                      .filter((item) => item.isActive)
+                      .map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}{item.sku ? ` (${item.sku})` : ""}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+
+                {!manualAdjustmentDraft.catalogItemId ? (
+                  <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                    Custom item
+                    <input
+                      value={manualAdjustmentDraft.customItem}
+                      onChange={(event) => setManualAdjustmentDraft((draft) => ({ ...draft, customItem: event.target.value }))}
+                      placeholder="Example: 1-gang box"
+                      style={inputStyle}
+                    />
+                  </label>
+                ) : null}
+
+                <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                  Note
+                  <input
+                    value={manualAdjustmentDraft.note}
+                    onChange={(event) => setManualAdjustmentDraft((draft) => ({ ...draft, note: event.target.value }))}
+                    placeholder="Optional reason"
+                    style={inputStyle}
+                  />
+                </label>
+
+                <button type="button" style={{ ...toolbarButtonStyle, justifySelf: "start" }} onClick={handleAddManualAdjustment}>
+                  Add adjustment
+                </button>
+              </div>
+
+              <section style={{ display: "grid", gap: "8px" }}>
+                <strong style={{ color: brand.text }}>
+                  Current adjustments ({manualAdjustments.length})
+                </strong>
+                {manualAdjustments.length ? (
+                  <div style={{ display: "grid", gap: "8px" }}>
+                    {manualAdjustments.map((adjustment) => (
+                      <div
+                        key={adjustment.id}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr auto auto",
+                          gap: "10px",
+                          alignItems: "center",
+                          border: `1px solid ${brand.border}`,
+                          borderRadius: "10px",
+                          padding: "10px",
+                          color: brand.textSoft,
+                          fontSize: "13px",
+                        }}
+                      >
+                        <span>
+                          <strong style={{ color: brand.text }}>
+                            {adjustment.adjustmentKind === "device" ? "Device" : "Material"}
+                          </strong>
+                          {" · "}
+                          {adjustment.item}
+                          {adjustment.note ? ` · ${adjustment.note}` : ""}
+                        </span>
+                        <strong style={{ color: adjustment.quantity < 0 ? "#9a3412" : brand.primaryDark }}>
+                          {adjustment.quantity > 0 ? "+" : ""}{adjustment.quantity}
+                        </strong>
+                        <button
+                          type="button"
+                          style={{ ...toolbarButtonStyle, padding: "5px 8px" }}
+                          onClick={() =>
+                            setManualAdjustments((current) => current.filter((item) => item.id !== adjustment.id))
+                          }
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      border: `1px dashed ${brand.border}`,
+                      borderRadius: "10px",
+                      padding: "14px",
+                      color: brand.textSoft,
+                      fontSize: "13px",
+                      background: brand.surfaceAlt,
+                    }}
+                  >
+                    No manual adjustments yet. Use this for quick adds, deletes, or custom materials before building the quote.
+                  </div>
+                )}
+              </section>
+            </section>
+          </div>
         ) : null}
       </div>
     </section>
