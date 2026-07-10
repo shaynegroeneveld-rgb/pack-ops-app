@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 
 import { useAuthContext } from "@/app/contexts/auth-context";
 import type { CatalogItem } from "@/domain/materials/types";
+import type { QuoteLineItemInput, QuoteView } from "@/domain/quotes/types";
 import { brand, pageStyle } from "@/features/shared/ui/mobile-styles";
 import { useMaterialsSlice } from "@/features/materials/hooks/use-materials-slice";
+import { useQuotesSlice } from "@/features/quotes/hooks/use-quotes-slice";
 
 interface TakeoffMaterialLine {
   section: string;
@@ -35,6 +37,26 @@ interface ManualAdjustment {
   quantity: number;
   catalogItemId: string | null;
   note: string | null;
+}
+
+interface TakeoffLabourLine {
+  phase: string;
+  item: string;
+  hours: number;
+}
+
+interface QuoteDraft {
+  customerName: string;
+  companyName: string;
+  contactName: string;
+  phone: string;
+  email: string;
+  siteAddress: string;
+  title: string;
+  materialMarkup: string;
+  laborCostRate: string;
+  laborSellRate: string;
+  taxRate: string;
 }
 
 const frameStyle: CSSProperties = {
@@ -74,6 +96,20 @@ const emptyAdjustmentDraft: ManualAdjustmentDraft = {
 
 const TAKEOFF_CATALOG_STORAGE_KEY = "packops-takeoff-material-catalog-v1";
 
+const emptyQuoteDraft: QuoteDraft = {
+  customerName: "",
+  companyName: "",
+  contactName: "",
+  phone: "",
+  email: "",
+  siteAddress: "",
+  title: "",
+  materialMarkup: "30",
+  laborCostRate: "0",
+  laborSellRate: "95",
+  taxRate: "5",
+};
+
 export function ElectricalTakeoffPage() {
   const { currentUser } = useAuthContext();
   if (!currentUser) {
@@ -86,8 +122,13 @@ export function ElectricalTakeoffPage() {
   const [manualAdjustments, setManualAdjustments] = useState<ManualAdjustment[]>([]);
   const [manualAdjustmentDraft, setManualAdjustmentDraft] = useState<ManualAdjustmentDraft>(emptyAdjustmentDraft);
   const [isAdjustmentsOpen, setIsAdjustmentsOpen] = useState(false);
+  const [isQuotePanelOpen, setIsQuotePanelOpen] = useState(false);
+  const [quoteDraft, setQuoteDraft] = useState<QuoteDraft>(emptyQuoteDraft);
+  const [createdQuote, setCreatedQuote] = useState<QuoteView | null>(null);
   const { catalogQuery } = useMaterialsSlice(currentUser);
+  const { builderResourcesQuery, createQuote } = useQuotesSlice(currentUser);
   const catalogItems = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
+  const builderResources = builderResourcesQuery.data ?? null;
   const pricedCatalogItems = useMemo(
     () => catalogItems.filter((item) => item.isActive && item.costPrice !== null),
     [catalogItems],
@@ -115,12 +156,34 @@ export function ElectricalTakeoffPage() {
 
   const reviewDisplayTotals = useMemo(() => {
     const lines = matchedReviewLines;
+    const labourLines = reviewLines ? readTakeoffLabourLines(iframeRef.current) : [];
     return {
       matched: lines.filter((line) => line.match).length,
       unmatched: lines.filter((line) => !line.match).length,
       totalCost: lines.reduce((total, line) => total + (line.lineCost ?? 0), 0),
+      labourHours: labourLines.reduce((total, line) => total + line.hours, 0),
     };
   }, [matchedReviewLines]);
+
+  useEffect(() => {
+    if (!builderResources) {
+      return;
+    }
+
+    setQuoteDraft((current) => ({
+      ...current,
+      materialMarkup: current.materialMarkup || String(builderResources.defaultMaterialMarkup),
+      laborCostRate: current.laborCostRate === emptyQuoteDraft.laborCostRate
+        ? String(builderResources.defaultLaborCostRate)
+        : current.laborCostRate,
+      laborSellRate: current.laborSellRate === emptyQuoteDraft.laborSellRate
+        ? String(builderResources.defaultLaborSellRate)
+        : current.laborSellRate,
+      taxRate: current.taxRate === emptyQuoteDraft.taxRate
+        ? String(builderResources.defaultTaxRate)
+        : current.taxRate,
+    }));
+  }, [builderResources]);
 
   function syncTakeoffCatalog() {
     if (typeof window === "undefined") {
@@ -144,6 +207,7 @@ export function ElectricalTakeoffPage() {
 
     setReviewLines(lines.map((line) => matchTakeoffLine(line, pricedCatalogItems)));
     setReviewError(null);
+    setCreatedQuote(null);
   }
 
   function handleAddManualAdjustment() {
@@ -201,6 +265,82 @@ export function ElectricalTakeoffPage() {
 
     await navigator.clipboard.writeText(csv);
     setReviewError("Copied matched material CSV to your clipboard.");
+  }
+
+  function openQuotePanel() {
+    if (!matchedReviewLines.length) {
+      setReviewError("Review the takeoff materials first, then create a quote.");
+      return;
+    }
+
+    const title = quoteDraft.title.trim() || getTakeoffProjectName(iframeRef.current) || "Electrical takeoff quote";
+    setQuoteDraft((current) => ({
+      ...current,
+      title,
+      customerName: current.customerName || current.companyName || "Takeoff customer",
+    }));
+    setIsQuotePanelOpen(true);
+    setReviewError(null);
+  }
+
+  async function handleCreateQuote() {
+    const materialMarkup = Number(quoteDraft.materialMarkup);
+    const laborCostRate = Number(quoteDraft.laborCostRate);
+    const laborSellRate = Number(quoteDraft.laborSellRate);
+    const taxRate = Number(quoteDraft.taxRate);
+
+    if (!quoteDraft.customerName.trim()) {
+      setReviewError("Customer name is required before creating a quote.");
+      return;
+    }
+
+    if (!quoteDraft.title.trim()) {
+      setReviewError("Project / site is required before creating a quote.");
+      return;
+    }
+
+    if (![materialMarkup, laborCostRate, laborSellRate, taxRate].every(Number.isFinite)) {
+      setReviewError("Markup, labour rates, and tax rate must be valid numbers.");
+      return;
+    }
+
+    const labourLines = readTakeoffLabourLines(iframeRef.current);
+    const lineItems = buildQuoteLineItems({
+      materialLines: matchedReviewLines,
+      labourLines,
+      materialMarkup,
+      laborCostRate,
+      laborSellRate,
+    });
+
+    if (lineItems.length === 0) {
+      setReviewError("No positive material or labour lines are ready to quote yet.");
+      return;
+    }
+
+    try {
+      const quote = await createQuote.mutateAsync({
+        customerName: quoteDraft.customerName,
+        companyName: quoteDraft.companyName || null,
+        contactName: quoteDraft.contactName || null,
+        phone: quoteDraft.phone || null,
+        email: quoteDraft.email || null,
+        siteAddress: quoteDraft.siteAddress || null,
+        title: quoteDraft.title,
+        description: "Generated from the electrical takeoff material and labour review.",
+        notes: "Created from Electrical Takeoff. Review unmatched/zero-dollar lines before sending.",
+        laborCostRate,
+        laborSellRate,
+        taxRate,
+        status: "draft",
+        lineItems,
+      });
+      setCreatedQuote(quote);
+      setReviewError(`Created draft quote ${quote.number}. Open Quotes to review pricing and customer PDF.`);
+      setIsQuotePanelOpen(false);
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : "Quote creation failed.");
+    }
   }
 
   return (
@@ -299,6 +439,8 @@ export function ElectricalTakeoffPage() {
                 <h2 style={{ margin: 0, fontSize: "18px", color: brand.text }}>Catalog Material Review</h2>
                 <p style={{ margin: "4px 0 0", color: brand.textSoft, fontSize: "13px" }}>
                   {reviewDisplayTotals.matched} matched, {reviewDisplayTotals.unmatched} unmatched · Estimated catalog cost ${reviewDisplayTotals.totalCost.toFixed(2)}
+                  {" · "}
+                  Labour {reviewDisplayTotals.labourHours.toFixed(2)} hr
                 </p>
               </div>
               <button type="button" style={toolbarButtonStyle} onClick={() => setReviewLines(null)}>
@@ -327,6 +469,32 @@ export function ElectricalTakeoffPage() {
               <button type="button" style={toolbarButtonStyle} onClick={() => setIsAdjustmentsOpen(true)}>
                 Open
               </button>
+            </section>
+
+            <section
+              style={{
+                border: `1px solid ${brand.border}`,
+                borderRadius: "12px",
+                padding: "10px",
+                background: "#ffffff",
+                display: "grid",
+                gap: "8px",
+              }}
+            >
+              <div>
+                <strong style={{ display: "block", color: brand.text }}>Quote prep</strong>
+                <span style={{ color: brand.textSoft, fontSize: "13px" }}>
+                  Builds a new draft quote with grouped material lines and takeoff labour lines.
+                </span>
+              </div>
+              <button type="button" style={{ ...toolbarButtonStyle, justifySelf: "start" }} onClick={openQuotePanel}>
+                Create Quote
+              </button>
+              {createdQuote ? (
+                <span style={{ color: brand.primaryDark, fontSize: "13px", fontWeight: 800 }}>
+                  Draft quote {createdQuote.number} created.
+                </span>
+              ) : null}
             </section>
 
             <div style={{ display: "grid", gap: "8px" }}>
@@ -367,6 +535,117 @@ export function ElectricalTakeoffPage() {
               ))}
             </div>
           </aside>
+        ) : null}
+
+        {isQuotePanelOpen ? (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="takeoff-create-quote-title"
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.36)",
+              display: "grid",
+              placeItems: "center",
+              padding: "18px",
+              zIndex: 9,
+            }}
+          >
+            <section
+              style={{
+                width: "min(760px, 100%)",
+                maxHeight: "min(760px, 100%)",
+                overflow: "auto",
+                border: `1px solid ${brand.border}`,
+                borderRadius: "14px",
+                background: "#ffffff",
+                boxShadow: "0 24px 70px rgba(15, 23, 42, 0.28)",
+                padding: "16px",
+                display: "grid",
+                gap: "14px",
+              }}
+            >
+              <header style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
+                <div>
+                  <h2 id="takeoff-create-quote-title" style={{ margin: 0, fontSize: "20px", color: brand.text }}>
+                    Create Quote From Takeoff
+                  </h2>
+                  <p style={{ margin: "4px 0 0", color: brand.textSoft, fontSize: "13px" }}>
+                    Creates a brand new draft quote. Review it in Quotes before sending the customer PDF.
+                  </p>
+                </div>
+                <button type="button" style={toolbarButtonStyle} onClick={() => setIsQuotePanelOpen(false)}>
+                  Close
+                </button>
+              </header>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
+                {([
+                  ["Customer name", "customerName"],
+                  ["Company", "companyName"],
+                  ["Contact name", "contactName"],
+                  ["Phone", "phone"],
+                  ["Email", "email"],
+                  ["Site address", "siteAddress"],
+                  ["Project / site", "title"],
+                ] satisfies Array<[string, keyof QuoteDraft]>).map(([label, key]) => (
+                  <label key={key} style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                    {label}
+                    <input
+                      value={quoteDraft[key as keyof QuoteDraft]}
+                      onChange={(event) => setQuoteDraft((draft) => ({ ...draft, [key]: event.target.value }))}
+                      style={inputStyle}
+                    />
+                  </label>
+                ))}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "10px" }}>
+                {([
+                  ["Material markup %", "materialMarkup"],
+                  ["Labour cost/hr", "laborCostRate"],
+                  ["Labour sell/hr", "laborSellRate"],
+                  ["Tax %", "taxRate"],
+                ] satisfies Array<[string, keyof QuoteDraft]>).map(([label, key]) => (
+                  <label key={key} style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                    {label}
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={quoteDraft[key as keyof QuoteDraft]}
+                      onChange={(event) => setQuoteDraft((draft) => ({ ...draft, [key]: event.target.value }))}
+                      style={inputStyle}
+                    />
+                  </label>
+                ))}
+              </div>
+
+              <div
+                style={{
+                  border: `1px solid ${brand.border}`,
+                  borderRadius: "12px",
+                  padding: "10px",
+                  background: brand.surfaceAlt,
+                  color: brand.textSoft,
+                  fontSize: "13px",
+                }}
+              >
+                Quote will include {matchedReviewLines.filter((line) => line.quantity > 0).length} material line(s) and{" "}
+                {readTakeoffLabourLines(iframeRef.current).length} labour line(s). Unmatched materials are included at $0 so you can price them in the quote editor.
+              </div>
+
+              <button
+                type="button"
+                className="primary"
+                style={{ ...toolbarButtonStyle, background: brand.primary, borderColor: brand.primary, color: "#ffffff", justifySelf: "start" }}
+                onClick={() => void handleCreateQuote()}
+                disabled={createQuote.isPending}
+              >
+                {createQuote.isPending ? "Creating..." : "Create Draft Quote"}
+              </button>
+            </section>
+          </div>
         ) : null}
 
         {isAdjustmentsOpen ? (
@@ -592,6 +871,46 @@ function readTakeoffMaterialLines(iframe: HTMLIFrameElement | null): TakeoffMate
   });
 }
 
+function readTakeoffLabourLines(iframe: HTMLIFrameElement | null): TakeoffLabourLine[] {
+  const document = iframe?.contentDocument;
+  if (!document) {
+    return [];
+  }
+
+  return Array.from(document.querySelectorAll(".takeoff.compact > div")).flatMap((row) => {
+    const item = row.querySelector("span")?.textContent?.trim();
+    const quantityText = row.querySelector("strong")?.textContent?.trim() ?? "";
+
+    if (!item || item.toLowerCase().includes("total labour") || !quantityText.toLowerCase().includes("hr")) {
+      return [];
+    }
+
+    const hours = Number(quantityText.replace(/hr/gi, "").trim());
+    if (!Number.isFinite(hours) || hours <= 0) {
+      return [];
+    }
+
+    const [phase, ...rest] = item.split(":");
+    return [{
+      phase: phase?.trim() || "Labour",
+      item: rest.join(":").trim() || item,
+      hours,
+    }];
+  });
+}
+
+function getTakeoffProjectName(iframe: HTMLIFrameElement | null): string | null {
+  const document = iframe?.contentDocument;
+  if (!document) {
+    return null;
+  }
+
+  const projectInput = Array.from(document.querySelectorAll("input")).find((input) =>
+    input.previousSibling?.textContent?.toLowerCase().includes("project"),
+  );
+  return projectInput?.value?.trim() || null;
+}
+
 function matchTakeoffLine(line: TakeoffMaterialLine, catalogItems: CatalogItem[]): MatchedTakeoffMaterialLine {
   const rankedMatches = catalogItems
     .map((item) => ({ item, score: scoreCatalogMatch(line.item, item) }))
@@ -679,6 +998,74 @@ function rollUpReviewLines(lines: MatchedTakeoffMaterialLine[]): MatchedTakeoffM
   }
 
   return [...rolledUp.values()].filter((line) => line.quantity !== 0);
+}
+
+function buildQuoteLineItems(input: {
+  materialLines: MatchedTakeoffMaterialLine[];
+  labourLines: TakeoffLabourLine[];
+  materialMarkup: number;
+  laborCostRate: number;
+  laborSellRate: number;
+}): QuoteLineItemInput[] {
+  const lineItems: QuoteLineItemInput[] = [];
+
+  input.materialLines
+    .filter((line) => line.quantity > 0)
+    .forEach((line, index) => {
+      const unitCost = line.match?.costPrice ?? 0;
+      lineItems.push({
+        catalogItemId: line.match?.id ?? null,
+        sortOrder: index,
+        description: line.match?.name ?? line.item,
+        sku: line.match?.sku ?? null,
+        note: line.note ?? (line.match ? null : `Unmatched takeoff item: ${line.item}`),
+        sectionName: normalizeQuoteSection(line.section),
+        sourceType: line.match ? "material" : "manual",
+        lineKind: "item",
+        quantity: roundQuantity(line.quantity),
+        unit: line.match?.unit ?? "each",
+        unitCost,
+        unitSell: roundMoney(unitCost * (1 + input.materialMarkup / 100)),
+      });
+    });
+
+  input.labourLines
+    .filter((line) => line.hours > 0)
+    .forEach((line, index) => {
+      lineItems.push({
+        sortOrder: lineItems.length + index,
+        description: line.item,
+        note: `Takeoff labour phase: ${line.phase}`,
+        sectionName: normalizeQuoteSection(line.phase),
+        sourceType: "manual",
+        lineKind: "labor",
+        quantity: roundQuantity(line.hours),
+        unit: "hr",
+        unitCost: roundMoney(input.laborCostRate),
+        unitSell: roundMoney(input.laborSellRate),
+      });
+    });
+
+  return lineItems;
+}
+
+function normalizeQuoteSection(section: string): string {
+  const lower = section.toLowerCase();
+  if (lower.includes("finish")) {
+    return "Finish";
+  }
+  if (lower.includes("panel") || lower.includes("service") || lower.includes("breaker")) {
+    return "Service";
+  }
+  return "Rough-in";
+}
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function roundQuantity(value: number): number {
+  return Math.round(value * 1000) / 1000;
 }
 
 function scoreCatalogMatch(takeoffItem: string, catalogItem: CatalogItem): number {
