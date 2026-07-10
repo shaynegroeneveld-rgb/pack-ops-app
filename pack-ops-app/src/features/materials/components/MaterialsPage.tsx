@@ -586,7 +586,9 @@ export function MaterialsPage() {
     } catch (error) {
       setFeedback({
         tone: "error",
-        text: error instanceof Error ? error.message : "No-cost material cleanup scan failed.",
+        text: error instanceof Error
+          ? `No-cost material cleanup scan failed: ${error.message}`
+          : "No-cost material cleanup scan failed.",
       });
     }
   }
@@ -615,7 +617,9 @@ export function MaterialsPage() {
     } catch (error) {
       setFeedback({
         tone: "error",
-        text: error instanceof Error ? error.message : "No-cost material cleanup failed.",
+        text: error instanceof Error
+          ? `No-cost material cleanup failed: ${error.message}`
+          : "No-cost material cleanup failed.",
       });
     }
   }

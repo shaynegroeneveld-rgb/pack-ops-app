@@ -265,6 +265,21 @@ function addReferenceCount(counts: Map<string, number>, catalogItemId: string | 
   counts.set(catalogItemId, (counts.get(catalogItemId) ?? 0) + 1);
 }
 
+function canIgnoreMissingOptionalTable(error: { code?: string | null; message?: string | null }): boolean {
+  const message = error.message?.toLowerCase() ?? "";
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST106" ||
+    error.code === "PGRST200" ||
+    error.code === "PGRST205" ||
+    message.includes("finance_document_line_items") && (
+      message.includes("does not exist") ||
+      message.includes("could not find") ||
+      message.includes("not found")
+    )
+  );
+}
+
 export class MaterialsService {
   readonly catalogItems;
   readonly assemblies;
@@ -450,6 +465,9 @@ export class MaterialsService {
       );
 
     if (error) {
+      if (canIgnoreMissingOptionalTable(error)) {
+        return counts;
+      }
       throw error;
     }
 
