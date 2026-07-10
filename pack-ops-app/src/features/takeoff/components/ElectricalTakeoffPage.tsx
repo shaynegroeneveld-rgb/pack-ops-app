@@ -870,7 +870,7 @@ function readTakeoffMaterialLines(iframe: HTMLIFrameElement | null): TakeoffMate
     });
   });
 
-  if (materialLines.some((line) => line.section.toLowerCase() === "wire")) {
+  if (materialLines.some(isWireLikeLine)) {
     return materialLines;
   }
 
@@ -1038,7 +1038,7 @@ function buildQuoteLineItems(input: {
         description: line.match?.name ?? line.item,
         sku: line.match?.sku ?? null,
         note: line.note ?? (line.match ? null : `Unmatched takeoff item: ${line.item}`),
-        sectionName: normalizeQuoteSection(line.section),
+        sectionName: normalizeQuoteSection(line.section, line.item),
         sourceType: line.match ? "material" : "manual",
         lineKind: "item",
         quantity: roundQuantity(line.quantity),
@@ -1067,15 +1067,27 @@ function buildQuoteLineItems(input: {
   return lineItems;
 }
 
-function normalizeQuoteSection(section: string): string {
-  const lower = section.toLowerCase();
-  if (lower.includes("finish")) {
-    return "Finish";
-  }
-  if (lower.includes("panel") || lower.includes("service") || lower.includes("breaker")) {
+function normalizeQuoteSection(section: string, item = ""): string {
+  const lower = `${section} ${item}`.toLowerCase();
+  if (lower.includes("panel") || lower.includes("subpanel")) {
     return "Service";
   }
-  if (lower.includes("device") || lower.includes("fixture") || lower.includes("plate")) {
+  if (lower.includes("breaker") || lower.includes("plate") || lower.includes("device") || lower.includes("fixture")) {
+    return "Finish";
+  }
+  if (
+    lower.includes("box")
+    || lower.includes("wire")
+    || lower.includes("nmd")
+    || lower.includes("cable")
+    || lower.includes("awg")
+    || lower.includes("vapour")
+    || lower.includes("vapor")
+    || lower.includes("boot")
+  ) {
+    return "Rough-in";
+  }
+  if (lower.includes("finish")) {
     return "Finish";
   }
   return "Rough-in";
@@ -1120,6 +1132,11 @@ function inferTakeoffUnit(line: TakeoffMaterialLine): string {
     return "m";
   }
   return "each";
+}
+
+function isWireLikeLine(line: TakeoffMaterialLine): boolean {
+  const lower = `${line.section} ${line.item}`.toLowerCase();
+  return lower.includes("wire") || lower.includes("nmd") || lower.includes("cable") || lower.includes("awg");
 }
 
 function parseTakeoffQuantity(value: string): number {
