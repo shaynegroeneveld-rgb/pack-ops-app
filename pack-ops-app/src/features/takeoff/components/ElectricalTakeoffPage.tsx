@@ -15,6 +15,26 @@ interface MatchedTakeoffMaterialLine extends TakeoffMaterialLine {
   match: CatalogItem | null;
   matchScore: number;
   lineCost: number | null;
+  source: "takeoff" | "manual";
+  adjustmentKind?: "device" | "material";
+  note?: string;
+}
+
+interface ManualAdjustmentDraft {
+  adjustmentKind: "device" | "material";
+  catalogItemId: string;
+  customItem: string;
+  quantity: string;
+  note: string;
+}
+
+interface ManualAdjustment {
+  id: string;
+  adjustmentKind: "device" | "material";
+  item: string;
+  quantity: number;
+  catalogItemId: string | null;
+  note: string | null;
 }
 
 const frameStyle: CSSProperties = {
@@ -35,6 +55,23 @@ const toolbarButtonStyle: CSSProperties = {
   cursor: "pointer",
 };
 
+const inputStyle: CSSProperties = {
+  border: `1px solid ${brand.border}`,
+  borderRadius: "10px",
+  padding: "8px 10px",
+  background: "#ffffff",
+  color: brand.text,
+  minWidth: 0,
+};
+
+const emptyAdjustmentDraft: ManualAdjustmentDraft = {
+  adjustmentKind: "material",
+  catalogItemId: "",
+  customItem: "",
+  quantity: "1",
+  note: "",
+};
+
 export function ElectricalTakeoffPage() {
   const { currentUser } = useAuthContext();
   if (!currentUser) {
@@ -44,6 +81,8 @@ export function ElectricalTakeoffPage() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [reviewLines, setReviewLines] = useState<MatchedTakeoffMaterialLine[] | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [manualAdjustments, setManualAdjustments] = useState<ManualAdjustment[]>([]);
+  const [manualAdjustmentDraft, setManualAdjustmentDraft] = useState<ManualAdjustmentDraft>(emptyAdjustmentDraft);
   const { catalogQuery } = useMaterialsSlice(currentUser);
   const catalogItems = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
   const pricedCatalogItems = useMemo(
@@ -51,14 +90,19 @@ export function ElectricalTakeoffPage() {
     [catalogItems],
   );
 
-  const reviewTotals = useMemo(() => {
-    const lines = reviewLines ?? [];
+  const matchedReviewLines = useMemo(
+    () => buildReviewLines(reviewLines ?? [], manualAdjustments, pricedCatalogItems),
+    [manualAdjustments, pricedCatalogItems, reviewLines],
+  );
+
+  const reviewDisplayTotals = useMemo(() => {
+    const lines = matchedReviewLines;
     return {
       matched: lines.filter((line) => line.match).length,
       unmatched: lines.filter((line) => !line.match).length,
       totalCost: lines.reduce((total, line) => total + (line.lineCost ?? 0), 0),
     };
-  }, [reviewLines]);
+  }, [matchedReviewLines]);
 
   function handleReviewMaterials() {
     const lines = readTakeoffMaterialLines(iframeRef.current);
@@ -72,15 +116,46 @@ export function ElectricalTakeoffPage() {
     setReviewError(null);
   }
 
+  function handleAddManualAdjustment() {
+    const quantity = Number(manualAdjustmentDraft.quantity);
+    if (!Number.isFinite(quantity) || quantity === 0) {
+      setReviewError("Manual adjustment quantity must be a positive or negative number.");
+      return;
+    }
+
+    const catalogItem = catalogItems.find((item) => item.id === manualAdjustmentDraft.catalogItemId) ?? null;
+    const itemName = catalogItem?.name ?? manualAdjustmentDraft.customItem.trim();
+    if (!itemName) {
+      setReviewError("Choose a catalog item or type a custom manual adjustment item.");
+      return;
+    }
+
+    setManualAdjustments((current) => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        adjustmentKind: manualAdjustmentDraft.adjustmentKind,
+        item: itemName,
+        quantity: Math.round(quantity * 100) / 100,
+        catalogItemId: catalogItem?.id ?? null,
+        note: manualAdjustmentDraft.note.trim() || null,
+      },
+    ]);
+    setManualAdjustmentDraft(emptyAdjustmentDraft);
+    setReviewError(null);
+  }
+
   async function handleCopyCsv() {
-    if (!reviewLines?.length) {
+    if (!matchedReviewLines.length) {
       return;
     }
 
     const csv = [
-      ["Section", "Takeoff item", "Quantity", "Catalog match", "Catalog SKU", "Unit", "Unit cost", "Line cost"],
-      ...reviewLines.map((line) => [
+      ["Section", "Source", "Kind", "Takeoff item", "Quantity", "Catalog match", "Catalog SKU", "Unit", "Unit cost", "Line cost", "Note"],
+      ...matchedReviewLines.map((line) => [
         line.section,
+        line.source,
+        line.adjustmentKind ?? "",
         line.item,
         String(line.quantity),
         line.match?.name ?? "",
@@ -88,6 +163,7 @@ export function ElectricalTakeoffPage() {
         line.match?.unit ?? "",
         line.match?.costPrice?.toFixed(2) ?? "",
         line.lineCost?.toFixed(2) ?? "",
+        line.note ?? "",
       ]),
     ]
       .map((row) => row.map((value) => `"${value.replace(/"/g, '""')}"`).join(","))
@@ -188,7 +264,7 @@ export function ElectricalTakeoffPage() {
               <div>
                 <h2 style={{ margin: 0, fontSize: "18px", color: brand.text }}>Catalog Material Review</h2>
                 <p style={{ margin: "4px 0 0", color: brand.textSoft, fontSize: "13px" }}>
-                  {reviewTotals.matched} matched, {reviewTotals.unmatched} unmatched · Estimated catalog cost ${reviewTotals.totalCost.toFixed(2)}
+                  {reviewDisplayTotals.matched} matched, {reviewDisplayTotals.unmatched} unmatched · Estimated catalog cost ${reviewDisplayTotals.totalCost.toFixed(2)}
                 </p>
               </div>
               <button type="button" style={toolbarButtonStyle} onClick={() => setReviewLines(null)}>
@@ -196,10 +272,132 @@ export function ElectricalTakeoffPage() {
               </button>
             </header>
 
+            <section
+              style={{
+                border: `1px solid ${brand.border}`,
+                borderRadius: "12px",
+                padding: "10px",
+                background: brand.surfaceAlt,
+                display: "grid",
+                gap: "8px",
+              }}
+            >
+              <strong style={{ color: brand.text }}>Manual adjustments</strong>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                  Type
+                  <select
+                    value={manualAdjustmentDraft.adjustmentKind}
+                    onChange={(event) =>
+                      setManualAdjustmentDraft((draft) => ({
+                        ...draft,
+                        adjustmentKind: event.target.value as ManualAdjustmentDraft["adjustmentKind"],
+                      }))
+                    }
+                    style={inputStyle}
+                  >
+                    <option value="material">Material</option>
+                    <option value="device">Device</option>
+                  </select>
+                </label>
+                <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                  Qty +/-
+                  <input
+                    value={manualAdjustmentDraft.quantity}
+                    onChange={(event) => setManualAdjustmentDraft((draft) => ({ ...draft, quantity: event.target.value }))}
+                    type="number"
+                    step="0.25"
+                    style={inputStyle}
+                  />
+                </label>
+              </div>
+              <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                Catalog material/device
+                <select
+                  value={manualAdjustmentDraft.catalogItemId}
+                  onChange={(event) =>
+                    setManualAdjustmentDraft((draft) => ({
+                      ...draft,
+                      catalogItemId: event.target.value,
+                      customItem: event.target.value ? "" : draft.customItem,
+                    }))
+                  }
+                  style={inputStyle}
+                >
+                  <option value="">Custom / unmatched</option>
+                  {catalogItems
+                    .filter((item) => item.isActive)
+                    .map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}{item.sku ? ` (${item.sku})` : ""}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              {!manualAdjustmentDraft.catalogItemId ? (
+                <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                  Custom item
+                  <input
+                    value={manualAdjustmentDraft.customItem}
+                    onChange={(event) => setManualAdjustmentDraft((draft) => ({ ...draft, customItem: event.target.value }))}
+                    placeholder="Example: 1-gang box"
+                    style={inputStyle}
+                  />
+                </label>
+              ) : null}
+              <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                Note
+                <input
+                  value={manualAdjustmentDraft.note}
+                  onChange={(event) => setManualAdjustmentDraft((draft) => ({ ...draft, note: event.target.value }))}
+                  placeholder="Optional reason"
+                  style={inputStyle}
+                />
+              </label>
+              <button type="button" style={toolbarButtonStyle} onClick={handleAddManualAdjustment}>
+                Add adjustment
+              </button>
+
+              {manualAdjustments.length ? (
+                <div style={{ display: "grid", gap: "6px" }}>
+                  {manualAdjustments.map((adjustment) => (
+                    <div
+                      key={adjustment.id}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr auto auto",
+                        gap: "8px",
+                        alignItems: "center",
+                        color: brand.textSoft,
+                        fontSize: "13px",
+                      }}
+                    >
+                      <span>
+                        {adjustment.adjustmentKind === "device" ? "Device" : "Material"} · {adjustment.item}
+                        {adjustment.note ? ` · ${adjustment.note}` : ""}
+                      </span>
+                      <strong style={{ color: adjustment.quantity < 0 ? "#9a3412" : brand.primaryDark }}>
+                        {adjustment.quantity > 0 ? "+" : ""}{adjustment.quantity}
+                      </strong>
+                      <button
+                        type="button"
+                        style={{ ...toolbarButtonStyle, padding: "5px 8px" }}
+                        onClick={() =>
+                          setManualAdjustments((current) => current.filter((item) => item.id !== adjustment.id))
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+
             <div style={{ display: "grid", gap: "8px" }}>
-              {reviewLines.map((line) => (
+              {matchedReviewLines.map((line) => (
                 <article
-                  key={`${line.section}-${line.item}`}
+                  key={`${line.source}-${line.section}-${line.item}-${line.note ?? ""}`}
                   style={{
                     border: `1px solid ${line.match ? brand.border : "#f0c2a7"}`,
                     borderRadius: "10px",
@@ -214,6 +412,11 @@ export function ElectricalTakeoffPage() {
                     <span style={{ color: brand.primaryDark, fontWeight: 800 }}>{line.quantity}</span>
                   </div>
                   <div style={{ color: brand.textSoft, fontSize: "12px" }}>{line.section}</div>
+                  {line.source === "manual" ? (
+                    <div style={{ color: brand.primaryDark, fontSize: "12px", fontWeight: 800 }}>
+                      Manual {line.adjustmentKind} adjustment{line.note ? ` · ${line.note}` : ""}
+                    </div>
+                  ) : null}
                   {line.match ? (
                     <div style={{ color: brand.textSoft, fontSize: "13px" }}>
                       Matched to <strong style={{ color: brand.text }}>{line.match.name}</strong>
@@ -273,7 +476,78 @@ function matchTakeoffLine(line: TakeoffMaterialLine, catalogItems: CatalogItem[]
     match,
     matchScore: best?.score ?? 0,
     lineCost,
+    source: "takeoff",
   };
+}
+
+function buildReviewLines(
+  takeoffLines: MatchedTakeoffMaterialLine[],
+  manualAdjustments: ManualAdjustment[],
+  catalogItems: CatalogItem[],
+): MatchedTakeoffMaterialLine[] {
+  const manualLines = manualAdjustments.map((adjustment) => {
+    const catalogMatch = adjustment.catalogItemId
+      ? catalogItems.find((item) => item.id === adjustment.catalogItemId) ?? null
+      : null;
+    const baseLine: TakeoffMaterialLine = {
+      section: adjustment.adjustmentKind === "device" ? "Manual Devices" : "Manual Materials",
+      item: adjustment.item,
+      quantity: adjustment.quantity,
+    };
+    const matchedLine = catalogMatch
+      ? {
+          ...baseLine,
+          match: catalogMatch,
+          matchScore: 1,
+          lineCost: catalogMatch.costPrice !== null
+            ? Math.round(catalogMatch.costPrice * adjustment.quantity * 100) / 100
+            : null,
+          source: "manual" as const,
+          adjustmentKind: adjustment.adjustmentKind,
+          ...(adjustment.note ? { note: adjustment.note } : {}),
+        }
+      : {
+          ...matchTakeoffLine(baseLine, catalogItems),
+          source: "manual" as const,
+          adjustmentKind: adjustment.adjustmentKind,
+          ...(adjustment.note ? { note: adjustment.note } : {}),
+        };
+
+    return matchedLine;
+  });
+
+  return rollUpReviewLines([...takeoffLines, ...manualLines]);
+}
+
+function rollUpReviewLines(lines: MatchedTakeoffMaterialLine[]): MatchedTakeoffMaterialLine[] {
+  const rolledUp = new Map<string, MatchedTakeoffMaterialLine>();
+
+  for (const line of lines) {
+    const key = [
+      line.source,
+      line.section,
+      line.item,
+      line.match?.id ?? "unmatched",
+      line.adjustmentKind ?? "",
+      line.note ?? "",
+    ].join("::");
+    const current = rolledUp.get(key);
+    if (!current) {
+      rolledUp.set(key, line);
+      continue;
+    }
+
+    const quantity = Math.round((current.quantity + line.quantity) * 100) / 100;
+    rolledUp.set(key, {
+      ...current,
+      quantity,
+      lineCost: current.match?.costPrice !== null && current.match?.costPrice !== undefined
+        ? Math.round(current.match.costPrice * quantity * 100) / 100
+        : null,
+    });
+  }
+
+  return [...rolledUp.values()].filter((line) => line.quantity !== 0);
 }
 
 function scoreCatalogMatch(takeoffItem: string, catalogItem: CatalogItem): number {
