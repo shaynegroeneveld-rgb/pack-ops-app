@@ -143,6 +143,15 @@ export function useMaterialsSlice(authenticatedUser: AuthenticatedUser) {
     onSuccess: invalidate,
   });
 
+  const inspectUnpricedCatalogCleanup = useMutation({
+    mutationFn: () => service.inspectUnpricedCatalogCleanup(),
+  });
+
+  const archiveUnpricedCatalogItems = useMutation({
+    mutationFn: (itemIds: CatalogItem["id"][]) => service.archiveUnpricedCatalogItems(itemIds),
+    onSuccess: invalidate,
+  });
+
   const createAssembly = useMutation({
     mutationFn: (input: Parameters<MaterialsService["createAssembly"]>[0]) => service.createAssembly(input),
     onSuccess: invalidate,
@@ -180,6 +189,8 @@ export function useMaterialsSlice(authenticatedUser: AuthenticatedUser) {
     applyCatalogCleanup,
     inspectImportedMaterialRollback,
     rollbackImportedMaterials,
+    inspectUnpricedCatalogCleanup,
+    archiveUnpricedCatalogItems,
     createAssembly,
     updateAssembly,
     duplicateAssembly,

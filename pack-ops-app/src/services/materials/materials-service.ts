@@ -26,6 +26,7 @@ import type {
   SupplierInvoiceMatchCandidate,
   SupplierInvoiceReviewPreview,
   SupplierInvoiceReviewResolution,
+  UnpricedCatalogCleanupPreview,
   UpdateAssemblyInput,
   UpdateCatalogItemInput,
 } from "@/domain/materials/types";
@@ -253,6 +254,17 @@ function buildCleanupPairId(leftId: string, rightId: string): string {
   return [leftId, rightId].sort().join("::");
 }
 
+function isUnpricedCatalogItem(item: CatalogItem): boolean {
+  return item.costPrice === null && (item.unitPrice === null || item.unitPrice === 0);
+}
+
+function addReferenceCount(counts: Map<string, number>, catalogItemId: string | null | undefined) {
+  if (!catalogItemId) {
+    return;
+  }
+  counts.set(catalogItemId, (counts.get(catalogItemId) ?? 0) + 1);
+}
+
 export class MaterialsService {
   readonly catalogItems;
   readonly assemblies;
@@ -343,6 +355,110 @@ export class MaterialsService {
         migrationHint: "0028_business_entity_soft_delete_rpcs.sql",
       });
     }
+  }
+
+  async inspectUnpricedCatalogCleanup(): Promise<UnpricedCatalogCleanupPreview> {
+    this.assertCanManage();
+    const unpricedItems = (await this.catalogItems.list({ filter: { includeInactive: true } }))
+      .filter((item) => item.isActive && isUnpricedCatalogItem(item));
+
+    if (unpricedItems.length === 0) {
+      return { candidates: [] };
+    }
+
+    const candidateIds = unpricedItems.map((item) => item.id as string);
+    const [assemblyCounts, quoteLineCounts, jobMaterialCounts, financeLineCounts] = await Promise.all([
+      this.countCatalogReferences("assembly_items", "catalog_item_id", candidateIds),
+      this.countCatalogReferences("quote_line_items", "catalog_item_id", candidateIds),
+      this.countCatalogReferences("job_materials", "catalog_item_id", candidateIds),
+      this.countFinanceLineReferences(candidateIds),
+    ]);
+
+    return {
+      candidates: unpricedItems.map((item) => {
+        const referenceCounts = {
+          assemblies: assemblyCounts.get(item.id) ?? 0,
+          quoteLines: quoteLineCounts.get(item.id) ?? 0,
+          jobMaterials: jobMaterialCounts.get(item.id) ?? 0,
+          financeLines: financeLineCounts.get(item.id) ?? 0,
+        };
+        const totalReferences =
+          referenceCounts.assemblies +
+          referenceCounts.quoteLines +
+          referenceCounts.jobMaterials +
+          referenceCounts.financeLines;
+
+        return {
+          item,
+          referenceCounts,
+          safeToArchive: totalReferences === 0,
+        };
+      }),
+    };
+  }
+
+  async archiveUnpricedCatalogItems(itemIds: CatalogItem["id"][]): Promise<{ archived: number; blocked: number }> {
+    this.assertCanManage();
+    const requestedIds = new Set(itemIds.map(String));
+    const preview = await this.inspectUnpricedCatalogCleanup();
+    const safeIds = preview.candidates
+      .filter((candidate) => requestedIds.has(candidate.item.id) && candidate.safeToArchive)
+      .map((candidate) => candidate.item.id);
+
+    for (const itemId of safeIds) {
+      await this.archiveCatalogItem(itemId);
+    }
+
+    return {
+      archived: safeIds.length,
+      blocked: requestedIds.size - safeIds.length,
+    };
+  }
+
+  private async countCatalogReferences(
+    tableName: "assembly_items" | "quote_line_items" | "job_materials",
+    columnName: "catalog_item_id",
+    catalogItemIds: string[],
+  ): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    const { data, error } = await this.client
+      .from(tableName)
+      .select(columnName)
+      .eq("org_id", this.context.orgId)
+      .is("deleted_at", null)
+      .in(columnName, catalogItemIds);
+
+    if (error) {
+      throw error;
+    }
+
+    for (const row of data ?? []) {
+      addReferenceCount(counts, row.catalog_item_id);
+    }
+
+    return counts;
+  }
+
+  private async countFinanceLineReferences(catalogItemIds: string[]): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    const { data, error } = await (this.client as SupabaseClient<any>)
+      .from("finance_document_line_items")
+      .select("matched_catalog_item_id, applied_catalog_item_id")
+      .eq("org_id", this.context.orgId)
+      .or(
+        `matched_catalog_item_id.in.(${catalogItemIds.join(",")}),applied_catalog_item_id.in.(${catalogItemIds.join(",")})`,
+      );
+
+    if (error) {
+      throw error;
+    }
+
+    for (const row of data ?? []) {
+      addReferenceCount(counts, row.matched_catalog_item_id);
+      addReferenceCount(counts, row.applied_catalog_item_id);
+    }
+
+    return counts;
   }
 
   private async buildAssemblyViews(assemblies: Assembly[]): Promise<AssemblyView[]> {

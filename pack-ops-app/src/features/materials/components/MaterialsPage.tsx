@@ -21,6 +21,7 @@ import type {
   SupplierInvoiceImportRow,
   SupplierInvoiceReviewPreview,
   SupplierInvoiceReviewResolution,
+  UnpricedCatalogCleanupPreview,
 } from "@/domain/materials/types";
 
 type MaterialsTab = "catalog" | "assemblies";
@@ -140,6 +141,7 @@ export function MaterialsPage() {
   const [assemblyDraft, setAssemblyDraft] = useState<AssemblyEditorDraft | null>(null);
   const [catalogCleanupPairs, setCatalogCleanupPairs] = useState<CatalogCleanupPair[] | null>(null);
   const [importRollbackPreview, setImportRollbackPreview] = useState<MaterialImportRollbackPreview | null>(null);
+  const [unpricedCleanupPreview, setUnpricedCleanupPreview] = useState<UnpricedCatalogCleanupPreview | null>(null);
   const [reconciliationPreview, setReconciliationPreview] = useState<MaterialReconciliationPreview | null>(null);
   const [supplierInvoicePreview, setSupplierInvoicePreview] = useState<SupplierInvoiceReviewPreview | null>(null);
 
@@ -162,6 +164,8 @@ export function MaterialsPage() {
     applyCatalogCleanup,
     inspectImportedMaterialRollback,
     rollbackImportedMaterials,
+    inspectUnpricedCatalogCleanup,
+    archiveUnpricedCatalogItems,
     createAssembly,
     updateAssembly,
     duplicateAssembly,
@@ -187,7 +191,9 @@ export function MaterialsPage() {
     analyzeCatalogCleanup.isPending ||
     applyCatalogCleanup.isPending ||
     inspectImportedMaterialRollback.isPending ||
-    rollbackImportedMaterials.isPending;
+    rollbackImportedMaterials.isPending ||
+    inspectUnpricedCatalogCleanup.isPending ||
+    archiveUnpricedCatalogItems.isPending;
 
   const filteredCatalogItems = useMemo(() => {
     if (!catalogSearch.trim()) {
@@ -566,6 +572,54 @@ export function MaterialsPage() {
     }
   }
 
+  async function handleOpenUnpricedCleanup() {
+    try {
+      const preview = await inspectUnpricedCatalogCleanup.mutateAsync();
+      setUnpricedCleanupPreview(preview);
+      const safeCount = preview.candidates.filter((candidate) => candidate.safeToArchive).length;
+      setFeedback({
+        tone: "success",
+        text: preview.candidates.length
+          ? `Found ${preview.candidates.length} active materials with no cost/sell price. ${safeCount} can be archived safely.`
+          : "No active materials with missing cost/sell price were found.",
+      });
+    } catch (error) {
+      setFeedback({
+        tone: "error",
+        text: error instanceof Error ? error.message : "No-cost material cleanup scan failed.",
+      });
+    }
+  }
+
+  async function handleConfirmUnpricedCleanup() {
+    if (!unpricedCleanupPreview) {
+      return;
+    }
+
+    const safeIds = unpricedCleanupPreview.candidates
+      .filter((candidate) => candidate.safeToArchive)
+      .map((candidate) => candidate.item.id);
+
+    if (safeIds.length === 0) {
+      setFeedback({ tone: "error", text: "There are no safe unpriced materials to archive." });
+      return;
+    }
+
+    try {
+      const result = await archiveUnpricedCatalogItems.mutateAsync(safeIds);
+      setFeedback({
+        tone: "success",
+        text: `Archived ${result.archived} unpriced materials. ${result.blocked} were blocked because they were referenced or no longer matched the cleanup rules.`,
+      });
+      setUnpricedCleanupPreview(null);
+    } catch (error) {
+      setFeedback({
+        tone: "error",
+        text: error instanceof Error ? error.message : "No-cost material cleanup failed.",
+      });
+    }
+  }
+
   return (
     <main style={{ padding: "24px", fontFamily: "ui-sans-serif, system-ui", color: "#172033" }}>
       <header
@@ -610,6 +664,9 @@ export function MaterialsPage() {
               </button>
               <button onClick={() => void handleOpenImportedMaterialRollback()} disabled={isPending}>
                 {inspectImportedMaterialRollback.isPending ? "Checking..." : "Remove Imported"}
+              </button>
+              <button onClick={() => void handleOpenUnpricedCleanup()} disabled={isPending}>
+                {inspectUnpricedCatalogCleanup.isPending ? "Scanning..." : "No-cost Cleanup"}
               </button>
               <button onClick={() => setMaterialDraft(createEmptyMaterialDraft())}>New Material</button>
             </div>
@@ -872,6 +929,119 @@ export function MaterialsPage() {
         onConfirm={handleConfirmImportedMaterialRollback}
         onClose={() => setImportRollbackPreview(null)}
       />
+
+      {unpricedCleanupPreview ? (
+        <section
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.45)",
+            display: "grid",
+            placeItems: "center",
+            padding: "20px",
+            zIndex: 50,
+          }}
+        >
+          <div
+            style={{
+              width: "min(920px, 100%)",
+              maxHeight: "88vh",
+              overflow: "auto",
+              borderRadius: "18px",
+              background: "#fff",
+              boxShadow: "0 24px 70px rgba(15, 23, 42, 0.3)",
+              padding: "18px",
+              display: "grid",
+              gap: "14px",
+            }}
+          >
+            <header style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
+              <div>
+                <h2 style={{ margin: 0 }}>No-cost material cleanup</h2>
+                <p style={{ margin: "6px 0 0", color: "#5b6475" }}>
+                  Active materials with no cost and no sell price. Referenced rows are shown but blocked from archive.
+                </p>
+              </div>
+              <button type="button" onClick={() => setUnpricedCleanupPreview(null)}>Close</button>
+            </header>
+
+            {unpricedCleanupPreview.candidates.length === 0 ? (
+              <p style={{ color: "#5b6475", margin: 0 }}>No matching materials found.</p>
+            ) : (
+              <div style={{ display: "grid", gap: "10px" }}>
+                {unpricedCleanupPreview.candidates.map((candidate) => {
+                  const totalReferences =
+                    candidate.referenceCounts.assemblies +
+                    candidate.referenceCounts.quoteLines +
+                    candidate.referenceCounts.jobMaterials +
+                    candidate.referenceCounts.financeLines;
+
+                  return (
+                    <article
+                      key={candidate.item.id}
+                      style={{
+                        border: "1px solid #d9dfeb",
+                        borderRadius: "12px",
+                        padding: "12px",
+                        display: "grid",
+                        gap: "8px",
+                        background: candidate.safeToArchive ? "#fbfffc" : "#fff8f2",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+                        <div>
+                          <strong>{candidate.item.name}</strong>
+                          <div style={{ color: "#5b6475", fontSize: "13px", marginTop: "3px" }}>
+                            {candidate.item.category || "Uncategorized"}
+                            {candidate.item.sku ? ` · ${candidate.item.sku}` : ""}
+                            {" · "}
+                            Unit: {candidate.item.unit}
+                          </div>
+                        </div>
+                        <span
+                          style={{
+                            borderRadius: "999px",
+                            padding: "6px 10px",
+                            fontSize: "12px",
+                            fontWeight: 700,
+                            background: candidate.safeToArchive ? "#e9f8ee" : "#fff1de",
+                            color: candidate.safeToArchive ? "#1f6b37" : "#9a4d00",
+                          }}
+                        >
+                          {candidate.safeToArchive ? "Safe to archive" : `${totalReferences} reference${totalReferences === 1 ? "" : "s"}`}
+                        </span>
+                      </div>
+                      {!candidate.safeToArchive ? (
+                        <div style={{ color: "#5b6475", fontSize: "13px" }}>
+                          Assemblies: {candidate.referenceCounts.assemblies} · Quote lines: {candidate.referenceCounts.quoteLines} · Job materials: {candidate.referenceCounts.jobMaterials} · Finance lines: {candidate.referenceCounts.financeLines}
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+
+            <footer style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
+              <span style={{ color: "#5b6475", fontSize: "13px", alignSelf: "center" }}>
+                {unpricedCleanupPreview.candidates.filter((candidate) => candidate.safeToArchive).length} safe to archive.
+              </span>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <button type="button" onClick={() => setUnpricedCleanupPreview(null)}>Cancel</button>
+                <button
+                  type="button"
+                  disabled={archiveUnpricedCatalogItems.isPending || unpricedCleanupPreview.candidates.every((candidate) => !candidate.safeToArchive)}
+                  onClick={() => void handleConfirmUnpricedCleanup()}
+                >
+                  {archiveUnpricedCatalogItems.isPending ? "Archiving..." : "Archive safe no-cost materials"}
+                </button>
+              </div>
+            </footer>
+          </div>
+        </section>
+      ) : null}
     </main>
   );
 }

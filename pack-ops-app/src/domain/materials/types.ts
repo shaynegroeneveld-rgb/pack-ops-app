@@ -208,3 +208,18 @@ export interface MaterialImportRollbackPreview {
   removableImportedMaterials: CatalogItem[];
   mergedArtifactMaterials: CatalogItem[];
 }
+
+export interface UnpricedCatalogCleanupCandidate {
+  item: CatalogItem;
+  referenceCounts: {
+    assemblies: number;
+    quoteLines: number;
+    jobMaterials: number;
+    financeLines: number;
+  };
+  safeToArchive: boolean;
+}
+
+export interface UnpricedCatalogCleanupPreview {
+  candidates: UnpricedCatalogCleanupCandidate[];
+}
