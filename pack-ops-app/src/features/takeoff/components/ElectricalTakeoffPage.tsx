@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import automationPdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 import { useAuthContext } from "@/app/contexts/auth-context";
 import type { CatalogItem } from "@/domain/materials/types";
@@ -160,7 +161,6 @@ const emptyAdjustmentDraft: ManualAdjustmentDraft = {
 };
 
 const TAKEOFF_CATALOG_STORAGE_KEY = "packops-takeoff-material-catalog-v1";
-const TAKEOFF_AUTOMATION_PDF_WORKER_SRC = "/takeoff/assets/pdf.worker.min-qwK7q_zL.mjs";
 const AUTOMATION_PAGE_WIDTH = 820;
 
 const AUTOMATION_ELECTRICAL_KEYWORDS = [
@@ -1563,7 +1563,7 @@ export function ElectricalTakeoffPage() {
 
 async function loadAutomationPdfJs() {
   const { pdfjs } = await import("react-pdf");
-  pdfjs.GlobalWorkerOptions.workerSrc = TAKEOFF_AUTOMATION_PDF_WORKER_SRC;
+  pdfjs.GlobalWorkerOptions.workerSrc = automationPdfWorkerUrl;
   return pdfjs;
 }
 
