@@ -59,6 +59,71 @@ interface QuoteDraft {
   taxRate: string;
 }
 
+interface AutomationPosition {
+  x: number;
+  y: number;
+}
+
+interface AutomationTextCandidate {
+  pageNumber: number;
+  text: string;
+  position: AutomationPosition;
+  width: number;
+  height: number;
+  source: "text" | "line";
+}
+
+interface AutomationDeviceSuggestion {
+  id: string;
+  pageNumber: number;
+  catalogItemId: string;
+  label: string;
+  sourceText: string;
+  position: AutomationPosition;
+  confidence: number;
+  reason: string;
+}
+
+interface AutomationRoomSuggestion {
+  id: string;
+  pageNumber: number;
+  roomType: string;
+  sourceText: string;
+  position: AutomationPosition;
+  confidence: number;
+}
+
+interface AutomationScaleCandidate {
+  id: string;
+  pageNumber: number;
+  sourceText: string;
+  position: AutomationPosition;
+  confidence: number;
+}
+
+interface AutomationPageSummary {
+  pageNumber: number;
+  pageLabel: string | null;
+  width: number;
+  height: number;
+  textItemCount: number;
+  electricalScore: number;
+  isLikelyElectrical: boolean;
+  matchedKeywords: string[];
+}
+
+interface AutomationAnalysisResult {
+  fileName: string;
+  analyzedAt: string;
+  pageCount: number;
+  pages: AutomationPageSummary[];
+  devices: AutomationDeviceSuggestion[];
+  rooms: AutomationRoomSuggestion[];
+  scaleCandidates: AutomationScaleCandidate[];
+  warnings: string[];
+  projectJson: Record<string, unknown>;
+}
+
 const frameStyle: CSSProperties = {
   width: "100%",
   height: "100%",
@@ -95,6 +160,330 @@ const emptyAdjustmentDraft: ManualAdjustmentDraft = {
 };
 
 const TAKEOFF_CATALOG_STORAGE_KEY = "packops-takeoff-material-catalog-v1";
+const TAKEOFF_AUTOMATION_PDF_WORKER_SRC = "/takeoff/assets/pdf.worker.min-qwK7q_zL.mjs";
+const AUTOMATION_PAGE_WIDTH = 820;
+
+const AUTOMATION_ELECTRICAL_KEYWORDS = [
+  "electrical",
+  "lighting",
+  "power",
+  "receptacle",
+  "switch",
+  "panel",
+  "circuit",
+  "smoke",
+  "gfci",
+  "light fixture",
+  "luminaire",
+  "e-",
+];
+
+const AUTOMATION_ROOM_RULES = [
+  { roomType: "Bedroom", pattern: /\b(?:BEDROOM|BED\s*\d*|PRIMARY BEDROOM|MASTER BEDROOM)\b/i },
+  { roomType: "Kitchen", pattern: /\bKITCHEN\b/i },
+  { roomType: "Living", pattern: /\b(?:LIVING|GREAT ROOM|FAMILY ROOM)\b/i },
+  { roomType: "Dining", pattern: /\bDINING\b/i },
+  { roomType: "Bathroom", pattern: /\b(?:BATH|BATHROOM|ENSUITE|POWDER)\b/i },
+  { roomType: "Garage", pattern: /\bGARAGE\b/i },
+  { roomType: "Laundry", pattern: /\bLAUNDRY\b/i },
+  { roomType: "Mechanical", pattern: /\b(?:MECHANICAL|MECH\.?|UTILITY)\b/i },
+  { roomType: "Closet", pattern: /\b(?:CLOSET|WIC|W\/I CLOSET)\b/i },
+  { roomType: "Pantry", pattern: /\bPANTRY\b/i },
+  { roomType: "Hall", pattern: /\b(?:HALL|HALLWAY|CORRIDOR)\b/i },
+  { roomType: "Foyer", pattern: /\b(?:FOYER|ENTRY)\b/i },
+  { roomType: "Porch", pattern: /\bPORCH\b/i },
+  { roomType: "Deck", pattern: /\bDECK\b/i },
+];
+
+const AUTOMATION_DEVICE_RULES = [
+  {
+    catalogItemId: "100a-subpanel",
+    label: "100A subpanel",
+    pattern: /\b(?:100\s*A|100A).{0,18}(?:SUB\s*PANEL|SUBPANEL)\b|\b(?:SUB\s*PANEL|SUBPANEL).{0,18}(?:100\s*A|100A)\b/i,
+    confidence: 0.78,
+    reason: "Text references a 100A subpanel.",
+  },
+  {
+    catalogItemId: "subpanel",
+    label: "Subpanel",
+    pattern: /\b(?:SUB\s*PANEL|SUBPANEL)\b/i,
+    confidence: 0.72,
+    reason: "Text references a subpanel.",
+  },
+  {
+    catalogItemId: "panel",
+    label: "Panel",
+    pattern: /\b(?:PANEL|MAIN PANEL|SERVICE PANEL)\b/i,
+    confidence: 0.68,
+    reason: "Text references an electrical panel.",
+  },
+  {
+    catalogItemId: "3-way-switch",
+    label: "3-way switch",
+    pattern: /\b(?:S3|S\/3|3\s*WAY|3-WAY|THREE\s*WAY)\b/i,
+    confidence: 0.76,
+    reason: "Text matches a 3-way switch label.",
+  },
+  {
+    catalogItemId: "4-way-switch",
+    label: "4-way switch",
+    pattern: /\b(?:S4|S\/4|4\s*WAY|4-WAY|FOUR\s*WAY)\b/i,
+    confidence: 0.76,
+    reason: "Text matches a 4-way switch label.",
+  },
+  {
+    catalogItemId: "dimmer",
+    label: "Dimmer switch",
+    pattern: /\b(?:DIMMER|S\s*D|SD)\b/i,
+    confidence: 0.7,
+    reason: "Text references a dimmer switch.",
+  },
+  {
+    catalogItemId: "motion-switch",
+    label: "Motion switch",
+    pattern: /\b(?:MOTION|OCCUPANCY|S\s*M|SM)\b/i,
+    confidence: 0.68,
+    reason: "Text references a motion/occupancy switch.",
+  },
+  {
+    catalogItemId: "switch",
+    label: "Switch",
+    pattern: /\b(?:SWITCH|S1|S\/1|SINGLE POLE)\b|^S$/i,
+    confidence: 0.58,
+    reason: "Text matches a switch label.",
+  },
+  {
+    catalogItemId: "pot-light",
+    label: "Pot light",
+    pattern: /\b(?:POT\s*LIGHT|RECESSED|RECESS|DOWNLIGHT)\b/i,
+    confidence: 0.68,
+    reason: "Text references a recessed/pot light.",
+  },
+  {
+    catalogItemId: "ceiling-light",
+    label: "Ceiling light",
+    pattern: /\b(?:CEILING\s*LIGHT|LIGHT\s*FIXTURE|LUMINAIRE)\b/i,
+    confidence: 0.62,
+    reason: "Text references a ceiling light or fixture.",
+  },
+  {
+    catalogItemId: "smoke-alarm",
+    label: "Smoke alarm",
+    pattern: /\b(?:SMOKE|SMOKE\s*ALARM|S\/A|SA|SD)\b/i,
+    confidence: 0.72,
+    reason: "Text references a smoke alarm.",
+  },
+  {
+    catalogItemId: "co-alarm",
+    label: "CO alarm",
+    pattern: /\b(?:CO|CARBON\s*MONOXIDE)\b/i,
+    confidence: 0.7,
+    reason: "Text references a CO alarm.",
+  },
+  {
+    catalogItemId: "bathroom-fan",
+    label: "Bathroom fan",
+    pattern: /\b(?:BATH\s*FAN|EXHAUST\s*FAN|FAN FIXTURE)\b/i,
+    confidence: 0.68,
+    reason: "Text references a bath or exhaust fan.",
+  },
+  {
+    catalogItemId: "data-jack",
+    label: "Data jack",
+    pattern: /\b(?:DATA|CAT\s*6|CAT6|ETHERNET)\b/i,
+    confidence: 0.66,
+    reason: "Text references data cabling.",
+  },
+  {
+    catalogItemId: "tv-coax-outlet",
+    label: "TV/coax",
+    pattern: /\b(?:TV|COAX|CABLE)\b/i,
+    confidence: 0.62,
+    reason: "Text references TV/coax.",
+  },
+  {
+    catalogItemId: "exterior-weather-rated-gfci-receptacle",
+    label: "Exterior weatherproof GFCI receptacle",
+    pattern: /\b(?:(?:EXTERIOR|OUTDOOR|WEATHER|WP).{0,24}(?:GFCI|GFI|RECEPTACLE|REC|PLUG)|(?:GFCI|GFI).{0,24}(?:EXTERIOR|OUTDOOR|WEATHER|WP))\b/i,
+    confidence: 0.74,
+    reason: "Text references an exterior/weatherproof GFCI receptacle.",
+  },
+  {
+    catalogItemId: "garage-receptacle",
+    label: "Garage receptacle",
+    pattern: /\bGARAGE.{0,24}(?:RECEPTACLE|REC|PLUG)\b/i,
+    confidence: 0.7,
+    reason: "Text references a garage receptacle.",
+  },
+  {
+    catalogItemId: "counter-receptacle",
+    label: "Counter receptacle",
+    pattern: /\b(?:COUNTER|KITCHEN).{0,24}(?:RECEPTACLE|REC|PLUG)\b/i,
+    confidence: 0.72,
+    reason: "Text references a counter receptacle.",
+  },
+  {
+    catalogItemId: "gfci-receptacle",
+    label: "GFCI receptacle",
+    pattern: /\b(?:GFCI|GFI)\b/i,
+    confidence: 0.66,
+    reason: "Text references a GFCI/GFI device.",
+  },
+  {
+    catalogItemId: "20a-receptacle",
+    label: "20A receptacle",
+    pattern: /\b(?:20\s*A|20A).{0,24}(?:RECEPTACLE|REC|PLUG)\b/i,
+    confidence: 0.68,
+    reason: "Text references a 20A receptacle.",
+  },
+  {
+    catalogItemId: "15a-receptacle",
+    label: "15A receptacle",
+    pattern: /\b(?:RECEPTACLE|DUPLEX|REC\.?|PLUG)\b/i,
+    confidence: 0.55,
+    reason: "Text references a general receptacle or plug.",
+  },
+  {
+    catalogItemId: "range-outlet",
+    label: "Range outlet",
+    pattern: /\b(?:RANGE|STOVE)\b/i,
+    confidence: 0.72,
+    reason: "Text references a range/stove circuit.",
+  },
+  {
+    catalogItemId: "dryer-outlet",
+    label: "Dryer outlet",
+    pattern: /\bDRYER\b/i,
+    confidence: 0.72,
+    reason: "Text references a dryer circuit.",
+  },
+  {
+    catalogItemId: "ev-charger",
+    label: "EV charger",
+    pattern: /\b(?:EV|ELECTRIC VEHICLE|CAR CHARGER|CHARGER)\b/i,
+    confidence: 0.66,
+    reason: "Text references an EV charger.",
+  },
+  {
+    catalogItemId: "fridge",
+    label: "Fridge circuit",
+    pattern: /\b(?:FRIDGE|REFRIGERATOR)\b/i,
+    confidence: 0.7,
+    reason: "Text references a fridge circuit.",
+  },
+  {
+    catalogItemId: "dishwasher",
+    label: "Dishwasher circuit",
+    pattern: /\b(?:DISHWASHER|D\/W|DW)\b/i,
+    confidence: 0.7,
+    reason: "Text references a dishwasher circuit.",
+  },
+  {
+    catalogItemId: "washer",
+    label: "Washer circuit",
+    pattern: /\bWASHER\b/i,
+    confidence: 0.68,
+    reason: "Text references a washer circuit.",
+  },
+  {
+    catalogItemId: "freezer",
+    label: "Freezer circuit",
+    pattern: /\bFREEZER\b/i,
+    confidence: 0.68,
+    reason: "Text references a freezer circuit.",
+  },
+  {
+    catalogItemId: "microwave",
+    label: "Microwave circuit",
+    pattern: /\b(?:MICROWAVE|MICRO)\b/i,
+    confidence: 0.68,
+    reason: "Text references a microwave circuit.",
+  },
+  {
+    catalogItemId: "hrv",
+    label: "HRV circuit",
+    pattern: /\bHRV\b/i,
+    confidence: 0.7,
+    reason: "Text references an HRV circuit.",
+  },
+  {
+    catalogItemId: "furnace",
+    label: "Furnace circuit",
+    pattern: /\bFURNACE\b/i,
+    confidence: 0.68,
+    reason: "Text references a furnace circuit.",
+  },
+  {
+    catalogItemId: "gas-hwt",
+    label: "Gas HWT circuit",
+    pattern: /\b(?:GAS\s*HWT|GAS WATER HEATER)\b/i,
+    confidence: 0.68,
+    reason: "Text references a gas hot water tank.",
+  },
+  {
+    catalogItemId: "electric-hwt",
+    label: "Electric HWT circuit",
+    pattern: /\b(?:ELECTRIC\s*HWT|ELECTRIC WATER HEATER|EWH)\b/i,
+    confidence: 0.68,
+    reason: "Text references an electric hot water tank.",
+  },
+  {
+    catalogItemId: "heat-pump",
+    label: "Heat pump",
+    pattern: /\b(?:HEAT\s*PUMP|HP)\b/i,
+    confidence: 0.66,
+    reason: "Text references a heat pump.",
+  },
+  {
+    catalogItemId: "heat-pump-disconnect",
+    label: "Heat pump disconnect",
+    pattern: /\b(?:HEAT\s*PUMP|HP).{0,24}DISCONNECT|DISCONNECT.{0,24}(?:HEAT\s*PUMP|HP)\b/i,
+    confidence: 0.74,
+    reason: "Text references a heat pump disconnect.",
+  },
+  {
+    catalogItemId: "heat-trace",
+    label: "Heat trace",
+    pattern: /\bHEAT\s*TRACE\b/i,
+    confidence: 0.68,
+    reason: "Text references heat trace.",
+  },
+  {
+    catalogItemId: "radon",
+    label: "Radon circuit",
+    pattern: /\bRADON\b/i,
+    confidence: 0.68,
+    reason: "Text references a radon circuit.",
+  },
+  {
+    catalogItemId: "gas-range",
+    label: "Gas range circuit",
+    pattern: /\bGAS\s*RANGE\b/i,
+    confidence: 0.68,
+    reason: "Text references a gas range circuit.",
+  },
+  {
+    catalogItemId: "baseboard-thermostat",
+    label: "Baseboard thermostat",
+    pattern: /\b(?:THERMOSTAT|T-?STAT|TSTAT)\b/i,
+    confidence: 0.66,
+    reason: "Text references a thermostat.",
+  },
+  {
+    catalogItemId: "baseboard-heater",
+    label: "Baseboard heater",
+    pattern: /\b(?:BASEBOARD|BBH|HEATER)\b/i,
+    confidence: 0.62,
+    reason: "Text references baseboard heating.",
+  },
+  {
+    catalogItemId: "floor-riser",
+    label: "Floor riser",
+    pattern: /\b(?:RISER|FLOOR RISER)\b/i,
+    confidence: 0.64,
+    reason: "Text references a floor riser.",
+  },
+];
 
 const emptyQuoteDraft: QuoteDraft = {
   customerName: "",
@@ -125,6 +514,11 @@ export function ElectricalTakeoffPage() {
   const [isQuotePanelOpen, setIsQuotePanelOpen] = useState(false);
   const [quoteDraft, setQuoteDraft] = useState<QuoteDraft>(emptyQuoteDraft);
   const [createdQuote, setCreatedQuote] = useState<QuoteView | null>(null);
+  const [isAutomationOpen, setIsAutomationOpen] = useState(false);
+  const [automationFile, setAutomationFile] = useState<File | null>(null);
+  const [automationResult, setAutomationResult] = useState<AutomationAnalysisResult | null>(null);
+  const [automationError, setAutomationError] = useState<string | null>(null);
+  const [isAutomationAnalyzing, setIsAutomationAnalyzing] = useState(false);
   const { catalogQuery } = useMaterialsSlice(currentUser);
   const { builderResourcesQuery, createQuote } = useQuotesSlice(currentUser);
   const catalogItems = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
@@ -343,6 +737,42 @@ export function ElectricalTakeoffPage() {
     }
   }
 
+  async function handleAnalyzeAutomationPdf() {
+    if (!automationFile) {
+      setAutomationError("Choose a PDF first.");
+      return;
+    }
+
+    if (!isPdfFile(automationFile)) {
+      setAutomationError("That file does not look like a PDF. Choose a normal .pdf file.");
+      return;
+    }
+
+    setIsAutomationAnalyzing(true);
+    setAutomationError(null);
+    setAutomationResult(null);
+
+    try {
+      const result = await analyzeTakeoffPdf(automationFile);
+      setAutomationResult(result);
+    } catch (error) {
+      setAutomationError(error instanceof Error ? error.message : "PDF analysis failed.");
+    } finally {
+      setIsAutomationAnalyzing(false);
+    }
+  }
+
+  function handleDownloadAutomationTakeoff() {
+    if (!automationResult) {
+      return;
+    }
+
+    downloadJsonFile(
+      automationResult.projectJson,
+      `${slugifyFileName(automationResult.fileName.replace(/\.pdf$/i, "")) || "auto-takeoff"}.auto-suggested.takeoff.json`,
+    );
+  }
+
   return (
     <section
       style={{
@@ -375,6 +805,9 @@ export function ElectricalTakeoffPage() {
           </span>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button type="button" style={toolbarButtonStyle} onClick={() => setIsAutomationOpen(true)}>
+            Automation Lab
+          </button>
           <button type="button" style={toolbarButtonStyle} onClick={handleReviewMaterials}>
             Review Takeoff Materials
           </button>
@@ -535,6 +968,286 @@ export function ElectricalTakeoffPage() {
               ))}
             </div>
           </aside>
+        ) : null}
+
+        {isAutomationOpen ? (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="takeoff-automation-title"
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.38)",
+              display: "grid",
+              placeItems: "center",
+              padding: "18px",
+              zIndex: 10,
+            }}
+          >
+            <section
+              style={{
+                width: "min(920px, 100%)",
+                maxHeight: "min(820px, 100%)",
+                overflow: "auto",
+                border: `1px solid ${brand.border}`,
+                borderRadius: "14px",
+                background: "#ffffff",
+                boxShadow: "0 24px 70px rgba(15, 23, 42, 0.3)",
+                padding: "16px",
+                display: "grid",
+                gap: "14px",
+              }}
+            >
+              <header style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
+                <div>
+                  <h2 id="takeoff-automation-title" style={{ margin: 0, fontSize: "20px", color: brand.text }}>
+                    Automation Lab
+                  </h2>
+                  <p style={{ margin: "4px 0 0", color: brand.textSoft, fontSize: "13px" }}>
+                    Upload a PDF to create a separate suggested takeoff file. This does not change the active takeoff until you import the downloaded JSON.
+                  </p>
+                </div>
+                <button type="button" style={toolbarButtonStyle} onClick={() => setIsAutomationOpen(false)}>
+                  Close
+                </button>
+              </header>
+
+              <div
+                style={{
+                  border: `1px solid ${brand.border}`,
+                  borderRadius: "12px",
+                  padding: "12px",
+                  background: brand.surfaceAlt,
+                  display: "grid",
+                  gap: "10px",
+                }}
+              >
+                <label style={{ display: "grid", gap: "6px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                  Plan PDF
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      setAutomationFile(file);
+                      setAutomationResult(null);
+                      setAutomationError(null);
+                    }}
+                    style={inputStyle}
+                  />
+                </label>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                  <button
+                    type="button"
+                    style={{ ...toolbarButtonStyle, background: brand.primary, borderColor: brand.primary, color: "#ffffff" }}
+                    onClick={() => void handleAnalyzeAutomationPdf()}
+                    disabled={isAutomationAnalyzing || !automationFile}
+                  >
+                    {isAutomationAnalyzing ? "Analyzing..." : "Analyze PDF"}
+                  </button>
+                  {automationResult ? (
+                    <button type="button" style={toolbarButtonStyle} onClick={handleDownloadAutomationTakeoff}>
+                      Download Suggested Takeoff
+                    </button>
+                  ) : null}
+                  <span style={{ color: brand.textSoft, fontSize: "12px" }}>
+                    Safe mode: output is a new import file with suggested devices only.
+                  </span>
+                </div>
+                {automationError ? (
+                  <div
+                    role="status"
+                    style={{
+                      border: "1px solid #f0c2a7",
+                      borderRadius: "10px",
+                      padding: "8px 10px",
+                      background: "#fff8f4",
+                      color: "#9a3412",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {automationError}
+                  </div>
+                ) : null}
+              </div>
+
+              {automationResult ? (
+                <div style={{ display: "grid", gap: "12px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "8px" }}>
+                    {[
+                      ["Pages", String(automationResult.pageCount)],
+                      ["Electrical pages", String(automationResult.pages.filter((page) => page.isLikelyElectrical).length)],
+                      ["Suggested devices", String(automationResult.devices.length)],
+                      ["Room labels", String(automationResult.rooms.length)],
+                    ].map(([label, value]) => (
+                      <div
+                        key={label}
+                        style={{
+                          border: `1px solid ${brand.border}`,
+                          borderRadius: "10px",
+                          padding: "10px",
+                          background: "#ffffff",
+                          display: "grid",
+                          gap: "4px",
+                        }}
+                      >
+                        <span style={{ color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>{label}</span>
+                        <strong style={{ color: brand.text, fontSize: "18px" }}>{value}</strong>
+                      </div>
+                    ))}
+                  </div>
+
+                  {automationResult.warnings.length ? (
+                    <div
+                      style={{
+                        border: "1px solid #f0d59c",
+                        borderRadius: "10px",
+                        padding: "10px",
+                        background: "#fff9ec",
+                        color: "#7a4d00",
+                        fontSize: "13px",
+                      }}
+                    >
+                      <strong style={{ display: "block", marginBottom: "4px" }}>Review notes</strong>
+                      {automationResult.warnings.join(" ")}
+                    </div>
+                  ) : null}
+
+                  <section style={{ display: "grid", gap: "8px" }}>
+                    <strong style={{ color: brand.text }}>Page classification</strong>
+                    <div style={{ display: "grid", gap: "6px", maxHeight: "150px", overflow: "auto" }}>
+                      {automationResult.pages.map((page) => (
+                        <div
+                          key={page.pageNumber}
+                          style={{
+                            border: `1px solid ${brand.border}`,
+                            borderRadius: "10px",
+                            padding: "8px 10px",
+                            color: brand.textSoft,
+                            fontSize: "13px",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: "10px",
+                          }}
+                        >
+                          <span>
+                            <strong style={{ color: brand.text }}>Page {page.pageNumber}</strong>
+                            {page.pageLabel ? ` · ${page.pageLabel}` : ""}
+                            {" · "}
+                            {page.textItemCount} text item{page.textItemCount === 1 ? "" : "s"}
+                          </span>
+                          <span style={{ color: page.isLikelyElectrical ? brand.primaryDark : brand.textSoft, fontWeight: 800 }}>
+                            {page.isLikelyElectrical ? "Likely electrical" : "Needs review"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section style={{ display: "grid", gap: "8px" }}>
+                    <strong style={{ color: brand.text }}>Suggested devices</strong>
+                    {automationResult.devices.length ? (
+                      <div style={{ display: "grid", gap: "6px", maxHeight: "250px", overflow: "auto" }}>
+                        {automationResult.devices.slice(0, 90).map((device) => (
+                          <div
+                            key={device.id}
+                            style={{
+                              border: `1px solid ${brand.border}`,
+                              borderRadius: "10px",
+                              padding: "8px 10px",
+                              display: "grid",
+                              gap: "4px",
+                              fontSize: "13px",
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: "10px" }}>
+                              <strong style={{ color: brand.text }}>{device.label}</strong>
+                              <span style={{ color: brand.primaryDark, fontWeight: 800 }}>
+                                {(device.confidence * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                            <span style={{ color: brand.textSoft }}>
+                              Page {device.pageNumber} · {device.catalogItemId} · "{device.sourceText}" · {device.reason}
+                            </span>
+                          </div>
+                        ))}
+                        {automationResult.devices.length > 90 ? (
+                          <span style={{ color: brand.textSoft, fontSize: "12px" }}>
+                            Showing first 90 of {automationResult.devices.length}. The downloaded file includes them all.
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          border: `1px dashed ${brand.border}`,
+                          borderRadius: "10px",
+                          padding: "12px",
+                          color: brand.textSoft,
+                          fontSize: "13px",
+                          background: brand.surfaceAlt,
+                        }}
+                      >
+                        No obvious device labels were found in the PDF text layer. This can still happen on scanned plans or drawings where the symbols are just linework.
+                      </div>
+                    )}
+                  </section>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
+                    <section style={{ display: "grid", gap: "8px", minWidth: 0 }}>
+                      <strong style={{ color: brand.text }}>Room label clues</strong>
+                      <div style={{ display: "grid", gap: "6px", maxHeight: "170px", overflow: "auto" }}>
+                        {automationResult.rooms.length ? automationResult.rooms.slice(0, 50).map((room) => (
+                          <div
+                            key={room.id}
+                            style={{
+                              border: `1px solid ${brand.border}`,
+                              borderRadius: "10px",
+                              padding: "8px 10px",
+                              color: brand.textSoft,
+                              fontSize: "13px",
+                            }}
+                          >
+                            <strong style={{ color: brand.text }}>{room.roomType}</strong>
+                            {" · "}
+                            Page {room.pageNumber} · "{room.sourceText}" · {(room.confidence * 100).toFixed(0)}%
+                          </div>
+                        )) : (
+                          <div style={{ color: brand.textSoft, fontSize: "13px" }}>No room label clues found.</div>
+                        )}
+                      </div>
+                    </section>
+
+                    <section style={{ display: "grid", gap: "8px", minWidth: 0 }}>
+                      <strong style={{ color: brand.text }}>Scale clues</strong>
+                      <div style={{ display: "grid", gap: "6px", maxHeight: "170px", overflow: "auto" }}>
+                        {automationResult.scaleCandidates.length ? automationResult.scaleCandidates.slice(0, 30).map((scale) => (
+                          <div
+                            key={scale.id}
+                            style={{
+                              border: `1px solid ${brand.border}`,
+                              borderRadius: "10px",
+                              padding: "8px 10px",
+                              color: brand.textSoft,
+                              fontSize: "13px",
+                            }}
+                          >
+                            Page {scale.pageNumber} · "{scale.sourceText}" · {(scale.confidence * 100).toFixed(0)}%
+                          </div>
+                        )) : (
+                          <div style={{ color: brand.textSoft, fontSize: "13px" }}>
+                            No scale text found. You should set scale manually in the takeoff before trusting wire quantities.
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              ) : null}
+            </section>
+          </div>
         ) : null}
 
         {isQuotePanelOpen ? (
@@ -846,6 +1559,501 @@ export function ElectricalTakeoffPage() {
       </div>
     </section>
   );
+}
+
+async function loadAutomationPdfJs() {
+  const { pdfjs } = await import("react-pdf");
+  pdfjs.GlobalWorkerOptions.workerSrc = TAKEOFF_AUTOMATION_PDF_WORKER_SRC;
+  return pdfjs;
+}
+
+async function analyzeTakeoffPdf(file: File): Promise<AutomationAnalysisResult> {
+  const analyzedAt = new Date().toISOString();
+  const pdfjs = await loadAutomationPdfJs();
+  const buffer = await file.arrayBuffer();
+  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer.slice(0)) });
+  const pdf = await loadingTask.promise;
+  const pages: AutomationPageSummary[] = [];
+  const allDevices: AutomationDeviceSuggestion[] = [];
+  const allRooms: AutomationRoomSuggestion[] = [];
+  const allScaleCandidates: AutomationScaleCandidate[] = [];
+  const warnings: string[] = [];
+
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    const page = await pdf.getPage(pageNumber);
+    const viewport = page.getViewport({ scale: 1 });
+    const textContent = await page.getTextContent();
+    const textItems = normalizePdfTextItems({
+      items: (textContent.items ?? []) as Array<Record<string, unknown>>,
+      pageNumber,
+      pageWidth: viewport.width,
+      pageHeight: viewport.height,
+    });
+    const textLines = buildAutomationTextLines(textItems);
+    const pageSummary = classifyAutomationPage(pageNumber, viewport.width, viewport.height, textItems, textLines);
+    pages.push(pageSummary);
+    allRooms.push(...detectAutomationRooms(textLines, pageSummary));
+    allScaleCandidates.push(...detectAutomationScaleCandidates(textLines));
+    allDevices.push(...detectAutomationDevices([...textItems, ...textLines], pageSummary));
+  }
+
+  const devices = dedupeAutomationDevices(allDevices).slice(0, 350);
+  const rooms = dedupeAutomationRooms(allRooms).slice(0, 160);
+  const scaleCandidates = dedupeAutomationScales(allScaleCandidates).slice(0, 80);
+
+  if (devices.length === 0) {
+    warnings.push("No importable device suggestions were found. The PDF may be scanned, flattened, or mostly symbol linework with no useful text layer.");
+  }
+
+  if (scaleCandidates.length === 0) {
+    warnings.push("No reliable scale text was found. Set page scale manually before trusting wire quantities.");
+  }
+
+  if (pages.every((page) => !page.isLikelyElectrical)) {
+    warnings.push("No page strongly classified as electrical. Suggestions may be from legends, notes, or architectural pages.");
+  }
+
+  const result: AutomationAnalysisResult = {
+    fileName: file.name,
+    analyzedAt,
+    pageCount: pdf.numPages,
+    pages,
+    devices,
+    rooms,
+    scaleCandidates,
+    warnings,
+    projectJson: buildAutomationTakeoffProject({
+      fileName: file.name,
+      pdfData: buffer,
+      analyzedAt,
+      pageCount: pdf.numPages,
+      pages,
+      devices,
+      rooms,
+      scaleCandidates,
+      warnings,
+    }),
+  };
+
+  await pdf.destroy();
+  return result;
+}
+
+function normalizePdfTextItems(input: {
+  items: Array<Record<string, unknown>>;
+  pageNumber: number;
+  pageWidth: number;
+  pageHeight: number;
+}): AutomationTextCandidate[] {
+  const targetHeight = input.pageHeight > 0 && input.pageWidth > 0
+    ? (input.pageHeight / input.pageWidth) * AUTOMATION_PAGE_WIDTH
+    : AUTOMATION_PAGE_WIDTH;
+
+  return input.items.flatMap((item) => {
+    const text = String(item.str ?? "").replace(/\s+/g, " ").trim();
+    const transform = Array.isArray(item.transform) ? item.transform : [];
+    const rawX = Number(transform[4]);
+    const rawY = Number(transform[5]);
+    const rawWidth = Number(item.width);
+    const rawHeight = Number(item.height) || Math.abs(Number(transform[3])) || 8;
+
+    if (!text || !Number.isFinite(rawX) || !Number.isFinite(rawY) || input.pageWidth <= 0 || input.pageHeight <= 0) {
+      return [];
+    }
+
+    const x = clampNumber((rawX / input.pageWidth) * AUTOMATION_PAGE_WIDTH, 0, AUTOMATION_PAGE_WIDTH);
+    const y = clampNumber(((input.pageHeight - rawY) / input.pageHeight) * targetHeight, 0, targetHeight);
+    const width = Number.isFinite(rawWidth) ? Math.max(1, (rawWidth / input.pageWidth) * AUTOMATION_PAGE_WIDTH) : 1;
+    const height = Math.max(1, (rawHeight / input.pageHeight) * targetHeight);
+
+    return [{
+      pageNumber: input.pageNumber,
+      text,
+      position: { x: roundQuantity(x), y: roundQuantity(y) },
+      width: roundQuantity(width),
+      height: roundQuantity(height),
+      source: "text" as const,
+    }];
+  });
+}
+
+function buildAutomationTextLines(items: AutomationTextCandidate[]): AutomationTextCandidate[] {
+  const sorted = [...items].sort((left, right) =>
+    left.position.y - right.position.y || left.position.x - right.position.x,
+  );
+  const lines: AutomationTextCandidate[] = [];
+  let current: AutomationTextCandidate[] = [];
+  let baseline = 0;
+
+  function flushCurrent() {
+    const firstItem = current[0];
+    if (!firstItem) {
+      return;
+    }
+
+    const minX = Math.min(...current.map((item) => item.position.x));
+    const minY = Math.min(...current.map((item) => item.position.y));
+    const maxX = Math.max(...current.map((item) => item.position.x + item.width));
+    const maxY = Math.max(...current.map((item) => item.position.y + item.height));
+    const text = current.map((item) => item.text).join(" ").replace(/\s+/g, " ").trim();
+
+    if (text) {
+      lines.push({
+        pageNumber: firstItem.pageNumber,
+        text,
+        position: { x: roundQuantity(minX), y: roundQuantity(minY) },
+        width: roundQuantity(maxX - minX),
+        height: roundQuantity(maxY - minY),
+        source: "line",
+      });
+    }
+
+    current = [];
+    baseline = 0;
+  }
+
+  for (const item of sorted) {
+    const lastItem = current[current.length - 1];
+    const firstItem = current[0];
+    const lastRight = lastItem ? lastItem.position.x + lastItem.width : 0;
+    const startsNewLine =
+      !firstItem || !lastItem
+        ? false
+        : item.pageNumber !== firstItem.pageNumber
+          || Math.abs(item.position.y - baseline) > 6
+          || item.position.x - lastRight > 160
+          || item.position.x < lastItem.position.x - 4;
+
+    if (startsNewLine) {
+      flushCurrent();
+    }
+
+    current.push(item);
+    baseline = current.reduce((total, candidate) => total + candidate.position.y, 0) / current.length;
+  }
+
+  flushCurrent();
+  return lines.filter((line) => line.text.length <= 140);
+}
+
+function classifyAutomationPage(
+  pageNumber: number,
+  width: number,
+  height: number,
+  textItems: AutomationTextCandidate[],
+  textLines: AutomationTextCandidate[],
+): AutomationPageSummary {
+  const fullText = [...textItems, ...textLines].map((item) => item.text).join(" ").toLowerCase();
+  const matchedKeywords = AUTOMATION_ELECTRICAL_KEYWORDS.filter((keyword) => fullText.includes(keyword));
+  const drawingNumberBoost = /\bE[-\s]?\d+(?:\.\d+)?\b/i.test(fullText) ? 1 : 0;
+  const electricalScore = matchedKeywords.length + drawingNumberBoost;
+  const pageLabelLine = textLines.find((line) =>
+    line.text.length <= 90 && /\b(?:ELECTRICAL|POWER|LIGHTING|E[-\s]?\d+(?:\.\d+)?)\b/i.test(line.text),
+  );
+
+  return {
+    pageNumber,
+    pageLabel: pageLabelLine?.text ?? null,
+    width: roundQuantity(width),
+    height: roundQuantity(height),
+    textItemCount: textItems.length,
+    electricalScore,
+    isLikelyElectrical: electricalScore >= 2 || /\b(?:electrical|lighting plan|power plan)\b/i.test(fullText),
+    matchedKeywords,
+  };
+}
+
+function detectAutomationDevices(
+  textCandidates: AutomationTextCandidate[],
+  pageSummary: AutomationPageSummary,
+): AutomationDeviceSuggestion[] {
+  const suggestions: AutomationDeviceSuggestion[] = [];
+
+  for (const candidate of textCandidates) {
+    const text = candidate.text.trim();
+    if (!text || text.length > 90 || looksLikeNonDevicePlanText(text)) {
+      continue;
+    }
+
+    for (const rule of AUTOMATION_DEVICE_RULES) {
+      if (!rule.pattern.test(text) || shouldSkipAutomationDeviceRule(rule.catalogItemId, text, candidate)) {
+        continue;
+      }
+
+      const confidence = clampNumber(
+        rule.confidence + (pageSummary.isLikelyElectrical ? 0.08 : -0.04) + (candidate.source === "text" ? 0.02 : 0),
+        0.35,
+        0.92,
+      );
+
+      suggestions.push({
+        id: makeBrowserId("auto-device"),
+        pageNumber: candidate.pageNumber,
+        catalogItemId: rule.catalogItemId,
+        label: rule.label,
+        sourceText: text,
+        position: candidate.position,
+        confidence: roundQuantity(confidence),
+        reason: pageSummary.isLikelyElectrical ? rule.reason : `${rule.reason} Page was not strongly classified as electrical.`,
+      });
+      break;
+    }
+  }
+
+  return suggestions;
+}
+
+function shouldSkipAutomationDeviceRule(catalogItemId: string, text: string, candidate: AutomationTextCandidate): boolean {
+  const upper = text.toUpperCase();
+
+  if (catalogItemId === "panel" && /\b(?:SUB\s*PANEL|SUBPANEL)\b/i.test(text)) {
+    return true;
+  }
+
+  if (catalogItemId === "range-outlet" && /\bGAS\s*RANGE\b/i.test(text)) {
+    return true;
+  }
+
+  if (catalogItemId === "heat-pump" && /\bDISCONNECT\b/i.test(text)) {
+    return true;
+  }
+
+  if (catalogItemId === "baseboard-heater" && /\b(?:WATER HEATER|HWT)\b/i.test(text)) {
+    return true;
+  }
+
+  if (catalogItemId === "switch" && candidate.source === "line" && !/\bSWITCH\b/i.test(text) && upper !== "S" && upper !== "S1") {
+    return true;
+  }
+
+  if (catalogItemId === "co-alarm" && /\bCO\b/i.test(text) && text.length > 28 && !/\bCARBON\b/i.test(text)) {
+    return true;
+  }
+
+  if (catalogItemId === "tv-coax-outlet" && /\bCABLE\b/i.test(text) && /\b(?:WIRE|NMD|AWG|CIRCUIT)\b/i.test(text)) {
+    return true;
+  }
+
+  return false;
+}
+
+function looksLikeNonDevicePlanText(text: string): boolean {
+  return /\b(?:GENERAL NOTES|DRAWING LIST|ISSUED FOR|REVISION|SHEET|DETAIL|SECTION|SCALE|NORTH|PROJECT|ADDRESS|SPECIFICATION)\b/i.test(text)
+    || /^\d+(?:\.\d+)?$/.test(text.trim());
+}
+
+function detectAutomationRooms(
+  textLines: AutomationTextCandidate[],
+  pageSummary: AutomationPageSummary,
+): AutomationRoomSuggestion[] {
+  const rooms: AutomationRoomSuggestion[] = [];
+
+  for (const line of textLines) {
+    const text = line.text.trim();
+    if (!text || text.length > 55 || looksLikeNonRoomText(text)) {
+      continue;
+    }
+
+    for (const rule of AUTOMATION_ROOM_RULES) {
+      if (!rule.pattern.test(text)) {
+        continue;
+      }
+
+      rooms.push({
+        id: makeBrowserId("auto-room"),
+        pageNumber: line.pageNumber,
+        roomType: rule.roomType,
+        sourceText: text,
+        position: line.position,
+        confidence: roundQuantity(clampNumber(pageSummary.isLikelyElectrical ? 0.74 : 0.6, 0.35, 0.9)),
+      });
+      break;
+    }
+  }
+
+  return rooms;
+}
+
+function looksLikeNonRoomText(text: string): boolean {
+  return /\b(?:SCALE|NOTE|LEGEND|SCHEDULE|PANEL|CIRCUIT|DRAWING|PROJECT|LIGHTING|POWER|RECEPTACLE|SWITCH)\b/i.test(text);
+}
+
+function detectAutomationScaleCandidates(textLines: AutomationTextCandidate[]): AutomationScaleCandidate[] {
+  return textLines.flatMap((line) => {
+    const text = line.text.trim();
+    const hasArchitecturalScale = /\b(?:SCALE\s*)?(?:\d+\/\d+|\d+(?:\.\d+)?)\s*(?:"|IN|INCH)?\s*=\s*\d+(?:\.\d+)?\s*(?:'|FT|FEET|M|MM|IN|")/i.test(text);
+    const hasRatioScale = /\bSCALE\s*[:=]?\s*1\s*:\s*\d+\b/i.test(text);
+
+    if (!hasArchitecturalScale && !hasRatioScale) {
+      return [];
+    }
+
+    return [{
+      id: makeBrowserId("auto-scale"),
+      pageNumber: line.pageNumber,
+      sourceText: text,
+      position: line.position,
+      confidence: hasArchitecturalScale ? 0.72 : 0.62,
+    }];
+  });
+}
+
+function dedupeAutomationDevices(devices: AutomationDeviceSuggestion[]): AutomationDeviceSuggestion[] {
+  const sorted = [...devices].sort((left, right) => right.confidence - left.confidence);
+  const accepted: AutomationDeviceSuggestion[] = [];
+
+  for (const device of sorted) {
+    const duplicate = accepted.some((current) =>
+      current.pageNumber === device.pageNumber
+      && current.catalogItemId === device.catalogItemId
+      && distanceBetween(current.position, device.position) < 22,
+    );
+
+    if (!duplicate) {
+      accepted.push(device);
+    }
+  }
+
+  return accepted.sort((left, right) =>
+    left.pageNumber - right.pageNumber
+    || left.position.y - right.position.y
+    || left.position.x - right.position.x,
+  );
+}
+
+function dedupeAutomationRooms(rooms: AutomationRoomSuggestion[]): AutomationRoomSuggestion[] {
+  const accepted: AutomationRoomSuggestion[] = [];
+
+  for (const room of rooms) {
+    const duplicate = accepted.some((current) =>
+      current.pageNumber === room.pageNumber
+      && current.roomType === room.roomType
+      && distanceBetween(current.position, room.position) < 24,
+    );
+
+    if (!duplicate) {
+      accepted.push(room);
+    }
+  }
+
+  return accepted;
+}
+
+function dedupeAutomationScales(scales: AutomationScaleCandidate[]): AutomationScaleCandidate[] {
+  const accepted: AutomationScaleCandidate[] = [];
+
+  for (const scale of scales) {
+    const duplicate = accepted.some((current) =>
+      current.pageNumber === scale.pageNumber
+      && normalizeMatchText(current.sourceText) === normalizeMatchText(scale.sourceText),
+    );
+
+    if (!duplicate) {
+      accepted.push(scale);
+    }
+  }
+
+  return accepted;
+}
+
+function buildAutomationTakeoffProject(input: {
+  fileName: string;
+  pdfData: ArrayBuffer;
+  analyzedAt: string;
+  pageCount: number;
+  pages: AutomationPageSummary[];
+  devices: AutomationDeviceSuggestion[];
+  rooms: AutomationRoomSuggestion[];
+  scaleCandidates: AutomationScaleCandidate[];
+  warnings: string[];
+}): Record<string, unknown> {
+  return {
+    app: "electrical-takeoff-app",
+    version: 3,
+    savedAt: input.analyzedAt,
+    projectName: `${input.fileName.replace(/\.pdf$/i, "")} auto suggested`,
+    pdfName: input.fileName,
+    pdfDataUrl: `data:application/pdf;base64,${arrayBufferToBase64(input.pdfData)}`,
+    currentPageNumber: 1,
+    viewState: { zoom: 1, pan: { x: 0, y: 0 } },
+    rooms: [],
+    devices: input.devices.map((device) => ({
+      id: device.id,
+      planPageId: `pdf-page-${device.pageNumber}`,
+      pdfPageNumber: device.pageNumber,
+      catalogItemId: device.catalogItemId,
+      position: device.position,
+      inclusionStatus: "included",
+    })),
+    connections: [],
+    boxGroups: [],
+    planScales: [],
+    wireSettings: {
+      switchVerticalAllowanceFeet: 5,
+      applianceVerticalAllowanceFeet: 8,
+      defaultRiserDropMeters: 3,
+      wastePercent: 12,
+    },
+    automationReport: {
+      generatedBy: "Pack Ops Automation Lab",
+      generatedAt: input.analyzedAt,
+      reversible: true,
+      note: "Generated as a suggested import file. Review every device, set scale, and correct circuiting before quoting.",
+      pages: input.pages,
+      suggestedDevices: input.devices,
+      roomLabelClues: input.rooms,
+      scaleClues: input.scaleCandidates,
+      warnings: input.warnings,
+    },
+  };
+}
+
+function isPdfFile(file: File): boolean {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function downloadJsonFile(data: unknown, fileName: string) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+
+  return window.btoa(binary);
+}
+
+function slugifyFileName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function makeBrowserId(prefix: string): string {
+  return `${prefix}-${crypto.randomUUID()}`;
+}
+
+function distanceBetween(left: AutomationPosition, right: AutomationPosition): number {
+  return Math.hypot(left.x - right.x, left.y - right.y);
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function readTakeoffMaterialLines(iframe: HTMLIFrameElement | null): TakeoffMaterialLine[] {
