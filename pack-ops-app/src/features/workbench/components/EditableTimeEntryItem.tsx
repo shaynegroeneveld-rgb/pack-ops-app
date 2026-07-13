@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { formatTimeEntryHoursInput, parseTimeEntryHoursInput } from "@/domain/time-entries/draft";
 import type { TimeEntry } from "@/domain/time-entries/types";
 
 interface EditableTimeEntryItemProps {
@@ -43,16 +44,34 @@ export function EditableTimeEntryItem({
   const [workDate, setWorkDate] = useState(entry.workDate);
   const [startTime, setStartTime] = useState(entry.startTime ?? "");
   const [endTime, setEndTime] = useState(entry.endTime ?? "");
-  const [hours, setHours] = useState(String(entry.hours));
+  const [hours, setHours] = useState(formatTimeEntryHoursInput(entry.hours));
   const [description, setDescription] = useState(entry.description ?? "");
   const [hourlyRate, setHourlyRate] = useState(entry.hourlyRate != null ? String(entry.hourlyRate) : "");
   const [sectionName, setSectionName] = useState(entry.sectionName ?? "");
+  const parsedHours = parseTimeEntryHoursInput(hours);
+
+  async function handleSave() {
+    if (parsedHours === null) {
+      return;
+    }
+
+    await onSave({
+      workDate,
+      startTime: startTime || null,
+      endTime: endTime || null,
+      hours: parsedHours,
+      description: description.trim() || null,
+      hourlyRate: hourlyRate.trim() ? Number(hourlyRate) : null,
+      sectionName: sectionName.trim() || null,
+    });
+    setIsEditing(false);
+  }
 
   useEffect(() => {
     setWorkDate(entry.workDate);
     setStartTime(entry.startTime ?? "");
     setEndTime(entry.endTime ?? "");
-    setHours(String(entry.hours));
+    setHours(formatTimeEntryHoursInput(entry.hours));
     setDescription(entry.description ?? "");
     setHourlyRate(entry.hourlyRate != null ? String(entry.hourlyRate) : "");
     setSectionName(entry.sectionName ?? "");
@@ -123,11 +142,18 @@ export function EditableTimeEntryItem({
             <label style={{ display: "grid", gap: "4px" }}>
               <span style={{ fontSize: "13px", color: "#5b6475" }}>Hours</span>
               <input
-                type="number"
-                min="0.05"
-                step="0.25"
+                type="text"
+                inputMode="decimal"
+                placeholder="1.5"
                 value={hours}
                 onChange={(event) => setHours(event.target.value)}
+                onBlur={() => {
+                  if (parsedHours === null) {
+                    setHours(formatTimeEntryHoursInput(entry.hours));
+                    return;
+                  }
+                  setHours(formatTimeEntryHoursInput(parsedHours));
+                }}
               />
             </label>
             <label style={{ display: "grid", gap: "4px" }}>
@@ -152,22 +178,15 @@ export function EditableTimeEntryItem({
           <div style={{ color: "#5b6475", fontSize: "13px" }}>
             Worked by {workedByLabel} · Entered by {enteredByLabel}
           </div>
+          {parsedHours === null ? (
+            <div style={{ color: "#8f1d1d", fontSize: "13px" }}>
+              Enter hours as a simple decimal like 1.5 or 2.25.
+            </div>
+          ) : null}
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             <button
-              onClick={() =>
-                void onSave({
-                  workDate,
-                  startTime: startTime || null,
-                  endTime: endTime || null,
-                  hours: Number(hours),
-                  description: description.trim() || null,
-                  hourlyRate: hourlyRate.trim() ? Number(hourlyRate) : null,
-                  sectionName: sectionName.trim() || null,
-                }).then(() => {
-                  setIsEditing(false);
-                })
-              }
-              disabled={isSaving}
+              onClick={() => void handleSave()}
+              disabled={isSaving || parsedHours === null}
             >
               {isSaving ? "Saving..." : "Save Changes"}
             </button>
@@ -176,7 +195,7 @@ export function EditableTimeEntryItem({
                 setWorkDate(entry.workDate);
                 setStartTime(entry.startTime ?? "");
                 setEndTime(entry.endTime ?? "");
-                setHours(String(entry.hours));
+                setHours(formatTimeEntryHoursInput(entry.hours));
                 setDescription(entry.description ?? "");
                 setHourlyRate(entry.hourlyRate != null ? String(entry.hourlyRate) : "");
                 setSectionName(entry.sectionName ?? "");

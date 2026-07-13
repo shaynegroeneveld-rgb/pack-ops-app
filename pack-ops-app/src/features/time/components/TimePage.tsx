@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuthContext } from "@/app/contexts/auth-context";
 import { getSupabaseClient } from "@/data/supabase/client";
@@ -26,7 +26,10 @@ function sectionHeadingRow() {
 export function TimePage() {
   const { currentUser } = useAuthContext();
   const client = getSupabaseClient(import.meta.env);
+  const queryClient = useQueryClient();
   const [filters, setFilters] = useState({
+    periodMode: "range" as "range" | "month",
+    month: "",
     userId: "",
     jobId: "",
     dateFrom: "",
@@ -56,12 +59,25 @@ export function TimePage() {
       service.getTimeReport({
         userId: filters.userId || null,
         jobId: filters.jobId || null,
-        dateFrom: filters.dateFrom || null,
-        dateTo: filters.dateTo || null,
+        dateFrom: filters.periodMode === "range" ? filters.dateFrom || null : null,
+        dateTo: filters.periodMode === "range" ? filters.dateTo || null : null,
+        month: filters.periodMode === "month" ? filters.month || null : null,
       }),
   });
 
+  const approveTimeEntry = useMutation({
+    mutationFn: (timeEntryId: string) => service.approveTimeEntry(timeEntryId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["time-report", currentUser.user.id] });
+    },
+  });
+
   const report = reportQuery.data;
+  const canApproveTime =
+    Boolean(currentUser.user.canApproveTime) ||
+    currentUser.user.role === "owner" ||
+    currentUser.user.role === "office" ||
+    currentUser.user.role === "bookkeeper";
 
   return (
     <section style={pageStyle()}>
@@ -77,15 +93,32 @@ export function TimePage() {
           <div>
             <h2 style={{ margin: 0, fontSize: "20px" }}>Filters</h2>
             <p style={{ margin: "4px 0 0", color: "#5d6978" }}>
-              Narrow entries by worker, job, or date range.
+              Narrow entries by worker, job, date range, or a single month for payroll review.
             </p>
           </div>
           <button
             type="button"
-            onClick={() => setFilters({ userId: "", jobId: "", dateFrom: "", dateTo: "" })}
+            onClick={() => setFilters({ periodMode: "range", month: "", userId: "", jobId: "", dateFrom: "", dateTo: "" })}
             style={secondaryButtonStyle()}
           >
             Clear Filters
+          </button>
+        </div>
+
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => setFilters((current) => ({ ...current, periodMode: "range" }))}
+            style={filters.periodMode === "range" ? primaryButtonStyle() : secondaryButtonStyle()}
+          >
+            Date Range
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilters((current) => ({ ...current, periodMode: "month", dateFrom: "", dateTo: "" }))}
+            style={filters.periodMode === "month" ? primaryButtonStyle() : secondaryButtonStyle()}
+          >
+            Monthly
           </button>
         </div>
 
@@ -114,21 +147,38 @@ export function TimePage() {
             </select>
           </label>
 
-          <label style={{ display: "grid", gap: "6px" }}>
-            <span style={{ fontSize: "13px", color: "#5d6978" }}>Date From</span>
-            <input type="date" value={filters.dateFrom} onChange={(event) => setFilters((current) => ({ ...current, dateFrom: event.target.value }))} />
-          </label>
+          {filters.periodMode === "month" ? (
+            <label style={{ display: "grid", gap: "6px" }}>
+              <span style={{ fontSize: "13px", color: "#5d6978" }}>Month</span>
+              <input
+                type="month"
+                value={filters.month}
+                onChange={(event) => setFilters((current) => ({ ...current, month: event.target.value }))}
+              />
+            </label>
+          ) : (
+            <>
+              <label style={{ display: "grid", gap: "6px" }}>
+                <span style={{ fontSize: "13px", color: "#5d6978" }}>Date From</span>
+                <input type="date" value={filters.dateFrom} onChange={(event) => setFilters((current) => ({ ...current, dateFrom: event.target.value }))} />
+              </label>
 
-          <label style={{ display: "grid", gap: "6px" }}>
-            <span style={{ fontSize: "13px", color: "#5d6978" }}>Date To</span>
-            <input type="date" value={filters.dateTo} onChange={(event) => setFilters((current) => ({ ...current, dateTo: event.target.value }))} />
-          </label>
+              <label style={{ display: "grid", gap: "6px" }}>
+                <span style={{ fontSize: "13px", color: "#5d6978" }}>Date To</span>
+                <input type="date" value={filters.dateTo} onChange={(event) => setFilters((current) => ({ ...current, dateTo: event.target.value }))} />
+              </label>
+            </>
+          )}
         </div>
       </section>
 
       {report ? (
         <section style={{ display: "grid", gap: "16px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
+            <div style={cardStyle("#fafcff")}>
+              <div style={{ color: "#5d6978", fontSize: "13px" }}>Reporting Period</div>
+              <strong style={{ fontSize: "20px" }}>{report.appliedPeriodLabel}</strong>
+            </div>
             <div style={cardStyle("#fafcff")}>
               <div style={{ color: "#5d6978", fontSize: "13px" }}>Total Hours</div>
               <strong style={{ fontSize: "26px" }}>{report.summary.totalHours.toFixed(2)}h</strong>
@@ -197,7 +247,19 @@ export function TimePage() {
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
                       <strong>{entry.jobNumber} · {entry.jobTitle}</strong>
-                      <strong>{entry.hours.toFixed(2)}h</strong>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        <strong>{entry.hours.toFixed(2)}h</strong>
+                        {entry.status === "pending" && canApproveTime ? (
+                          <button
+                            type="button"
+                            style={primaryButtonStyle()}
+                            disabled={approveTimeEntry.isPending}
+                            onClick={() => void approveTimeEntry.mutateAsync(entry.id)}
+                          >
+                            {approveTimeEntry.isPending && approveTimeEntry.variables === entry.id ? "Approving..." : "Approve"}
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                     <div style={{ color: "#5d6978", fontSize: "14px" }}>
                       {entry.date} · Worked by {entry.workedByName}
@@ -207,6 +269,11 @@ export function TimePage() {
                       Source: {entry.sourceLabel ?? "—"} · Status: {entry.status.replaceAll("_", " ")}
                     </div>
                     {entry.note ? <div style={{ color: "#172033" }}>{entry.note}</div> : null}
+                    {approveTimeEntry.isError && approveTimeEntry.variables === entry.id ? (
+                      <div style={{ color: "#8f1d1d", fontSize: "14px" }}>
+                        Could not approve this time entry.
+                      </div>
+                    ) : null}
                   </div>
                 ))
               )}

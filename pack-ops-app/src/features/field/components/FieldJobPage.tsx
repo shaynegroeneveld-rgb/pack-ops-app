@@ -8,7 +8,9 @@ import type { CatalogItem } from "@/domain/materials/types";
 import {
   deriveTimeEntryDraftDateValue,
   deriveTimeEntryDraftHours,
+  formatTimeEntryHoursInput,
   isTimeEntryDraftRunning,
+  parseTimeEntryHoursInput,
   updateManualTimeEntryDraftDate,
   updateManualTimeEntryDraftHours,
   validateTimeEntryDraft,
@@ -54,6 +56,7 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
     note: "",
   });
   const [clockNowMs, setClockNowMs] = useState(() => Date.now());
+  const [manualHoursInput, setManualHoursInput] = useState("");
   const noteInputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -136,6 +139,15 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
     return () => window.clearInterval(intervalId);
   }, []);
 
+  useEffect(() => {
+    if (!manualOrStoppedDraft) {
+      setManualHoursInput("");
+      return;
+    }
+
+    setManualHoursInput(formatTimeEntryHoursInput(deriveTimeEntryDraftHours(manualOrStoppedDraft)));
+  }, [manualOrStoppedDraft]);
+
   function toggleJobAccordion(key: JobAccordionKey) {
     setJobAccordions((current) => ({ ...current, [key]: !current[key] }));
   }
@@ -157,6 +169,10 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
       </div>
     );
   }
+
+  const parsedManualHours =
+    manualOrStoppedDraft && manualHoursInput.trim().length > 0 ? parseTimeEntryHoursInput(manualHoursInput) : null;
+  const manualHoursInvalid = Boolean(manualOrStoppedDraft && manualHoursInput.trim().length > 0 && parsedManualHours === null);
 
   async function handleAddNeededMaterial() {
     if (!selectedJobCard || !neededMaterialDraft.materialId) {
@@ -457,24 +473,42 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
                 <label style={{ display: "grid", gap: "6px" }}>
                   <span style={infoLabelStyle()}>Hours</span>
                   <input
-                    type="number"
-                    min="0.05"
-                    max="24"
-                    step="0.05"
-                    value={deriveTimeEntryDraftHours(manualOrStoppedDraft).toFixed(2)}
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="1.5"
+                    value={manualHoursInput}
                     onChange={(event) => {
-                      const nextDraft = updateManualTimeEntryDraftHours(
-                        manualOrStoppedDraft,
-                        Number(event.target.value || 0.05),
-                      );
+                      const nextValue = event.target.value;
+                      setManualHoursInput(nextValue);
+                      const parsedHours = parseTimeEntryHoursInput(nextValue);
+                      if (parsedHours === null) {
+                        return;
+                      }
+                      const nextDraft = updateManualTimeEntryDraftHours(manualOrStoppedDraft, parsedHours);
                       workbench.updateTimeEntryDraft({
                         startedAt: nextDraft.startedAt,
                         endedAt: nextDraft.endedAt,
                       });
                     }}
+                    onBlur={() => {
+                      if (!manualOrStoppedDraft) {
+                        return;
+                      }
+                      const parsedHours = parseTimeEntryHoursInput(manualHoursInput);
+                      if (parsedHours === null) {
+                        setManualHoursInput(formatTimeEntryHoursInput(deriveTimeEntryDraftHours(manualOrStoppedDraft)));
+                        return;
+                      }
+                      setManualHoursInput(formatTimeEntryHoursInput(parsedHours));
+                    }}
                     style={inputStyle()}
                   />
                 </label>
+                {manualHoursInvalid ? (
+                  <div style={{ color: fieldColors.danger, fontSize: "13px" }}>
+                    Enter hours as a simple decimal like 1.5 or 2.25.
+                  </div>
+                ) : null}
                 <label style={{ display: "grid", gap: "6px" }}>
                   <span style={infoLabelStyle()}>Note</span>
                   <textarea
@@ -508,7 +542,7 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
                   <button
                     type="button"
                     style={actionButtonStyle()}
-                    disabled={workbench.isSavingTimeEntryDraft || Boolean(validateTimeEntryDraft(manualOrStoppedDraft))}
+                    disabled={workbench.isSavingTimeEntryDraft || Boolean(validateTimeEntryDraft(manualOrStoppedDraft)) || manualHoursInvalid}
                     onClick={() => void workbench.saveTimeEntryDraft()}
                   >
                     {workbench.isSavingTimeEntryDraft ? "Saving..." : "Save Time"}

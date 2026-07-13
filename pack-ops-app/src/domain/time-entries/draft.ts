@@ -149,7 +149,7 @@ export function updateManualTimeEntryDraftHours(
   draft: TimeEntryDraft,
   hours: number,
 ): TimeEntryDraft {
-  const safeHours = Math.max(0.05, Number.isFinite(hours) ? hours : 0.05);
+  const safeHours = clampTimeEntryHours(hours);
   const startedAt = new Date(draft.startedAt);
   const endedAt = new Date(startedAt.getTime() + safeHours * 60 * 60 * 1000);
 
@@ -190,4 +190,27 @@ export function validateTimeEntryDraft(draft: TimeEntryDraft, now: Date = new Da
   }
 
   return null;
+}
+
+export function clampTimeEntryHours(hours: number): number {
+  return Math.max(0.05, Number.isFinite(hours) ? hours : 0.05);
+}
+
+export function parseTimeEntryHoursInput(raw: string): number | null {
+  const normalized = raw.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+
+  return clampTimeEntryHours(parsed);
+}
+
+export function formatTimeEntryHoursInput(hours: number): string {
+  const safeHours = clampTimeEntryHours(hours);
+  return Number.isInteger(safeHours) ? String(safeHours) : safeHours.toFixed(2).replace(/\.?0+$/, "");
 }

@@ -33,14 +33,39 @@ export interface TimeReportData {
   summary: TimeEntryReportSummary;
   userOptions: Array<{ id: string; label: string }>;
   jobOptions: Array<{ id: string; label: string }>;
+  appliedPeriodLabel: string;
 }
 
 function canViewTimeReporting(user: User): boolean {
-  return user.role === "owner" || user.role === "office";
+  return user.role === "owner" || user.role === "office" || user.role === "bookkeeper";
+}
+
+function canApproveTimeReporting(user: User): boolean {
+  return Boolean(user.canApproveTime) || user.role === "owner" || user.role === "office" || user.role === "bookkeeper";
 }
 
 function roundHours(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function deriveMonthRange(monthValue: string | null | undefined): { start: string; end: string; label: string } | null {
+  if (!monthValue || !/^\d{4}-\d{2}$/.test(monthValue)) {
+    return null;
+  }
+
+  const [yearText, monthText] = monthValue.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return null;
+  }
+
+  const start = `${yearText}-${monthText}-01`;
+  const endDate = new Date(Date.UTC(year, month, 0));
+  const end = endDate.toISOString().slice(0, 10);
+  const label = endDate.toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
+
+  return { start, end, label };
 }
 
 export class TimeService {
@@ -62,13 +87,41 @@ export class TimeService {
     }
   }
 
+  private assertCanApproveTimeReporting() {
+    if (!canApproveTimeReporting(this.currentUser)) {
+      throw new Error("You cannot approve time entries.");
+    }
+  }
+
+  async approveTimeEntry(timeEntryId: string) {
+    this.assertCanApproveTimeReporting();
+
+    const { data, error } = await this.client
+      .from("time_entries")
+      .update({ status: "approved" })
+      .eq("org_id", this.context.orgId)
+      .eq("id", timeEntryId)
+      .select("id, status")
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
+
   async getTimeReport(filters?: {
     userId?: string | null;
     jobId?: string | null;
     dateFrom?: string | null;
     dateTo?: string | null;
+    month?: string | null;
   }): Promise<TimeReportData> {
     this.assertCanViewTimeReporting();
+    const monthRange = deriveMonthRange(filters?.month);
+    const effectiveDateFrom = monthRange?.start ?? filters?.dateFrom ?? null;
+    const effectiveDateTo = monthRange?.end ?? filters?.dateTo ?? null;
 
     const [entries, jobs, usersResponse] = await Promise.all([
       this.timeEntries.list(),
@@ -94,10 +147,10 @@ export class TimeService {
       if (filters?.jobId && String(entry.jobId) !== filters.jobId) {
         return false;
       }
-      if (filters?.dateFrom && entry.workDate < filters.dateFrom) {
+      if (effectiveDateFrom && entry.workDate < effectiveDateFrom) {
         return false;
       }
-      if (filters?.dateTo && entry.workDate > filters.dateTo) {
+      if (effectiveDateTo && entry.workDate > effectiveDateTo) {
         return false;
       }
       return true;
@@ -166,6 +219,11 @@ export class TimeService {
       jobOptions: jobs
         .map((job) => ({ id: String(job.id), label: `${job.number} · ${job.title}` }))
         .sort((left, right) => left.label.localeCompare(right.label)),
+      appliedPeriodLabel: monthRange
+        ? monthRange.label
+        : effectiveDateFrom || effectiveDateTo
+          ? `${effectiveDateFrom ?? "Start"} to ${effectiveDateTo ?? "Now"}`
+          : "All time",
     };
   }
 }

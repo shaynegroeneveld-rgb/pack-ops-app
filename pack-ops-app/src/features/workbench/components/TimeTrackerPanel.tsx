@@ -4,7 +4,9 @@ import {
   deriveTimeEntryDraftDateValue,
   deriveTimeEntryDraftElapsedLabel,
   deriveTimeEntryDraftHours,
+  formatTimeEntryHoursInput,
   isTimeEntryDraftRunning,
+  parseTimeEntryHoursInput,
   type TimeEntryDraft,
   updateManualTimeEntryDraftDate,
   updateManualTimeEntryDraftHours,
@@ -64,6 +66,7 @@ export function TimeTrackerPanel({
   onGoToRunningJob,
 }: TimeTrackerPanelProps) {
   const [now, setNow] = useState(() => Date.now());
+  const [manualHoursInput, setManualHoursInput] = useState("");
   const runningDraft = activeRunningTimerDraft ?? (draft?.activeTimerId ? draft : null);
   const isRunning = draft ? isTimeEntryDraftRunning(draft) : false;
   const hasRunningTimerElsewhere = Boolean(runningDraft && runningDraft.jobId !== selectedJobId);
@@ -105,6 +108,18 @@ export function TimeTrackerPanel({
 
     return deriveTimeEntryDraftDateValue(draft);
   }, [draft]);
+
+  useEffect(() => {
+    if (!draft || draft.source !== "manual" || draftHours === null) {
+      setManualHoursInput("");
+      return;
+    }
+
+    setManualHoursInput(formatTimeEntryHoursInput(draftHours));
+  }, [draft, draftHours]);
+
+  const manualHoursInvalid =
+    draft?.source === "manual" && manualHoursInput.trim().length > 0 && parseTimeEntryHoursInput(manualHoursInput) === null;
 
   return (
     <div
@@ -285,21 +300,37 @@ export function TimeTrackerPanel({
                 <label style={{ display: "grid", gap: "6px" }}>
                   <span style={{ fontSize: "13px", color: "#5b6475" }}>Hours</span>
                   <input
-                    type="number"
-                    min="0.05"
-                    step="0.25"
-                    value={draftHours?.toFixed(2) ?? "1.00"}
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="1.5"
+                    value={manualHoursInput}
                     onChange={(event) => {
-                      const nextDraft = updateManualTimeEntryDraftHours(
-                        draft,
-                        Number(event.target.value),
-                      );
+                      const nextValue = event.target.value;
+                      setManualHoursInput(nextValue);
+                      const parsedHours = parseTimeEntryHoursInput(nextValue);
+                      if (parsedHours === null) {
+                        return;
+                      }
+                      const nextDraft = updateManualTimeEntryDraftHours(draft, parsedHours);
                       onUpdateDraft({
                         endedAt: nextDraft.endedAt,
                       });
                     }}
+                    onBlur={() => {
+                      const parsedHours = parseTimeEntryHoursInput(manualHoursInput);
+                      if (parsedHours === null) {
+                        setManualHoursInput(draftHours !== null ? formatTimeEntryHoursInput(draftHours) : "");
+                        return;
+                      }
+                      setManualHoursInput(formatTimeEntryHoursInput(parsedHours));
+                    }}
                   />
                 </label>
+                {manualHoursInvalid ? (
+                  <div style={{ color: "#8f1d1d", fontSize: "13px" }}>
+                    Enter hours as a simple decimal like 1.5 or 2.25.
+                  </div>
+                ) : null}
               </>
             ) : (
               <label style={{ display: "grid", gap: "6px" }}>
@@ -362,8 +393,8 @@ export function TimeTrackerPanel({
               {isRunning
                 ? `Tracking live on one of ${selectedTrackableJobCount} trackable job${selectedTrackableJobCount === 1 ? "" : "s"}.`
                 : draft.source === "manual"
-                  ? `This entry will save ${draftHours?.toFixed(2)}h on ${new Date(draft.startedAt).toLocaleDateString()}.`
-                  : `This entry will save ${draftHours?.toFixed(2)}h on ${new Date(draft.startedAt).toLocaleDateString()}.`}
+                  ? `This entry will save ${draftHours !== null ? formatTimeEntryHoursInput(draftHours) : "0"}h on ${new Date(draft.startedAt).toLocaleDateString()}.`
+                  : `This entry will save ${draftHours !== null ? formatTimeEntryHoursInput(draftHours) : "0"}h on ${new Date(draft.startedAt).toLocaleDateString()}.`}
             </div>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 <button onClick={() => void onDiscard()} disabled={isSaving}>
@@ -374,7 +405,7 @@ export function TimeTrackerPanel({
                   Stop Timer
                 </button>
               ) : (
-                <button onClick={() => void onSave()} disabled={isSaving} style={{ minWidth: "120px", fontWeight: 600 }}>
+                <button onClick={() => void onSave()} disabled={isSaving || manualHoursInvalid} style={{ minWidth: "120px", fontWeight: 600 }}>
                   {isSaving ? "Saving..." : "Save Entry"}
                 </button>
               )}

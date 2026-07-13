@@ -71,6 +71,14 @@ function fromDateTimeLocalValue(value: string): string {
   return new Date(value).toISOString();
 }
 
+function stopEvent(event: { stopPropagation?: () => void }) {
+  event.stopPropagation?.();
+}
+
+function isActivateKey(key: string) {
+  return key === "Enter" || key === " ";
+}
+
 export function FieldModePage() {
   const { currentUser } = useAuthContext();
   const setActiveRoute = useUiStore((state) => state.setActiveRoute);
@@ -865,7 +873,20 @@ export function FieldModePage() {
   function renderScheduleJobCard(jobCard: WorkbenchJobCard, block: (typeof todayBlocks)[number]) {
     const crewNames = getCrewNames(jobCard);
     return (
-      <div key={block.block.id} style={{ ...shellCardStyle(), padding: "16px", display: "grid", gap: "12px" }}>
+      <div
+        key={block.block.id}
+        onClick={() => openFieldJob(jobCard.job.id)}
+        onKeyDown={(event) => {
+          if (!isActivateKey(event.key)) {
+            return;
+          }
+          event.preventDefault();
+          openFieldJob(jobCard.job.id);
+        }}
+        role="button"
+        tabIndex={0}
+        style={{ ...shellCardStyle(), padding: "16px", display: "grid", gap: "12px", width: "100%", textAlign: "left", cursor: "pointer", border: "none" }}
+      >
         <div style={{ display: "grid", gap: "6px" }}>
           <strong style={{ color: fieldColors.white, fontSize: "20px", lineHeight: 1.15, overflowWrap: "anywhere" }}>
             {jobCard.job.fieldName || jobCard.job.title}
@@ -913,7 +934,10 @@ export function FieldModePage() {
               type="button"
               style={actionButtonStyle()}
               disabled={workbench.clearNeededMaterials.isPending}
-              onClick={() => void workbench.clearNeededMaterials.mutateAsync(jobCard.job.id)}
+              onClick={(event) => {
+                stopEvent(event);
+                void workbench.clearNeededMaterials.mutateAsync(jobCard.job.id);
+              }}
             >
               Mark materials picked up
             </button>
@@ -921,7 +945,10 @@ export function FieldModePage() {
         ) : null}
 
         <div style={{ display: "grid", gap: "10px" }}>
-          <button type="button" style={actionButtonStyle("secondary")} onClick={() => openFieldJob(jobCard.job.id)}>
+          <button type="button" style={actionButtonStyle("secondary")} onClick={(event) => {
+            stopEvent(event);
+            openFieldJob(jobCard.job.id);
+          }}>
             Open Job
           </button>
           {getAllowedNextJobStatuses(jobCard.job.status).includes("work_complete") ? (
@@ -929,7 +956,10 @@ export function FieldModePage() {
               type="button"
               style={actionButtonStyle()}
               disabled={workbench.updateJobStatus.isPending}
-              onClick={() => void handleMarkJobComplete(jobCard)}
+              onClick={(event) => {
+                stopEvent(event);
+                void handleMarkJobComplete(jobCard);
+              }}
             >
               {workbench.updateJobStatus.isPending ? "Completing..." : "Job Complete"}
             </button>
@@ -939,7 +969,10 @@ export function FieldModePage() {
               type="button"
               style={actionButtonStyle()}
               disabled={scheduling.autoFillScheduleBlocks.isPending}
-              onClick={() => void handleAutoFillNextAvailable(jobCard)}
+              onClick={(event) => {
+                stopEvent(event);
+                void handleAutoFillNextAvailable(jobCard);
+              }}
             >
               {jobCard.job.estimatedHours ? "Auto-fill Next Available" : "No estimated time set — schedule as 1 day?"}
             </button>
@@ -951,7 +984,20 @@ export function FieldModePage() {
 
   function renderJobListCard(jobCard: WorkbenchJobCard) {
     return (
-      <div key={jobCard.job.id} style={{ ...shellCardStyle(), padding: "16px", display: "grid", gap: "12px" }}>
+      <div
+        key={jobCard.job.id}
+        onClick={() => openFieldJob(jobCard.job.id)}
+        onKeyDown={(event) => {
+          if (!isActivateKey(event.key)) {
+            return;
+          }
+          event.preventDefault();
+          openFieldJob(jobCard.job.id);
+        }}
+        role="button"
+        tabIndex={0}
+        style={{ ...shellCardStyle(), padding: "16px", display: "grid", gap: "12px", width: "100%", textAlign: "left", cursor: "pointer", border: "none" }}
+      >
         <div style={{ display: "grid", gap: "6px" }}>
           <strong style={{ fontSize: "24px", lineHeight: 1.1, color: fieldColors.white, overflowWrap: "anywhere" }}>
             {jobCard.job.fieldName || jobCard.job.title}
@@ -978,13 +1024,19 @@ export function FieldModePage() {
           </div>
         ) : null}
 
-        <button type="button" onClick={() => openFieldJob(jobCard.job.id)} style={actionButtonStyle()}>
+        <button type="button" onClick={(event) => {
+          stopEvent(event);
+          openFieldJob(jobCard.job.id);
+        }} style={actionButtonStyle()}>
           Open Job
         </button>
         {getAllowedNextJobStatuses(jobCard.job.status).includes("work_complete") ? (
           <button
             type="button"
-            onClick={() => void handleMarkJobComplete(jobCard)}
+            onClick={(event) => {
+              stopEvent(event);
+              void handleMarkJobComplete(jobCard);
+            }}
             style={actionButtonStyle("secondary")}
             disabled={workbench.updateJobStatus.isPending}
           >
@@ -1178,6 +1230,18 @@ export function FieldModePage() {
           </div>,
           <span style={{ fontSize: "24px" }}>🔎</span>,
         )}
+        {!mainAccordions.jobs ? (
+          <button
+            type="button"
+            style={actionButtonStyle()}
+            onClick={() => {
+              setMainAccordions((current) => ({ ...current, jobs: true }));
+              setShowAddJobForm(true);
+            }}
+          >
+            Add Job
+          </button>
+        ) : null}
       </div>
       {renderFinishTimerPanel()}
     </div>
