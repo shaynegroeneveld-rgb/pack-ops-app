@@ -26,6 +26,7 @@ export interface TimeEntryReportSummary {
   totalHours: number;
   hoursByUser: Array<{ userId: string; userName: string; hours: number }>;
   hoursByJob: Array<{ jobId: string; jobLabel: string; hours: number }>;
+  hoursByDay: Array<{ date: string; hours: number }>;
 }
 
 export interface TimeReportData {
@@ -187,6 +188,7 @@ export class TimeService {
 
     const hoursByUser = new Map<string, { userId: string; userName: string; hours: number }>();
     const hoursByJob = new Map<string, { jobId: string; jobLabel: string; hours: number }>();
+    const hoursByDay = new Map<string, { date: string; hours: number }>();
 
     for (const row of rows) {
       const userCurrent = hoursByUser.get(row.workedByUserId) ?? {
@@ -204,6 +206,13 @@ export class TimeService {
       };
       jobCurrent.hours = roundHours(jobCurrent.hours + row.hours);
       hoursByJob.set(row.jobId, jobCurrent);
+
+      const dayCurrent = hoursByDay.get(row.date) ?? {
+        date: row.date,
+        hours: 0,
+      };
+      dayCurrent.hours = roundHours(dayCurrent.hours + row.hours);
+      hoursByDay.set(row.date, dayCurrent);
     }
 
     return {
@@ -212,6 +221,7 @@ export class TimeService {
         totalHours: roundHours(rows.reduce((total, row) => total + row.hours, 0)),
         hoursByUser: Array.from(hoursByUser.values()).sort((left, right) => right.hours - left.hours),
         hoursByJob: Array.from(hoursByJob.values()).sort((left, right) => right.hours - left.hours),
+        hoursByDay: Array.from(hoursByDay.values()).sort((left, right) => right.date.localeCompare(left.date)),
       },
       userOptions: Array.from(usersById.entries())
         .map(([id, label]) => ({ id, label }))

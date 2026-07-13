@@ -35,6 +35,7 @@ export function TimePage() {
     dateFrom: "",
     dateTo: "",
   });
+  const [hoursView, setHoursView] = useState<"user" | "job" | "day">("job");
 
   if (!currentUser) {
     return null;
@@ -78,6 +79,28 @@ export function TimePage() {
     currentUser.user.role === "owner" ||
     currentUser.user.role === "office" ||
     currentUser.user.role === "bookkeeper";
+
+  const hoursBreakdownTitle =
+    hoursView === "job" ? "Hours by Job" : hoursView === "day" ? "Hours by Day" : "Hours by User";
+
+  const hoursBreakdownRows =
+    hoursView === "job"
+      ? report?.summary.hoursByJob.map((item) => ({
+          id: item.jobId,
+          label: item.jobLabel,
+          hours: item.hours,
+        })) ?? []
+      : hoursView === "day"
+        ? report?.summary.hoursByDay.map((item) => ({
+            id: item.date,
+            label: item.date,
+            hours: item.hours,
+          })) ?? []
+        : report?.summary.hoursByUser.map((item) => ({
+            id: item.userId,
+            label: item.userName,
+            hours: item.hours,
+          })) ?? [];
 
   return (
     <section style={pageStyle()}>
@@ -193,31 +216,51 @@ export function TimePage() {
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px" }}>
-            <section style={cardStyle()}>
-              <h2 style={{ marginTop: 0, fontSize: "18px" }}>Hours by User</h2>
-              <div style={{ display: "grid", gap: "8px" }}>
-                {report.summary.hoursByUser.map((item) => (
-                  <div key={item.userId} style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                    <span>{item.userName}</span>
+          <section style={cardStyle()}>
+            <div style={sectionHeadingRow()}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: "18px" }}>{hoursBreakdownTitle}</h2>
+                <p style={{ margin: "4px 0 0", color: "#5d6978" }}>
+                  Switch the hours view without losing the filters above.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => setHoursView("job")}
+                  style={hoursView === "job" ? primaryButtonStyle() : secondaryButtonStyle()}
+                >
+                  By Job
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHoursView("day")}
+                  style={hoursView === "day" ? primaryButtonStyle() : secondaryButtonStyle()}
+                >
+                  By Day
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHoursView("user")}
+                  style={hoursView === "user" ? primaryButtonStyle() : secondaryButtonStyle()}
+                >
+                  By User
+                </button>
+              </div>
+            </div>
+            <div style={{ display: "grid", gap: "8px", marginTop: "12px" }}>
+              {hoursBreakdownRows.length === 0 ? (
+                <div style={{ color: "#5d6978" }}>No hours match the current filters.</div>
+              ) : (
+                hoursBreakdownRows.map((item) => (
+                  <div key={item.id} style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+                    <span>{item.label}</span>
                     <strong>{item.hours.toFixed(2)}h</strong>
                   </div>
-                ))}
-              </div>
-            </section>
-
-            <section style={cardStyle()}>
-              <h2 style={{ marginTop: 0, fontSize: "18px" }}>Hours by Job</h2>
-              <div style={{ display: "grid", gap: "8px" }}>
-                {report.summary.hoursByJob.map((item) => (
-                  <div key={item.jobId} style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                    <span>{item.jobLabel}</span>
-                    <strong>{item.hours.toFixed(2)}h</strong>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </div>
+                ))
+              )}
+            </div>
+          </section>
 
           <section style={cardStyle()}>
             <div style={sectionHeadingRow()}>
