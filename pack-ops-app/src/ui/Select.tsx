@@ -4,9 +4,9 @@ import type { SelectHTMLAttributes } from "react";
 import styles from "./Select.module.css";
 
 export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
-  label?: string;
-  error?: string;
-  hint?: string;
+  label?: string | undefined;
+  error?: string | undefined;
+  hint?: string | undefined;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(

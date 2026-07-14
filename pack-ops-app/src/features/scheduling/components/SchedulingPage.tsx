@@ -27,7 +27,7 @@ import {
   hasUnassignedBlocksWithCrew,
 } from "@/services/scheduling/job-capacity";
 import type { SchedulingUserOption } from "@/services/scheduling/scheduling-service";
-import { Modal } from "@/ui";
+import { Modal, useConfirm } from "@/ui";
 
 function startOfWeekMonday(input: Date): Date {
   const date = new Date(input);
@@ -281,6 +281,7 @@ type ScheduleDragPayload =
 
 export function SchedulingPage() {
   const { currentUser } = useAuthContext();
+  const { confirm } = useConfirm();
   const setActiveRoute = useUiStore((state) => state.setActiveRoute);
   const setSelectedWorkbenchJobId = useUiStore((state) => state.setSelectedWorkbenchJobId);
   const [weekStart, setWeekStart] = useState(() => startOfWeekMonday(new Date()));
@@ -599,9 +600,13 @@ export function SchedulingPage() {
   }
 
   async function handleRecalculateJobSchedule(jobId: Job["id"], startDay: string) {
-    const confirmed = window.confirm(
-      "Recalculating will replace all existing schedule blocks for this job with a new auto-filled plan. Any manual edits will be lost. Continue?",
-    );
+    const confirmed = await confirm({
+      title: "Recalculate schedule?",
+      description:
+        "Recalculating will replace all existing schedule blocks for this job with a new auto-filled plan. Any manual edits will be lost.",
+      confirmLabel: "Recalculate",
+      tone: "danger",
+    });
     if (!confirmed) {
       return;
     }

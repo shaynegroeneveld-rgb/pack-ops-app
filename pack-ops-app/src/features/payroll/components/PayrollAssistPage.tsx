@@ -19,6 +19,7 @@ import {
   calculatePayrollEmployeePay,
   type PayrollAssistEmployeePay,
 } from "@/services/payroll/payroll-assist-service";
+import { useConfirm, useToast } from "@/ui";
 
 function formatMoney(value: number): string {
   return new Intl.NumberFormat("en-CA", {
@@ -61,6 +62,8 @@ function SummaryMetric({ label, value }: { label: string; value: string }) {
 
 export function PayrollAssistPage() {
   const { currentUser } = useAuthContext();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const [period, setPeriod] = useState(getDefaultPayrollPeriod);
   const [rateOverrides, setRateOverrides] = useState<Record<string, string>>({});
   const [accountId, setAccountId] = useState("");
@@ -119,13 +122,14 @@ export function PayrollAssistPage() {
 
   async function handleApprovePayroll() {
     if (!selectedAccount || !selectedCategory) {
-      window.alert("Select a payment account and wage category before approving payroll.");
+      showToast("Select a payment account and wage category before approving payroll.", "warning");
       return;
     }
 
-    const confirmed = window.confirm(
-      `Create ${rows.filter((row) => row.netPay > 0).length} payroll transaction(s) for ${formatMoney(totals.net)} net pay?`,
-    );
+    const confirmed = await confirm({
+      title: "Approve payroll?",
+      description: `Create ${rows.filter((row) => row.netPay > 0).length} payroll transaction(s) for ${formatMoney(totals.net)} net pay?`,
+    });
     if (!confirmed) {
       return;
     }

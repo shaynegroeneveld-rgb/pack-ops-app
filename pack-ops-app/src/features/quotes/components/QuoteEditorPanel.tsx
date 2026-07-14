@@ -7,7 +7,7 @@ import { AssemblySearchSelect } from "@/features/quotes/components/AssemblySearc
 import { getQuoteStatusActions } from "@/domain/quotes/status";
 import type { QuoteLineItemInput, QuoteView } from "@/domain/quotes/types";
 import { createId } from "@/lib/create-id";
-import { Modal } from "@/ui";
+import { Modal, useConfirm } from "@/ui";
 
 export interface QuoteEditorDraftLine extends QuoteLineItemInput {
   localId: string;
@@ -160,6 +160,7 @@ export function QuoteEditorPanel({
   onArchive,
   onClose,
 }: QuoteEditorPanelProps) {
+  const { confirm } = useConfirm();
   const [draft, setDraft] = useState<QuoteEditorDraft | null>(initialDraft);
   const [sectionNames, setSectionNames] = useState<string[]>([]);
   const [selectedCatalogItemIds, setSelectedCatalogItemIds] = useState<Record<string, string>>({});
@@ -1417,19 +1418,25 @@ export function QuoteEditorPanel({
                     type="button"
                     disabled={isPending || isLockedByInvoice}
                     onClick={() => {
-                      if (action.requiresConfirmation) {
-                        const confirmed = window.confirm(action.confirmationMessage ?? "Change quote status?");
-                        if (!confirmed) {
+                      void (async () => {
+                        if (action.requiresConfirmation) {
+                          const confirmed = await confirm(
+                            action.confirmationMessage
+                              ? { title: "Change quote status?", description: action.confirmationMessage }
+                              : { title: "Change quote status?" },
+                          );
+                          if (!confirmed) {
+                            return;
+                          }
+                        }
+
+                        if (action.nextStatus === "accepted" && onAccept) {
+                          void onAccept(currentDraft);
                           return;
                         }
-                      }
 
-                      if (action.nextStatus === "accepted" && onAccept) {
-                        void onAccept(currentDraft);
-                        return;
-                      }
-
-                      setDraft((current) => (current ? { ...current, status: action.nextStatus } : current));
+                        setDraft((current) => (current ? { ...current, status: action.nextStatus } : current));
+                      })();
                     }}
                   >
                     {action.label}

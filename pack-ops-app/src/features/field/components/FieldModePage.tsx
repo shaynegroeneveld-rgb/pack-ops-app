@@ -14,7 +14,7 @@ import {
 import { useSchedulingSlice } from "@/features/scheduling/hooks/use-scheduling-slice";
 import { useWorkbenchSlice } from "@/features/workbench/hooks/use-workbench-slice";
 import type { WorkbenchJobCard } from "@/services/workbench/workbench-service";
-import { Button, Modal } from "@/ui";
+import { Button, Modal, useConfirm, useToast } from "@/ui";
 
 import {
   actionButtonStyle,
@@ -82,6 +82,8 @@ function isActivateKey(key: string) {
 
 export function FieldModePage() {
   const { currentUser } = useAuthContext();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const setActiveRoute = useUiStore((state) => state.setActiveRoute);
   const today = useMemo(() => toDayKey(), []);
   const tomorrow = useMemo(() => addDays(today, 1), [today]);
@@ -312,11 +314,14 @@ export function FieldModePage() {
 
   async function handleMarkJobComplete(jobCard: WorkbenchJobCard) {
     if (!getAllowedNextJobStatuses(jobCard.job.status).includes("work_complete")) {
-      window.alert("This job cannot be marked complete from its current status yet.");
+      showToast("This job cannot be marked complete from its current status yet.", "error");
       return;
     }
 
-    const confirmed = window.confirm(`Mark ${jobCard.job.title} as complete?`);
+    const confirmed = await confirm({
+      title: "Mark job complete?",
+      description: `Mark ${jobCard.job.title} as complete?`,
+    });
     if (!confirmed) {
       return;
     }

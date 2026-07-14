@@ -23,7 +23,7 @@ import type {
   SupplierInvoiceReviewResolution,
   UnpricedCatalogCleanupPreview,
 } from "@/domain/materials/types";
-import { Modal } from "@/ui";
+import { Modal, useConfirm } from "@/ui";
 
 type MaterialsTab = "catalog" | "assemblies";
 
@@ -135,6 +135,7 @@ function parseCsvNumber(value: string | undefined): number | null {
 
 export function MaterialsPage() {
   const { currentUser } = useAuthContext();
+  const { promptText } = useConfirm();
   const [activeTab, setActiveTab] = useState<MaterialsTab>("catalog");
   const [catalogSearch, setCatalogSearch] = useState("");
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
@@ -312,7 +313,11 @@ export function MaterialsPage() {
   }
 
   async function handleDuplicateAssembly(assembly: AssemblyView) {
-    const name = window.prompt("Duplicate assembly as", `${assembly.name} Copy`);
+    const name = await promptText({
+      title: "Duplicate assembly as",
+      label: "Name",
+      defaultValue: `${assembly.name} Copy`,
+    });
     if (name === null) {
       return;
     }

@@ -19,6 +19,7 @@ import {
   titleStyle,
 } from "@/features/shared/ui/mobile-styles";
 import type { CustomerQuotePreview, QuoteView } from "@/domain/quotes/types";
+import { useConfirm } from "@/ui";
 
 const STATUS_OPTIONS: Array<{ value: QuoteView["status"] | "all"; label: string }> = [
   { value: "all", label: "All" },
@@ -148,6 +149,7 @@ function createEmptyDraft(
 
 export function QuotesPage() {
   const { currentUser } = useAuthContext();
+  const { confirm, promptText } = useConfirm();
   const setActiveRoute = useUiStore((state) => state.setActiveRoute);
   const selectedQuoteId = useUiStore((state) => state.selectedQuoteId);
   const setSelectedQuoteId = useUiStore((state) => state.setSelectedQuoteId);
@@ -361,7 +363,11 @@ export function QuotesPage() {
       return;
     }
 
-    const name = window.prompt("Assembly name", draft.title ? `${draft.title} assembly` : "New assembly");
+    const name = await promptText({
+      title: "Assembly name",
+      label: "Name",
+      defaultValue: draft.title ? `${draft.title} assembly` : "New assembly",
+    });
     if (name === null) {
       return;
     }
@@ -418,7 +424,13 @@ export function QuotesPage() {
   }
 
   async function handleDeleteQuoteAttachment(attachment: QuoteView["attachments"][number]) {
-    if (!window.confirm(`Remove ${attachment.fileName} from this quote?`)) {
+    const confirmed = await confirm({
+      title: "Remove attachment?",
+      description: `Remove ${attachment.fileName} from this quote?`,
+      confirmLabel: "Remove",
+      tone: "danger",
+    });
+    if (!confirmed) {
       return;
     }
 

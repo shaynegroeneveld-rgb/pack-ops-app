@@ -22,8 +22,11 @@ export interface ModalProps {
    * page's own root element. Pass "field" when opening a modal from inside
    * Field Mode so it doesn't silently fall back to the office palette.
    */
-  theme?: ModalTheme;
+  theme?: ModalTheme | undefined;
 }
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function Modal({ open, onClose, title, children, footer, placement = "center", theme }: ModalProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -42,6 +45,30 @@ export function Modal({ open, onClose, title, children, footer, placement = "cen
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         onClose();
+        return;
+      }
+
+      // Keep keyboard focus inside the dialog while it's open — without this,
+      // Tab past the last control (or Shift+Tab past the first) escapes into
+      // whatever page content sits behind the modal.
+      if (event.key === "Tab" && panelRef.current) {
+        const focusable = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+        if (focusable.length === 0) {
+          event.preventDefault();
+          return;
+        }
+
+        const first = focusable[0]!;
+        const last = focusable[focusable.length - 1]!;
+        const active = document.activeElement;
+
+        if (event.shiftKey && active === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && active === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     }
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { APP_ROUTES } from "@/app/router/routes";
 import { useUiStore } from "@/app/store/ui-store";
-import { Button, Card, Chip, Input, Modal, Select, useToast } from "@/ui";
+import { Button, Card, Chip, Input, Modal, Select, useConfirm, useToast } from "@/ui";
 
 type ThemeName = "office" | "field";
 
@@ -18,16 +18,41 @@ function sectionTitleStyle(): React.CSSProperties {
   return { margin: 0, fontSize: "20px" };
 }
 
+function noteStyle(): React.CSSProperties {
+  return { margin: 0, color: "var(--color-text-soft)", fontSize: "13px" };
+}
+
+function stateLabelStyle(): React.CSSProperties {
+  return {
+    fontSize: "11px",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: "var(--color-text-soft)",
+  };
+}
+
+function LabeledState({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: "grid", gap: "6px" }}>
+      <span style={stateLabelStyle()}>{label}</span>
+      {children}
+    </div>
+  );
+}
+
 export function DesignSystemPage() {
   const setActiveRoute = useUiStore((state) => state.setActiveRoute);
   const [theme, setTheme] = useState<ThemeName>("office");
   const [isCenterModalOpen, setIsCenterModalOpen] = useState(false);
   const [isSheetModalOpen, setIsSheetModalOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const [lastConfirmResult, setLastConfirmResult] = useState<string | null>(null);
   const { showToast } = useToast();
+  const { confirm, promptText } = useConfirm();
 
   useEffect(() => {
-    // Toast portals to document.body via the app-root ToastProvider, outside this
+    // Toast/Confirm portal to document.body via app-root providers, outside this
     // page's own themed div, so previewing the toggle here also needs to mirror
     // onto <html> (AppShell does the equivalent based on the active route).
     const previousTheme = document.documentElement.dataset.theme;
@@ -60,8 +85,8 @@ export function DesignSystemPage() {
           </div>
           <h1 style={{ margin: 0, fontSize: "31px" }}>Pack Design System</h1>
           <p style={{ margin: 0, color: "var(--color-text-soft)", maxWidth: "60ch" }}>
-            Every shared primitive and its states, in one place. This page is only reachable from Settings
-            (owner-only) and isn&apos;t part of the app&apos;s navigation.
+            Every shared primitive and its states, in one place. This page is for developers only — it's
+            only reachable from Settings (owner-only) and isn&apos;t part of the app&apos;s navigation.
           </p>
           <div style={rowStyle()}>
             <Chip active={theme === "office"} onClick={() => setTheme("office")}>
@@ -76,28 +101,35 @@ export function DesignSystemPage() {
         <section style={sectionStyle()}>
           <h2 style={sectionTitleStyle()}>Button</h2>
           <Card variant="soft" style={{ display: "grid", gap: "16px" }}>
-            <div style={rowStyle()}>
-              <Button variant="primary">Primary</Button>
-              <Button variant="secondary">Secondary</Button>
-              <Button variant="danger">Danger</Button>
-              <Button variant="ghost">Ghost</Button>
-            </div>
-            <div style={rowStyle()}>
-              <Button variant="primary" size="sm">
-                Small
-              </Button>
-              <Button variant="primary" loading>
-                Loading
-              </Button>
-              <Button variant="primary" disabled>
-                Disabled
-              </Button>
-              <Button variant="secondary" fullWidth style={{ maxWidth: "220px" }}>
-                Full width
-              </Button>
-            </div>
-            <p style={{ margin: 0, color: "var(--color-text-soft)", fontSize: "13px" }}>
-              Tab to a button to see the focus-visible ring; click and hold to see the pressed state.
+            <LabeledState label="Default / variants">
+              <div style={rowStyle()}>
+                <Button variant="primary">Primary</Button>
+                <Button variant="secondary">Secondary</Button>
+                <Button variant="danger">Danger</Button>
+                <Button variant="ghost">Ghost</Button>
+              </div>
+            </LabeledState>
+            <LabeledState label="Loading / disabled / sizes">
+              <div style={rowStyle()}>
+                <Button variant="primary" size="sm">
+                  Small
+                </Button>
+                <Button variant="primary" loading>
+                  Loading
+                </Button>
+                <Button variant="primary" disabled>
+                  Disabled
+                </Button>
+                <Button variant="secondary" fullWidth style={{ maxWidth: "220px" }}>
+                  Full width
+                </Button>
+              </div>
+            </LabeledState>
+            <p style={noteStyle()}>
+              Hover, active (pressed), and focus-visible are interaction states, not static props — hover
+              with a mouse, click-and-hold, or Tab to a button above to see them. There is no separate
+              success/warning variant: "danger" already carries the destructive/error semantic, and
+              success/info feedback is communicated via Toast, not a button color.
             </p>
           </Card>
         </section>
@@ -105,19 +137,37 @@ export function DesignSystemPage() {
         <section style={sectionStyle()}>
           <h2 style={sectionTitleStyle()}>Input &amp; Select</h2>
           <Card variant="soft" style={{ display: "grid", gap: "16px", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-            <Input label="Job name" placeholder="e.g. Smith Reno" value={inputValue} onChange={(event) => setInputValue(event.target.value)} />
-            <Input label="With hint" placeholder="123 Main St" hint="Used for scheduling and invoices." />
-            <Input label="With error" defaultValue="not-an-email" error="Enter a valid email address." />
-            <Input label="Disabled" defaultValue="Locked field" disabled />
-            <Select label="Role" defaultValue="field" hint="Controls what this user can see.">
-              <option value="field">Field</option>
-              <option value="office">Office</option>
-              <option value="owner">Owner</option>
-            </Select>
-            <Select label="With error" error="Choose a job before saving.">
-              <option value="">Select a job…</option>
-            </Select>
+            <LabeledState label="Default">
+              <Input label="Job name" placeholder="e.g. Smith Reno" value={inputValue} onChange={(event) => setInputValue(event.target.value)} />
+            </LabeledState>
+            <LabeledState label="With hint">
+              <Input label="With hint" placeholder="123 Main St" hint="Used for scheduling and invoices." />
+            </LabeledState>
+            <LabeledState label="Error">
+              <Input label="With error" defaultValue="not-an-email" error="Enter a valid email address." />
+            </LabeledState>
+            <LabeledState label="Disabled">
+              <Input label="Disabled" defaultValue="Locked field" disabled />
+            </LabeledState>
+            <LabeledState label="Select — default">
+              <Select label="Role" defaultValue="field" hint="Controls what this user can see.">
+                <option value="field">Field</option>
+                <option value="office">Office</option>
+                <option value="owner">Owner</option>
+              </Select>
+            </LabeledState>
+            <LabeledState label="Select — error">
+              <Select label="With error" error="Choose a job before saving.">
+                <option value="">Select a job…</option>
+              </Select>
+            </LabeledState>
           </Card>
+          <p style={noteStyle()}>
+            Hover and focus-visible show on interaction (try Tab or clicking in). Neither Input nor Select
+            has a distinct "success" or "warning" visual state today — only "error" — since no workflow in
+            the app currently needs a third tone for a form field. Loading isn't applicable to a single
+            field (the surrounding form's submit button carries loading state instead).
+          </p>
         </section>
 
         <section style={sectionStyle()}>
@@ -127,6 +177,11 @@ export function DesignSystemPage() {
             <Card variant="soft">Soft card — nested/grouped content.</Card>
             <Card variant="elevated">Elevated card — modals, popovers, callouts.</Card>
           </div>
+          <p style={noteStyle()}>
+            Card is a static container — it has no hover/active/focus/loading state of its own (it isn't
+            interactive), and no success/warning/error tone (that belongs to the content inside it, e.g. a
+            Toast or an Input's error message).
+          </p>
         </section>
 
         <section style={sectionStyle()}>
@@ -137,6 +192,10 @@ export function DesignSystemPage() {
             <Chip badgeCount={3}>With badge</Chip>
             <Chip disabled>Disabled</Chip>
           </Card>
+          <p style={noteStyle()}>
+            Hover and focus-visible are visible on interaction. Chip has no loading state (chips are
+            filters/toggles, not submit actions) and no success/warning/error tone.
+          </p>
         </section>
 
         <section style={sectionStyle()}>
@@ -144,6 +203,9 @@ export function DesignSystemPage() {
           <Card variant="soft" style={rowStyle()}>
             <Button variant="secondary" onClick={() => showToast("Saved successfully.", "success")}>
               Trigger success
+            </Button>
+            <Button variant="secondary" onClick={() => showToast("Select an account before continuing.", "warning")}>
+              Trigger warning
             </Button>
             <Button variant="secondary" onClick={() => showToast("Could not save changes.", "error")}>
               Trigger error
@@ -163,6 +225,58 @@ export function DesignSystemPage() {
             <Button variant="secondary" onClick={() => setIsSheetModalOpen(true)}>
               Open bottom sheet
             </Button>
+          </Card>
+        </section>
+
+        <section style={sectionStyle()}>
+          <h2 style={sectionTitleStyle()}>Confirm &amp; Prompt</h2>
+          <p style={noteStyle()}>
+            Promise-based replacements for <code>window.confirm</code> / <code>window.prompt</code>, built
+            entirely on Modal + Button — this is what every destructive action and text-entry prompt in the
+            app now uses instead of a native browser dialog.
+          </p>
+          <Card variant="soft" style={{ display: "grid", gap: "12px" }}>
+            <div style={rowStyle()}>
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  void (async () => {
+                    const confirmed = await confirm({ title: "Save changes?", description: "Apply your edits now?" });
+                    setLastConfirmResult(confirmed ? "Confirmed (default tone)." : "Cancelled.");
+                  })()
+                }
+              >
+                Default confirm
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  void (async () => {
+                    const confirmed = await confirm({
+                      title: "Delete quote?",
+                      description: "This cannot be undone.",
+                      confirmLabel: "Delete",
+                      tone: "danger",
+                    });
+                    setLastConfirmResult(confirmed ? "Confirmed (danger tone)." : "Cancelled.");
+                  })()
+                }
+              >
+                Danger confirm
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  void (async () => {
+                    const name = await promptText({ title: "Assembly name", label: "Name", defaultValue: "New assembly" });
+                    setLastConfirmResult(name === null ? "Cancelled." : `Entered: "${name}"`);
+                  })()
+                }
+              >
+                Prompt for text
+              </Button>
+            </div>
+            {lastConfirmResult ? <span style={noteStyle()}>{lastConfirmResult}</span> : null}
           </Card>
         </section>
       </div>

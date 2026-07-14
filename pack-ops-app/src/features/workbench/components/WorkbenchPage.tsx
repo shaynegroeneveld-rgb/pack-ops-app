@@ -47,7 +47,7 @@ import { CreateJobPanel } from "@/features/workbench/components/CreateJobPanel";
 import { EditableTimeEntryItem } from "@/features/workbench/components/EditableTimeEntryItem";
 import { TimeTrackerPanel } from "@/features/workbench/components/TimeTrackerPanel";
 import { useWorkbenchSlice } from "@/features/workbench/hooks/use-workbench-slice";
-import { Modal } from "@/ui";
+import { Modal, useConfirm } from "@/ui";
 
 type JobScreen = "main" | "attachments" | "actuals";
 type EditJobDraft = {
@@ -881,6 +881,7 @@ function ManualActualCostEditorCard({
 }
 
 export function WorkbenchPage() {
+  const { confirm } = useConfirm();
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [jobScreen, setJobScreen] = useState<JobScreen>("main");
   const [showCreateJob, setShowCreateJob] = useState(false);
@@ -1576,7 +1577,12 @@ export function WorkbenchPage() {
     storagePath: string;
     fileName: string;
   }) {
-    const confirmed = window.confirm(`Remove ${attachment.fileName} from this job?`);
+    const confirmed = await confirm({
+      title: "Remove attachment?",
+      description: `Remove ${attachment.fileName} from this job?`,
+      confirmLabel: "Remove",
+      tone: "danger",
+    });
     if (!confirmed) {
       return;
     }
@@ -1684,7 +1690,13 @@ export function WorkbenchPage() {
   }
 
   async function handleRemoveManualActualCostLine(item: JobManualActualCostLine) {
-    if (!window.confirm(`Remove manual actual cost line "${item.description}"?`)) {
+    const confirmed = await confirm({
+      title: "Remove cost line?",
+      description: `Remove manual actual cost line "${item.description}"?`,
+      confirmLabel: "Remove",
+      tone: "danger",
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -1749,7 +1761,12 @@ export function WorkbenchPage() {
   }
 
   async function handleRemoveJobMaterial(jobMaterialId: string, label: string) {
-    const confirmed = window.confirm(`Remove ${label} from this job?`);
+    const confirmed = await confirm({
+      title: "Remove material?",
+      description: `Remove ${label} from this job?`,
+      confirmLabel: "Remove",
+      tone: "danger",
+    });
     if (!confirmed) {
       return;
     }
@@ -1758,7 +1775,12 @@ export function WorkbenchPage() {
   }
 
   async function handleArchiveJob(jobId: string, label: string) {
-    const confirmed = window.confirm(`Archive ${label}? It will disappear from the active jobs list.`);
+    const confirmed = await confirm({
+      title: "Archive job?",
+      description: `Archive ${label}? It will disappear from the active jobs list.`,
+      confirmLabel: "Archive",
+      tone: "danger",
+    });
     if (!confirmed) {
       return;
     }
@@ -1817,7 +1839,12 @@ export function WorkbenchPage() {
   }
 
   async function handleRemoveAssignment(assignmentId: string, userLabel: string) {
-    const confirmed = window.confirm(`Remove ${userLabel} from this job?`);
+    const confirmed = await confirm({
+      title: "Remove crew member?",
+      description: `Remove ${userLabel} from this job?`,
+      confirmLabel: "Remove",
+      tone: "danger",
+    });
     if (!confirmed) {
       return;
     }
@@ -4071,10 +4098,18 @@ export function WorkbenchPage() {
           canDelete={canGenerateInvoices}
           isDeleting={deleteInvoice.isPending}
           onDelete={(invoice) => {
-            if (!window.confirm(`Delete invoice ${invoice.number}? This removes the saved invoice snapshot from this job.`)) {
-              return;
-            }
-            void deleteInvoice.mutate(invoice.id);
+            void (async () => {
+              const confirmed = await confirm({
+                title: "Delete invoice?",
+                description: `Delete invoice ${invoice.number}? This removes the saved invoice snapshot from this job.`,
+                confirmLabel: "Delete",
+                tone: "danger",
+              });
+              if (!confirmed) {
+                return;
+              }
+              void deleteInvoice.mutate(invoice.id);
+            })();
           }}
           onClose={() => setSelectedSavedInvoice(null)}
         />

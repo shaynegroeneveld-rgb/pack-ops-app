@@ -35,7 +35,7 @@ import {
 import { TimePage } from "@/features/time/components/TimePage";
 import { WorkbenchPage } from "@/features/workbench/components/WorkbenchPage";
 import { WorkbenchService, type WorkbenchFailedSyncItem } from "@/services/workbench/workbench-service";
-import { Modal } from "@/ui";
+import { Modal, useConfirm, useToast } from "@/ui";
 
 const NAV_ITEMS = [
   { label: "Leads", route: APP_ROUTES.leads },
@@ -147,6 +147,8 @@ function getSyncIndicatorPresentation(input: SyncIndicatorState & { isOffline: b
 
 export function AppShell() {
   const { currentUser } = useAuthContext();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const activeRoute = useUiStore((state) => state.activeRoute);
   const setActiveRoute = useUiStore((state) => state.setActiveRoute);
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
@@ -440,7 +442,7 @@ export function AppShell() {
       setSyncActionState({ type: "retry", outboxId });
       await workbenchService.retrySyncItem(outboxId);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Retry failed.");
+      showToast(error instanceof Error ? error.message : "Retry failed.", "error");
     } finally {
       setSyncActionState(null);
     }
@@ -451,7 +453,12 @@ export function AppShell() {
       return;
     }
 
-    const confirmed = window.confirm("Discard this failed sync item? Local unsynced changes for it will be removed.");
+    const confirmed = await confirm({
+      title: "Discard failed sync item?",
+      description: "Local unsynced changes for it will be removed.",
+      confirmLabel: "Discard",
+      tone: "danger",
+    });
     if (!confirmed) {
       return;
     }
@@ -460,7 +467,7 @@ export function AppShell() {
       setSyncActionState({ type: "discard", outboxId });
       await workbenchService.discardSyncItem(outboxId);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Discard failed.");
+      showToast(error instanceof Error ? error.message : "Discard failed.", "error");
     } finally {
       setSyncActionState(null);
     }

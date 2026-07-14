@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 import styles from "./Toast.module.css";
 
-export type ToastTone = "success" | "error" | "info";
+export type ToastTone = "success" | "error" | "warning" | "info";
 
 interface ToastItem {
   id: string;

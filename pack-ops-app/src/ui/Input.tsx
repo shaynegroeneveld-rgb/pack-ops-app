@@ -4,9 +4,12 @@ import type { InputHTMLAttributes } from "react";
 import styles from "./Input.module.css";
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
-  label?: string;
-  error?: string;
-  hint?: string;
+  // Explicitly `| undefined` throughout (not just optional) so callers
+  // deriving these from possibly-null data can pass them straight through
+  // under exactOptionalPropertyTypes without a defensive fallback.
+  label?: string | undefined;
+  error?: string | undefined;
+  hint?: string | undefined;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(

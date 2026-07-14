@@ -18,3 +18,6 @@ export type { ModalProps, ModalPlacement } from "./Modal";
 
 export { ToastProvider, useToast } from "./Toast";
 export type { ToastTone } from "./Toast";
+
+export { ConfirmProvider, useConfirm } from "./Confirm";
+export type { ConfirmOptions, ConfirmTone, PromptOptions } from "./Confirm";
