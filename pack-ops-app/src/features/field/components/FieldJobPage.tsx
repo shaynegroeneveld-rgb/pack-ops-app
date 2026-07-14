@@ -237,6 +237,7 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
   if (isJobLookupLoading) {
     return (
       <div
+        data-theme="field"
         style={{
           minHeight: "100vh",
           width: "100%",
@@ -263,6 +264,7 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
   if (!selectedJobCard) {
     return (
       <div
+        data-theme="field"
         style={{
           minHeight: "100vh",
           width: "100%",
@@ -288,6 +290,7 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
 
   return (
     <div
+      data-theme="field"
       style={{
         minHeight: "100vh",
         width: "100%",

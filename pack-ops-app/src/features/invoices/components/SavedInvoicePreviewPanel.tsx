@@ -1,4 +1,5 @@
 import type { SavedInvoiceSummary } from "@/domain/invoices/types";
+import { Modal } from "@/ui";
 
 interface SavedInvoicePreviewPanelProps {
   invoice: SavedInvoiceSummary | null;
@@ -247,50 +248,21 @@ export function SavedInvoicePreviewPanel({
   onDelete,
   onClose,
 }: SavedInvoicePreviewPanelProps) {
-  if (!invoice) {
-    return null;
-  }
-
-  const materialSubtotal = invoice.lines
-    .filter((line) => !isLabourLine(line))
-    .reduce((total, line) => total + line.subtotal, 0);
-  const labourSubtotal = invoice.lines.reduce((total, line) => total + line.subtotal, 0) - materialSubtotal;
+  const materialSubtotal = invoice
+    ? invoice.lines.filter((line) => !isLabourLine(line)).reduce((total, line) => total + line.subtotal, 0)
+    : 0;
+  const labourSubtotal = invoice
+    ? invoice.lines.reduce((total, line) => total + line.subtotal, 0) - materialSubtotal
+    : 0;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(23, 32, 51, 0.35)",
-        display: "grid",
-        placeItems: "center",
-        padding: "18px",
-        zIndex: 35,
-      }}
-    >
-      <section
-        style={{
-          width: "100%",
-          maxWidth: "920px",
-          maxHeight: "92vh",
-          overflow: "auto",
-          border: "1px solid #d9dfeb",
-          borderRadius: "18px",
-          background: "#fff",
-          padding: "18px",
-          display: "grid",
-          gap: "16px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap" }}>
-          <div>
-            <div style={{ color: "#5b6475", fontSize: "13px" }}>Saved Invoice</div>
-            <h2 style={{ margin: "4px 0 0" }}>{invoice.number}</h2>
-            <div style={{ color: "#5b6475", marginTop: "4px" }}>
-              {formatDate(invoice.createdAt)} · {invoice.status.replaceAll("_", " ")}
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+    <Modal
+      open={Boolean(invoice)}
+      onClose={onClose}
+      title={invoice?.number}
+      footer={
+        invoice ? (
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             <button
               type="button"
               onClick={() =>
@@ -315,8 +287,14 @@ export function SavedInvoicePreviewPanel({
                 {isDeleting ? "Deleting..." : "Delete Invoice"}
               </button>
             ) : null}
-            <button type="button" onClick={onClose}>Close</button>
           </div>
+        ) : null
+      }
+    >
+      {invoice ? (
+        <>
+        <div style={{ color: "#5b6475" }}>
+          {formatDate(invoice.createdAt)} · {invoice.status.replaceAll("_", " ")}
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
@@ -390,7 +368,8 @@ export function SavedInvoicePreviewPanel({
             <strong>{formatMoney(invoice.total)}</strong>
           </div>
         </div>
-      </section>
-    </div>
+        </>
+      ) : null}
+    </Modal>
   );
 }

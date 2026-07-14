@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import type { CustomerQuotePreview } from "@/domain/quotes/types";
+import { Modal } from "@/ui";
 
 interface CustomerQuotePreviewPanelProps {
   preview: CustomerQuotePreview | null;
@@ -66,140 +67,67 @@ export function CustomerQuotePreviewPanel({
   const termsLines = preview?.termsLines ?? [];
   const previewSections = useMemo(() => groupQuotePreviewSections(quote), [quote]);
 
-  if (!preview || !quote) {
-    return null;
-  }
-
   return (
-    <div
-      className="customer-quote-preview-overlay"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(23, 32, 51, 0.35)",
-        display: "grid",
-        placeItems: "center",
-        padding: "20px",
-        zIndex: 40,
-      }}
-    >
-      <style>
-        {`
-          @media print {
-            @page {
-              margin: 12mm;
-            }
-
-            html,
-            body {
-              margin: 0 !important;
-              padding: 0 !important;
-              background: #fff !important;
-            }
-
-            body * {
-              visibility: hidden !important;
-            }
-
-            .customer-quote-preview-overlay {
-              visibility: visible !important;
-              position: absolute !important;
-              inset: 0 !important;
-              display: block !important;
-              background: transparent !important;
-              padding: 0 !important;
-              width: 100% !important;
-              margin: 0 !important;
-            }
-
-            .customer-quote-preview-shell {
-              visibility: visible !important;
-              max-width: none !important;
-              max-height: none !important;
-              overflow: visible !important;
-              border: 0 !important;
-              border-radius: 0 !important;
-              padding: 0 !important;
-              box-shadow: none !important;
-              margin: 0 !important;
-              gap: 0 !important;
-              background: transparent !important;
-            }
-
-            .customer-quote-preview-controls {
-              display: none !important;
-            }
-
-            .customer-quote-preview-article {
-              visibility: visible !important;
-              border: 0 !important;
-              border-radius: 0 !important;
-              padding: 0 !important;
-              margin: 0 !important;
-              break-inside: avoid !important;
-            }
-
-            .customer-quote-preview-article * {
-              visibility: visible !important;
-            }
-          }
-        `}
-      </style>
-      <section
-        className="customer-quote-preview-shell"
-        style={{
-          width: "100%",
-          maxWidth: "980px",
-          maxHeight: "min(92vh, 980px)",
-          overflow: "auto",
-          border: "1px solid #d9dfeb",
-          borderRadius: "18px",
-          padding: "18px",
-          background: "#fff",
-          display: "grid",
-          gap: "16px",
-        }}
-      >
-        <div
-          className="customer-quote-preview-controls"
-          style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}
-        >
-          <div>
-            <h3 style={{ margin: 0 }}>Customer Quote Preview</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
-              Clean customer-facing output with no internal costs or raw estimating detail.
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={() => setShowMaterials((value) => !value)}
-              disabled={isPending}
-            >
-              {showMaterials ? "Hide Materials" : "Show Materials"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowItemPrices((value) => !value)}
-              disabled={isPending}
-            >
-              {showItemPrices ? "Hide Item Prices" : "Show Item Prices"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowLabourSummary((value) => !value)}
-              disabled={isPending}
-            >
-              {showLabourSummary ? "Hide Labour" : "Show Labour"}
-            </button>
-            <button type="button" onClick={() => window.print()} disabled={isPending}>
-              Print / Export
-            </button>
-            <button type="button" onClick={onClose} disabled={isPending}>
-              Close
-            </button>
-          </div>
+    <Modal
+      open={Boolean(preview && quote)}
+      onClose={onClose}
+      title="Customer Quote Preview"
+      footer={
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button type="button" onClick={() => setShowMaterials((value) => !value)} disabled={isPending}>
+            {showMaterials ? "Hide Materials" : "Show Materials"}
+          </button>
+          <button type="button" onClick={() => setShowItemPrices((value) => !value)} disabled={isPending}>
+            {showItemPrices ? "Hide Item Prices" : "Show Item Prices"}
+          </button>
+          <button type="button" onClick={() => setShowLabourSummary((value) => !value)} disabled={isPending}>
+            {showLabourSummary ? "Hide Labour" : "Show Labour"}
+          </button>
+          <button type="button" onClick={() => window.print()} disabled={isPending}>
+            Print / Export
+          </button>
         </div>
+      }
+    >
+      {quote ? (
+        <>
+        <style>
+          {`
+            @media print {
+              @page {
+                margin: 12mm;
+              }
+
+              html,
+              body {
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #fff !important;
+              }
+
+              body * {
+                visibility: hidden !important;
+              }
+
+              .customer-quote-preview-article,
+              .customer-quote-preview-article * {
+                visibility: visible !important;
+              }
+
+              .customer-quote-preview-article {
+                position: static !important;
+                border: 0 !important;
+                border-radius: 0 !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                break-inside: avoid !important;
+              }
+            }
+          `}
+        </style>
+        <p style={{ margin: 0, color: "#5b6475" }}>
+          Clean customer-facing output with no internal costs or raw estimating detail.
+        </p>
 
         <article
           className="customer-quote-preview-article"
@@ -398,7 +326,8 @@ export function CustomerQuotePreviewPanel({
             </section>
           ) : null}
         </article>
-      </section>
-    </div>
+        </>
+      ) : null}
+    </Modal>
   );
 }

@@ -6,6 +6,7 @@ import type {
   InvoiceGenerationPreview,
   InvoiceGenerationSource,
 } from "@/domain/invoices/types";
+import { Modal } from "@/ui";
 
 interface InvoicePreviewOptions {
   showMaterials: boolean;
@@ -355,173 +356,24 @@ export function InvoiceGenerationPanel({
   const previewSections = preview ? groupPreviewSections(preview.lines) : [];
 
   return (
-    <div
-      className="invoice-preview-overlay"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(23, 32, 51, 0.42)",
-        display: "grid",
-        placeItems: "center",
-        padding: "20px",
-        zIndex: 60,
-        overflowX: "hidden",
-      }}
+    <Modal
+      open
+      onClose={onClose}
+      title="Generate Invoice"
+      footer={
+        preview ? (
+          <button type="button" onClick={onSave} disabled={isSavePending || !hasVisibleLines || draftValidation.length > 0}>
+            {isSavePending ? "Saving Invoice..." : "Save Invoice"}
+          </button>
+        ) : null
+      }
     >
-      <style>
-        {`
-          @media (max-width: 820px) {
-            .invoice-preview-overlay {
-              padding: 0 !important;
-              place-items: stretch !important;
-            }
-            .invoice-preview-shell {
-              max-height: 100vh !important;
-              border-radius: 0 !important;
-              padding: 14px !important;
-              overflow-y: auto !important;
-              overflow-x: hidden !important;
-            }
-          }
-          @media print {
-            @page {
-              margin: 8mm;
-            }
-            html, body {
-              font-size: 11.5px !important;
-              line-height: 1.25 !important;
-              margin: 0 !important;
-              padding: 0 !important;
-              height: auto !important;
-              overflow: visible !important;
-            }
-            main:not(:has(.invoice-preview-overlay)) {
-              display: none !important;
-            }
-            main:has(.invoice-preview-overlay) {
-              min-height: 0 !important;
-              height: auto !important;
-              background: transparent !important;
-            }
-            main:has(.invoice-preview-overlay) > *:not(.invoice-preview-overlay) {
-              display: none !important;
-            }
-            .invoice-preview-overlay {
-              position: static !important;
-              inset: auto !important;
-              background: transparent !important;
-              display: block !important;
-              padding: 0 !important;
-              margin: 0 !important;
-              width: auto !important;
-              min-height: 0 !important;
-              overflow: visible !important;
-            }
-            .invoice-preview-shell {
-              border: 0 !important;
-              box-shadow: none !important;
-              max-width: none !important;
-              width: auto !important;
-              padding: 0 !important;
-              max-height: none !important;
-              overflow: visible !important;
-              margin: 0 !important;
-              gap: 0 !important;
-            }
-            .invoice-preview-controls {
-              display: none !important;
-            }
-            .invoice-preview-sheet {
-              border: 0 !important;
-              border-radius: 0 !important;
-              padding: 0 !important;
-              gap: 8px !important;
-              margin: 0 !important;
-            }
-            .invoice-preview-table-wrap {
-              overflow: visible !important;
-              break-inside: auto !important;
-            }
-            .invoice-preview-table {
-              min-width: 0 !important;
-              font-size: 11px !important;
-            }
-            .invoice-preview-breakdown {
-              break-inside: avoid;
-              max-width: 250px !important;
-              min-width: 0 !important;
-              gap: 6px !important;
-            }
-            .invoice-preview-header {
-              display: grid !important;
-              grid-template-columns: 1fr 210px !important;
-              gap: 10px !important;
-              align-items: start !important;
-              break-inside: avoid !important;
-            }
-            .invoice-preview-brand {
-              gap: 4px !important;
-            }
-            .invoice-preview-logo {
-              max-height: 54px !important;
-              max-width: 180px !important;
-            }
-            .invoice-preview-meta {
-              min-width: 0 !important;
-              gap: 4px !important;
-              padding: 8px !important;
-              break-inside: avoid !important;
-            }
-            .invoice-preview-billto {
-              gap: 2px !important;
-              break-inside: avoid !important;
-            }
-            .invoice-preview-description {
-              gap: 3px !important;
-              break-inside: avoid !important;
-            }
-            .invoice-preview-table th {
-              padding: 4px 0 !important;
-            }
-            .invoice-preview-table td {
-              padding: 5px 0 !important;
-              line-height: 1.2 !important;
-            }
-            .invoice-preview-summary-card {
-              padding: 8px !important;
-              gap: 4px !important;
-              break-inside: avoid !important;
-            }
-          }
-        `}
-      </style>
-
-      <section
-        className="invoice-preview-shell"
-        style={{
-          width: "100%",
-          maxWidth: "1080px",
-          maxHeight: "92vh",
-          overflowY: "auto",
-          overflowX: "hidden",
-          background: "#fff",
-          border: "1px solid #d9dfeb",
-          borderRadius: "18px",
-          padding: "18px",
-          display: "grid",
-          gap: "16px",
-        }}
-      >
         <div
-          className="invoice-preview-controls"
           style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}
         >
-          <div>
-            <h3 style={{ margin: 0 }}>Generate Invoice</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
-              Build the customer invoice from the quote or actuals.
-            </p>
-          </div>
+          <p style={{ margin: 0, color: "#5b6475" }}>
+            Build the customer invoice from the quote or actuals.
+          </p>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             <button type="button" onClick={() => onSelectSource("quote")} disabled={!canUseQuoteSource || isPreviewPending || isSavePending}>
               {selectedSource === "quote" ? "From Quote ✓" : "From Quote"}
@@ -549,14 +401,10 @@ export function InvoiceGenerationPanel({
             >
               Print
             </button>
-            <button type="button" onClick={onClose} disabled={isPreviewPending || isSavePending}>
-              Close
-            </button>
           </div>
         </div>
 
         <section
-          className="invoice-preview-controls"
           style={{
             border: "1px solid #d9dfeb",
             borderRadius: "16px",
@@ -873,7 +721,6 @@ export function InvoiceGenerationPanel({
 
         {preview ? (
           <article
-            className="invoice-preview-sheet"
             style={{
               border: "1px solid #d9dfeb",
               borderRadius: "18px",
@@ -883,10 +730,10 @@ export function InvoiceGenerationPanel({
               background: "#fff",
             }}
           >
-            <header className="invoice-preview-header" style={{ display: "flex", justifyContent: "space-between", gap: "24px", flexWrap: "wrap" }}>
-              <div className="invoice-preview-brand" style={{ display: "grid", gap: "10px" }}>
+            <header style={{ display: "flex", justifyContent: "space-between", gap: "24px", flexWrap: "wrap" }}>
+              <div style={{ display: "grid", gap: "10px" }}>
                 {preview.company.logoDataUrl ? (
-                  <img className="invoice-preview-logo" src={preview.company.logoDataUrl} alt={`${preview.company.name} logo`} style={{ maxHeight: "100px", maxWidth: "260px", objectFit: "contain" }} />
+                  <img src={preview.company.logoDataUrl} alt={`${preview.company.name} logo`} style={{ maxHeight: "100px", maxWidth: "260px", objectFit: "contain" }} />
                 ) : (
                   <strong style={{ fontSize: "28px" }}>{preview.company.name}</strong>
                 )}
@@ -899,7 +746,7 @@ export function InvoiceGenerationPanel({
                 </div>
               </div>
 
-              <div className="invoice-preview-meta" style={{ minWidth: "280px", display: "grid", gap: "8px", border: "1px solid #d9dfeb", borderRadius: "16px", padding: "16px", background: "#f8fafc" }}>
+              <div style={{ minWidth: "280px", display: "grid", gap: "8px", border: "1px solid #d9dfeb", borderRadius: "16px", padding: "16px", background: "#f8fafc" }}>
                 <div>
                   <div style={{ color: "#5b6475", fontSize: "13px" }}>Invoice Number</div>
                   <strong>{preview.invoiceNumberPreview}</strong>
@@ -919,7 +766,7 @@ export function InvoiceGenerationPanel({
               </div>
             </header>
 
-            <section className="invoice-preview-billto" style={{ display: "grid", gap: "6px" }}>
+            <section style={{ display: "grid", gap: "6px" }}>
               <div style={{ color: "#5b6475", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.08em" }}>Invoice To</div>
               <strong style={{ fontSize: "20px" }}>{preview.customer.customerName}</strong>
               <div style={{ color: "#445168" }}>
@@ -930,7 +777,7 @@ export function InvoiceGenerationPanel({
             </section>
 
             {previewOptions.descriptionOfWork.trim() ? (
-              <section className="invoice-preview-description" style={{ display: "grid", gap: "6px" }}>
+              <section style={{ display: "grid", gap: "6px" }}>
                 <div style={{ color: "#5b6475", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                   Description of Work
                 </div>
@@ -940,8 +787,8 @@ export function InvoiceGenerationPanel({
               </section>
             ) : null}
 
-            <section className="invoice-preview-table-wrap" style={{ overflowX: "auto" }}>
-              <table className="invoice-preview-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: "520px" }}>
+            <section style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "520px" }}>
                 <thead>
                   <tr style={{ textAlign: "left", borderBottom: "1px solid #d9dfeb" }}>
                     <th style={{ padding: "10px 0" }}>Description</th>
@@ -980,10 +827,9 @@ export function InvoiceGenerationPanel({
             </section>
 
             <section
-              className="invoice-preview-breakdown"
               style={{ display: "grid", gap: "10px", justifySelf: "end", minWidth: "320px", width: "100%", maxWidth: "360px" }}
             >
-              <div className="invoice-preview-summary-card" style={{ border: "1px solid #d9dfeb", borderRadius: "14px", padding: "14px", display: "grid", gap: "8px", background: "#fafcff" }}>
+              <div style={{ border: "1px solid #d9dfeb", borderRadius: "14px", padding: "14px", display: "grid", gap: "8px", background: "#fafcff" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
                   <span style={{ color: "#5b6475" }}>Materials</span>
                   <strong>{formatMoney(materialSubtotal)}</strong>
@@ -994,7 +840,7 @@ export function InvoiceGenerationPanel({
                 </div>
               </div>
 
-              <div className="invoice-preview-summary-card" style={{ border: "1px solid #d9dfeb", borderRadius: "14px", padding: "14px", display: "grid", gap: "8px" }}>
+              <div style={{ border: "1px solid #d9dfeb", borderRadius: "14px", padding: "14px", display: "grid", gap: "8px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
                   <span style={{ color: "#5b6475" }}>Subtotal</span>
                   <strong>{formatMoney(preview.subtotal)}</strong>
@@ -1009,19 +855,12 @@ export function InvoiceGenerationPanel({
                 </div>
               </div>
             </section>
-
-            <div className="invoice-preview-controls" style={{ display: "flex", justifyContent: "flex-end", gap: "8px", flexWrap: "wrap" }}>
-              <button type="button" onClick={onSave} disabled={isSavePending || !hasVisibleLines || draftValidation.length > 0}>
-                {isSavePending ? "Saving Invoice..." : "Save Invoice"}
-              </button>
-            </div>
           </article>
         ) : (
           <section style={{ border: "1px dashed #d9dfeb", borderRadius: "16px", padding: "22px", color: "#5b6475" }}>
             Generate a preview to review invoice lines before saving.
           </section>
         )}
-      </section>
-    </div>
+    </Modal>
   );
 }

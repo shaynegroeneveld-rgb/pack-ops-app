@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { ScheduleBlock } from "@/domain/scheduling/types";
+import { Modal } from "@/ui";
 
 export interface CarryOverDraft {
   /** IDs of all blocks to carry over (one per worker for multi-worker days). */
@@ -29,45 +30,24 @@ export function CarryOverPanel({
     setDraft(initialDraft);
   }, [initialDraft]);
 
-  if (!draft) {
-    return null;
-  }
-
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(23, 32, 51, 0.35)",
-        display: "grid",
-        placeItems: "center",
-        padding: "20px",
-        zIndex: 21,
-      }}
-    >
-      <section
-        style={{
-          width: "100%",
-          maxWidth: "520px",
-          border: "1px solid #d9dfeb",
-          borderRadius: "18px",
-          padding: "18px",
-          background: "#fff",
-          display: "grid",
-          gap: "14px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
-          <div>
-            <h3 style={{ margin: 0 }}>Carry Over Scheduled Work</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
-              Move this scheduled work forward and optionally leave a short reason.
-            </p>
-          </div>
-          <button onClick={onClose} disabled={isPending}>
-            Close
+    <Modal
+      open={Boolean(draft)}
+      onClose={onClose}
+      title="Carry Over Scheduled Work"
+      footer={
+        draft ? (
+          <button onClick={() => void onSubmit(draft)} disabled={isPending} style={{ fontWeight: 600 }}>
+            {isPending ? "Moving..." : "Carry Over"}
           </button>
-        </div>
+        ) : null
+      }
+    >
+      {draft ? (
+        <>
+        <p style={{ margin: 0, color: "#5b6475" }}>
+          Move this scheduled work forward and optionally leave a short reason.
+        </p>
 
         <label style={{ display: "grid", gap: "6px" }}>
           <span>Move To</span>
@@ -131,13 +111,8 @@ export function CarryOverPanel({
         >
           Carry over keeps the same job, assignee, duration, dispatch hint, and any explicit start time unless you change the date.
         </div>
-
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <button onClick={() => void onSubmit(draft)} disabled={isPending} style={{ fontWeight: 600 }}>
-            {isPending ? "Moving..." : "Carry Over"}
-          </button>
-        </div>
-      </section>
-    </div>
+        </>
+      ) : null}
+    </Modal>
   );
 }

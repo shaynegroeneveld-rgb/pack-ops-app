@@ -27,6 +27,7 @@ import {
   hasUnassignedBlocksWithCrew,
 } from "@/services/scheduling/job-capacity";
 import type { SchedulingUserOption } from "@/services/scheduling/scheduling-service";
+import { Modal } from "@/ui";
 
 function startOfWeekMonday(input: Date): Date {
   const date = new Date(input);
@@ -1044,49 +1045,21 @@ export function SchedulingPage() {
         </section>
       ) : null}
 
-      {canManageScheduling && isAvailabilityPanelOpen ? (
-        <div
-          role="presentation"
-          onClick={() => setIsAvailabilityPanelOpen(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.42)",
-            zIndex: 26,
-            display: "grid",
-            placeItems: isMobileLayout ? "end stretch" : "center",
-            padding: isMobileLayout ? "0" : "20px",
-          }}
+      {canManageScheduling ? (
+        <Modal
+          open={isAvailabilityPanelOpen}
+          onClose={() => setIsAvailabilityPanelOpen(false)}
+          placement={isMobileLayout ? "bottom" : "center"}
+          title="Mark Worker Away"
+          footer={
+            <button onClick={() => void handleMarkUnavailable()} disabled={markWorkerUnavailable.isPending} style={primaryButtonStyle()}>
+              {markWorkerUnavailable.isPending ? "Saving..." : "Mark Away"}
+            </button>
+          }
         >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-label="Mark worker away"
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: "520px",
-              maxHeight: "82vh",
-              overflow: "auto",
-              background: "#ffffff",
-              borderRadius: isMobileLayout ? "22px 22px 0 0" : "20px",
-              padding: "18px",
-              display: "grid",
-              gap: "14px",
-              boxShadow: "0 24px 70px rgba(15, 23, 42, 0.22)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
-              <div>
-                <h2 style={{ margin: 0, fontSize: "20px" }}>Mark Worker Away</h2>
-                <p style={{ margin: "4px 0 0", color: "#5b6475", fontSize: "13px" }}>
-                  Auto-fill scheduling will avoid this person on the selected day.
-                </p>
-              </div>
-              <button onClick={() => setIsAvailabilityPanelOpen(false)} style={secondaryButtonStyle()}>
-                Close
-              </button>
-            </div>
+            <p style={{ margin: 0, color: "#5b6475", fontSize: "13px" }}>
+              Auto-fill scheduling will avoid this person on the selected day.
+            </p>
 
             <div style={{ display: "grid", gap: "10px" }}>
               <label style={{ display: "grid", gap: "6px" }}>
@@ -1119,9 +1092,6 @@ export function SchedulingPage() {
                   onChange={(event) => setAvailabilityDraft((current) => ({ ...current, reason: event.target.value }))}
                 />
               </label>
-              <button onClick={() => void handleMarkUnavailable()} disabled={markWorkerUnavailable.isPending} style={primaryButtonStyle()}>
-                {markWorkerUnavailable.isPending ? "Saving..." : "Mark Away"}
-              </button>
             </div>
 
             <div style={{ display: "grid", gap: "8px" }}>
@@ -1156,8 +1126,7 @@ export function SchedulingPage() {
                 </div>
               ))}
             </div>
-          </section>
-        </div>
+        </Modal>
       ) : null}
 
       {canManageScheduling && isMobileLayout ? (
@@ -1886,47 +1855,16 @@ export function SchedulingPage() {
           onClose={() => { setCarryOverDraft(null); setPendingGroupAction(null); }}
         />
       ) : null}
-      {canManageScheduling && isMobileLayout && mobileAddJobDay ? (
-        <div
-          role="presentation"
-          onClick={() => setMobileAddJobDay(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.42)",
-            zIndex: 24,
-            display: "grid",
-            alignItems: "end",
-          }}
+      {canManageScheduling && isMobileLayout ? (
+        <Modal
+          open={Boolean(mobileAddJobDay)}
+          onClose={() => setMobileAddJobDay(null)}
+          placement="bottom"
+          title="Add Job"
         >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-label="Add job to day"
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              background: "#ffffff",
-              borderTopLeftRadius: "22px",
-              borderTopRightRadius: "22px",
-              padding: "18px",
-              display: "grid",
-              gap: "14px",
-              boxShadow: "0 -18px 50px rgba(15, 23, 42, 0.18)",
-              maxHeight: "78vh",
-              overflowY: "auto",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
-              <div>
-                <strong style={{ display: "block", fontSize: "17px" }}>Add Job</strong>
-                <span style={{ color: "#5b6475", fontSize: "13px" }}>
-                  Choose an unscheduled job for {getDayLabel(mobileAddJobDay)}.
-                </span>
-              </div>
-              <button onClick={() => setMobileAddJobDay(null)} style={secondaryButtonStyle()}>
-                Close
-              </button>
-            </div>
+            <p style={{ margin: 0, color: "#5b6475", fontSize: "13px" }}>
+              {mobileAddJobDay ? `Choose an unscheduled job for ${getDayLabel(mobileAddJobDay)}.` : null}
+            </p>
 
             {orderedUnscheduledJobs.length === 0 ? (
               <div
@@ -1946,6 +1884,9 @@ export function SchedulingPage() {
                   <button
                     key={item.job.id}
                     onClick={() => {
+                      if (!mobileAddJobDay) {
+                        return;
+                      }
                       openCreateForJob(item.job, mobileAddJobDay);
                       setMobileAddJobDay(null);
                     }}
@@ -1973,8 +1914,7 @@ export function SchedulingPage() {
                 ))}
               </div>
             )}
-          </section>
-        </div>
+        </Modal>
       ) : null}
       <DayDetailPanel
         day={selectedDayDetail}

@@ -7,6 +7,7 @@ import { AssemblySearchSelect } from "@/features/quotes/components/AssemblySearc
 import { getQuoteStatusActions } from "@/domain/quotes/status";
 import type { QuoteLineItemInput, QuoteView } from "@/domain/quotes/types";
 import { createId } from "@/lib/create-id";
+import { Modal } from "@/ui";
 
 export interface QuoteEditorDraftLine extends QuoteLineItemInput {
   localId: string;
@@ -310,7 +311,7 @@ export function QuoteEditorPanel({
   }, [draft]);
 
   if (!draft) {
-    return null;
+    return <Modal open={false} onClose={onClose} />;
   }
 
   const currentDraft = draft;
@@ -585,44 +586,52 @@ export function QuoteEditorPanel({
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(23, 32, 51, 0.35)",
-        display: "grid",
-        placeItems: "center",
-        padding: isMobileLayout ? "0" : "20px",
-        zIndex: 30,
-      }}
-    >
-      <section
-        style={{
-          width: "100%",
-          maxWidth: "1120px",
-          maxHeight: isMobileLayout ? "100vh" : "min(92vh, 960px)",
-          overflowY: "auto",
-          overflowX: "hidden",
-          border: "1px solid #d9dfeb",
-          borderRadius: isMobileLayout ? "0" : "18px",
-          padding: isMobileLayout ? "14px" : "18px",
-          background: "#fff",
-          display: "grid",
-          gap: "16px",
-          minWidth: 0,
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap", minWidth: 0 }}>
-          <div style={{ minWidth: 0 }}>
-            <h3 style={{ margin: 0 }}>{currentDraft.quoteId ? "Edit Quote" : "New Quote"}</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
-              Build the internal estimate with materials, assemblies, manual lines, and live totals.
-            </p>
-          </div>
-          <button onClick={onClose} disabled={isPending}>
-            Close
+    <Modal
+      open
+      onClose={onClose}
+      placement={isMobileLayout ? "bottom" : "center"}
+      title={currentDraft.quoteId ? "Edit Quote" : "New Quote"}
+      footer={
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+          {!isLockedByInvoice ? (
+            <button onClick={() => void onSubmit(currentDraft)} disabled={isPending} style={{ fontWeight: 600 }}>
+              {isPending ? "Saving..." : "Save Quote"}
+            </button>
+          ) : null}
+          {onCreateAssembly ? (
+            <button
+              type="button"
+              onClick={() => void onCreateAssembly(currentDraft)}
+              disabled={isPending || isLockedByInvoice}
+            >
+              Make Assembly
+            </button>
+          ) : null}
+          <button type="button" onClick={() => void handleCopyOrderList()} disabled={isPending}>
+            Copy Order List
           </button>
+          {currentDraft.quoteId && onPreviewCustomerQuote ? (
+            <button type="button" onClick={() => void onPreviewCustomerQuote()} disabled={isPending}>
+              Preview Customer Quote
+            </button>
+          ) : null}
+          {currentDraft.quoteId && currentDraft.status === "accepted" && onCreateJob ? (
+            <button onClick={() => void onCreateJob()} disabled={isPending}>
+              {isPending ? "Working..." : "Create Job"}
+            </button>
+          ) : null}
+          {currentDraft.quoteId && onArchive ? (
+            <button onClick={() => void onArchive()} disabled={isPending} style={{ color: "#b42318" }}>
+              {isPending ? "Working..." : "Archive Quote"}
+            </button>
+          ) : null}
+          {copyFeedback ? <span style={{ color: "#445168", fontSize: "13px" }}>{copyFeedback}</span> : null}
         </div>
+      }
+    >
+        <p style={{ margin: 0, color: "#5b6475" }}>
+          Build the internal estimate with materials, assemblies, manual lines, and live totals.
+        </p>
 
         <div
           style={{
@@ -1433,43 +1442,6 @@ export function QuoteEditorPanel({
             {statusHelpText ? <span style={{ color: "#5b6475", fontSize: "13px" }}>{statusHelpText}</span> : null}
           </div>
         </label>
-
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-          {!isLockedByInvoice ? (
-            <button onClick={() => void onSubmit(currentDraft)} disabled={isPending} style={{ fontWeight: 600 }}>
-              {isPending ? "Saving..." : "Save Quote"}
-            </button>
-          ) : null}
-          {onCreateAssembly ? (
-            <button
-              type="button"
-              onClick={() => void onCreateAssembly(currentDraft)}
-              disabled={isPending || isLockedByInvoice}
-            >
-              Make Assembly
-            </button>
-          ) : null}
-          <button type="button" onClick={() => void handleCopyOrderList()} disabled={isPending}>
-            Copy Order List
-          </button>
-          {currentDraft.quoteId && onPreviewCustomerQuote ? (
-            <button type="button" onClick={() => void onPreviewCustomerQuote()} disabled={isPending}>
-              Preview Customer Quote
-            </button>
-          ) : null}
-          {currentDraft.quoteId && currentDraft.status === "accepted" && onCreateJob ? (
-            <button onClick={() => void onCreateJob()} disabled={isPending}>
-              {isPending ? "Working..." : "Create Job"}
-            </button>
-          ) : null}
-          {currentDraft.quoteId && onArchive ? (
-            <button onClick={() => void onArchive()} disabled={isPending} style={{ color: "#b42318" }}>
-              {isPending ? "Working..." : "Archive Quote"}
-            </button>
-          ) : null}
-          {copyFeedback ? <span style={{ color: "#445168", fontSize: "13px" }}>{copyFeedback}</span> : null}
-        </div>
-      </section>
-    </div>
+    </Modal>
   );
 }

@@ -14,6 +14,7 @@ import {
 import { useSchedulingSlice } from "@/features/scheduling/hooks/use-scheduling-slice";
 import { useWorkbenchSlice } from "@/features/workbench/hooks/use-workbench-slice";
 import type { WorkbenchJobCard } from "@/services/workbench/workbench-service";
+import { Button, Modal } from "@/ui";
 
 import {
   actionButtonStyle,
@@ -671,33 +672,33 @@ export function FieldModePage() {
       (timeDraftHours ?? 0) > 0;
 
     return (
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 50,
-          background: "rgba(10, 1, 4, 0.72)",
-          display: "grid",
-          alignItems: "end",
-          padding: "12px",
-        }}
+      <Modal
+        open
+        onClose={() => undefined}
+        theme="field"
+        placement="bottom"
+        footer={
+          <div style={{ display: "grid", gap: "10px", width: "100%" }}>
+            <Button
+              fullWidth
+              disabled={!canSave}
+              loading={workbench.isSavingTimeEntryDraft}
+              onClick={() => void workbench.saveTimeEntryDraft()}
+            >
+              Save Time Entry
+            </Button>
+            <Button
+              variant="secondary"
+              fullWidth
+              disabled={workbench.isSavingTimeEntryDraft}
+              onClick={() => void workbench.discardTimeEntryDraft()}
+            >
+              Cancel
+            </Button>
+          </div>
+        }
       >
-        <div
-          style={{
-            ...shellCardStyle(),
-            borderTopLeftRadius: "28px",
-            borderTopRightRadius: "28px",
-            padding: "18px 16px 20px",
-            display: "grid",
-            gap: "12px",
-            maxHeight: "88vh",
-            overflowY: "auto",
-            width: "min(100%, 760px)",
-            maxWidth: "calc(100vw - 24px)",
-            boxSizing: "border-box",
-            justifySelf: "center",
-          }}
-        >
+        <div style={{ display: "grid", gap: "12px" }}>
           <div style={{ display: "grid", gap: "6px" }}>
             <strong style={{ fontSize: "24px", color: fieldColors.white }}>Finish Timer</strong>
             <span style={{ color: fieldColors.whiteSoft }}>
@@ -801,27 +802,8 @@ export function FieldModePage() {
               {timeDraftHours?.toFixed(2) ?? "0.00"}h {timeDraftElapsed ? `· ${timeDraftElapsed}` : ""}
             </span>
           </div>
-
-          <div style={{ display: "grid", gap: "10px" }}>
-            <button
-              type="button"
-              style={actionButtonStyle()}
-              disabled={!canSave || workbench.isSavingTimeEntryDraft}
-              onClick={() => void workbench.saveTimeEntryDraft()}
-            >
-              {workbench.isSavingTimeEntryDraft ? "Saving..." : "Save Time Entry"}
-            </button>
-            <button
-              type="button"
-              style={actionButtonStyle("secondary")}
-              disabled={workbench.isSavingTimeEntryDraft}
-              onClick={() => void workbench.discardTimeEntryDraft()}
-            >
-              Cancel
-            </button>
-          </div>
         </div>
-      </div>
+      </Modal>
     );
   }
 
@@ -1049,6 +1031,7 @@ export function FieldModePage() {
 
   return (
     <div
+      data-theme="field"
       style={{
         minHeight: "100vh",
         width: "100%",

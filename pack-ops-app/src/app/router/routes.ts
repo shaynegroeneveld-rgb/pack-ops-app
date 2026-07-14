@@ -35,4 +35,5 @@ export const APP_ROUTES = {
   money: "/money",
   scheduling: "/scheduling",
   admin: "/admin",
+  designSystem: "/design-system",
 } as const;

@@ -6,6 +6,7 @@ import { useAuthContext } from "@/app/contexts/auth-context";
 import { useUiStore } from "@/app/store/ui-store";
 import { localDb } from "@/data/dexie/db";
 import { getSupabaseClient } from "@/data/supabase/client";
+import { DesignSystemPage } from "@/features/design-system/components/DesignSystemPage";
 import { AgingSummaryPage } from "@/features/finance/components/AgingSummaryPage";
 import { ExpenseByCategoryPage } from "@/features/finance/components/ExpenseByCategoryPage";
 import { FinanceMoneyPage } from "@/features/finance/components/FinanceMoneyPage";
@@ -34,6 +35,7 @@ import {
 import { TimePage } from "@/features/time/components/TimePage";
 import { WorkbenchPage } from "@/features/workbench/components/WorkbenchPage";
 import { WorkbenchService, type WorkbenchFailedSyncItem } from "@/services/workbench/workbench-service";
+import { Modal } from "@/ui";
 
 const NAV_ITEMS = [
   { label: "Leads", route: APP_ROUTES.leads },
@@ -290,6 +292,13 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
+    // Mirrors the route's theme onto <html> so portaled UI (Modal, Toast — both
+    // render outside the page's own root element) still inherits the correct
+    // office/field color tokens instead of silently falling back to office.
+    document.documentElement.dataset.theme = isFieldRoute ? "field" : "office";
+  }, [isFieldRoute]);
+
+  useEffect(() => {
     if (!currentUser || !isMobileShellLayout) {
       return;
     }
@@ -342,6 +351,10 @@ export function AppShell() {
     }
 
     if (activeRoute === APP_ROUTES.settings && currentUser.user.role !== "owner") {
+      setActiveRoute(APP_ROUTES.workbench);
+    }
+
+    if (activeRoute === APP_ROUTES.designSystem && currentUser.user.role !== "owner") {
       setActiveRoute(APP_ROUTES.workbench);
     }
   }, [activeRoute, canSeeFinance, currentUser, setActiveRoute]);
@@ -656,126 +669,88 @@ export function AppShell() {
           <FieldModePage />
       ) : activeRoute === APP_ROUTES.settings ? (
         <SettingsPage />
+      ) : activeRoute === APP_ROUTES.designSystem ? (
+        <DesignSystemPage />
       ) : activeRoute === APP_ROUTES.scheduling ? (
         <SchedulingPage />
       ) : (
         <WorkbenchPage />
       )}
 
-      {!isFieldRoute && isSyncPanelOpen ? (
-        <div
-          role="presentation"
-          onClick={() => setIsSyncPanelOpen(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.42)",
-            zIndex: 30,
-            display: "grid",
-            placeItems: "center",
-            padding: "20px",
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-label="Sync status"
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              width: "min(560px, 100%)",
-              maxHeight: "80vh",
-              overflowY: "auto",
-              background: "#ffffff",
-              borderRadius: "22px",
-              padding: "18px",
-              boxShadow: "0 24px 60px rgba(15, 23, 42, 0.18)",
-              display: "grid",
-              gap: "16px",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
-              <div>
-                <strong style={{ display: "block", fontSize: "18px", color: brand.text }}>Sync Status</strong>
-                <span style={{ color: brand.textSoft, fontSize: "13px" }}>
-                  {syncTitle}
-                </span>
-              </div>
-              <button type="button" onClick={() => setIsSyncPanelOpen(false)} style={secondaryButtonStyle()}>
-                Close
-              </button>
+      {!isFieldRoute ? (
+        <Modal open={isSyncPanelOpen} onClose={() => setIsSyncPanelOpen(false)} title="Sync Status">
+          <span style={{ color: brand.textSoft, fontSize: "13px" }}>{syncTitle}</span>
+
+          {syncIndicator.failedItems.length === 0 ? (
+            <div
+              style={{
+                border: `1px solid ${brand.border}`,
+                borderRadius: "16px",
+                padding: "16px",
+                background: brand.surfaceAlt,
+                color: brand.textSoft,
+              }}
+            >
+              No failed sync items right now.
             </div>
+          ) : (
+            <div style={{ display: "grid", gap: "12px" }}>
+              {syncIndicator.failedItems.map((item) => {
+                const isRetrying = syncActionState?.type === "retry" && syncActionState.outboxId === item.id;
+                const isDiscarding = syncActionState?.type === "discard" && syncActionState.outboxId === item.id;
 
-            {syncIndicator.failedItems.length === 0 ? (
-              <div
-                style={{
-                  border: `1px solid ${brand.border}`,
-                  borderRadius: "16px",
-                  padding: "16px",
-                  background: brand.surfaceAlt,
-                  color: brand.textSoft,
-                }}
-              >
-                No failed sync items right now.
-              </div>
-            ) : (
-              <div style={{ display: "grid", gap: "12px" }}>
-                {syncIndicator.failedItems.map((item) => {
-                  const isRetrying = syncActionState?.type === "retry" && syncActionState.outboxId === item.id;
-                  const isDiscarding = syncActionState?.type === "discard" && syncActionState.outboxId === item.id;
-
-                  return (
-                    <article
-                      key={item.id}
-                      style={{
-                        border: "1px solid #f3c4c9",
-                        borderRadius: "16px",
-                        padding: "14px",
-                        background: "#fff8f8",
-                        display: "grid",
-                        gap: "10px",
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap" }}>
-                        <div style={{ display: "grid", gap: "4px" }}>
-                          <strong style={{ color: brand.text }}>
-                            {item.entityType} · {item.operation}
-                          </strong>
-                          <span style={{ color: brand.textSoft, fontSize: "13px" }}>
-                            {item.entityId}
-                          </span>
-                        </div>
-                        <span style={{ color: brand.textSoft, fontSize: "12px" }}>
-                          Retry {item.retryCount}
+                return (
+                  <article
+                    key={item.id}
+                    style={{
+                      border: "1px solid #f3c4c9",
+                      borderRadius: "16px",
+                      padding: "14px",
+                      background: "#fff8f8",
+                      display: "grid",
+                      gap: "10px",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap" }}>
+                      <div style={{ display: "grid", gap: "4px" }}>
+                        <strong style={{ color: brand.text }}>
+                          {item.entityType} · {item.operation}
+                        </strong>
+                        <span style={{ color: brand.textSoft, fontSize: "13px" }}>
+                          {item.entityId}
                         </span>
                       </div>
-                      <div style={{ color: "#8f1d1d", fontSize: "13px", lineHeight: 1.45 }}>
-                        {item.lastError ?? "Sync failed."}
-                      </div>
-                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          onClick={() => void handleRetrySyncItem(item.id)}
-                          disabled={Boolean(syncActionState)}
-                          style={secondaryButtonStyle()}
-                        >
-                          {isRetrying ? "Retrying..." : "Retry"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleDiscardSyncItem(item.id)}
-                          disabled={Boolean(syncActionState)}
-                          style={secondaryButtonStyle()}
-                        >
-                          {isDiscarding ? "Discarding..." : "Discard"}
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        </div>
+                      <span style={{ color: brand.textSoft, fontSize: "12px" }}>
+                        Retry {item.retryCount}
+                      </span>
+                    </div>
+                    <div style={{ color: "#8f1d1d", fontSize: "13px", lineHeight: 1.45 }}>
+                      {item.lastError ?? "Sync failed."}
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        onClick={() => void handleRetrySyncItem(item.id)}
+                        disabled={Boolean(syncActionState)}
+                        style={secondaryButtonStyle()}
+                      >
+                        {isRetrying ? "Retrying..." : "Retry"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDiscardSyncItem(item.id)}
+                        disabled={Boolean(syncActionState)}
+                        style={secondaryButtonStyle()}
+                      >
+                        {isDiscarding ? "Discarding..." : "Discard"}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </Modal>
       ) : null}
     </main>
   );

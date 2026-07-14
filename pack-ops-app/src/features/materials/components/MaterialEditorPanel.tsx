@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { CatalogItem } from "@/domain/materials/types";
+import { Modal } from "@/ui";
 
 export interface MaterialEditorDraft {
   itemId?: CatalogItem["id"];
@@ -35,47 +36,31 @@ export function MaterialEditorPanel({
     setDraft(initialDraft);
   }, [initialDraft]);
 
-  if (!draft) {
-    return null;
-  }
-
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(23, 32, 51, 0.35)",
-        display: "grid",
-        placeItems: "center",
-        padding: "20px",
-        zIndex: 30,
-      }}
-    >
-      <section
-        style={{
-          width: "100%",
-          maxWidth: "720px",
-          maxHeight: "min(90vh, 860px)",
-          overflow: "auto",
-          border: "1px solid #d9dfeb",
-          borderRadius: "18px",
-          padding: "18px",
-          background: "#fff",
-          display: "grid",
-          gap: "14px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
-          <div>
-            <h3 style={{ margin: 0 }}>{draft.itemId ? "Edit Material" : "New Material"}</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
-              Keep the catalog practical: cost-based materials, simple categories, and active/inactive.
-            </p>
+    <Modal
+      open={Boolean(draft)}
+      onClose={onClose}
+      title={draft?.itemId ? "Edit Material" : "New Material"}
+      footer={
+        draft ? (
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <button onClick={() => void onSubmit(draft)} disabled={isPending} style={{ fontWeight: 600 }}>
+              {isPending ? "Saving..." : "Save Material"}
+            </button>
+            {draft.itemId && onArchive ? (
+              <button onClick={() => void onArchive()} disabled={isPending} style={{ color: "#b42318" }}>
+                {isPending ? "Working..." : "Archive Material"}
+              </button>
+            ) : null}
           </div>
-          <button onClick={onClose} disabled={isPending}>
-            Close
-          </button>
-        </div>
+        ) : null
+      }
+    >
+      {draft ? (
+        <>
+        <p style={{ margin: 0, color: "#5b6475" }}>
+          Keep the catalog practical: cost-based materials, simple categories, and active/inactive.
+        </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
           <label style={{ display: "grid", gap: "6px" }}>
@@ -162,18 +147,8 @@ export function MaterialEditorPanel({
           />
           <span>Active</span>
         </label>
-
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <button onClick={() => void onSubmit(draft)} disabled={isPending} style={{ fontWeight: 600 }}>
-            {isPending ? "Saving..." : "Save Material"}
-          </button>
-          {draft.itemId && onArchive ? (
-            <button onClick={() => void onArchive()} disabled={isPending} style={{ color: "#b42318" }}>
-              {isPending ? "Working..." : "Archive Material"}
-            </button>
-          ) : null}
-        </div>
-      </section>
-    </div>
+        </>
+      ) : null}
+    </Modal>
   );
 }

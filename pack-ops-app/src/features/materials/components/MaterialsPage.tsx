@@ -23,6 +23,7 @@ import type {
   SupplierInvoiceReviewResolution,
   UnpricedCatalogCleanupPreview,
 } from "@/domain/materials/types";
+import { Modal } from "@/ui";
 
 type MaterialsTab = "catalog" | "assemblies";
 
@@ -934,42 +935,35 @@ export function MaterialsPage() {
         onClose={() => setImportRollbackPreview(null)}
       />
 
-      {unpricedCleanupPreview ? (
-        <section
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.45)",
-            display: "grid",
-            placeItems: "center",
-            padding: "20px",
-            zIndex: 50,
-          }}
-        >
-          <div
-            style={{
-              width: "min(920px, 100%)",
-              maxHeight: "88vh",
-              overflow: "auto",
-              borderRadius: "18px",
-              background: "#fff",
-              boxShadow: "0 24px 70px rgba(15, 23, 42, 0.3)",
-              padding: "18px",
-              display: "grid",
-              gap: "14px",
-            }}
-          >
-            <header style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
-              <div>
-                <h2 style={{ margin: 0 }}>No-cost material cleanup</h2>
-                <p style={{ margin: "6px 0 0", color: "#5b6475" }}>
-                  Active materials with no cost and no sell price. Referenced rows are shown but blocked from archive.
-                </p>
+      <Modal
+        open={Boolean(unpricedCleanupPreview)}
+        onClose={() => setUnpricedCleanupPreview(null)}
+        title="No-cost material cleanup"
+        footer={
+          unpricedCleanupPreview ? (
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap", width: "100%", alignItems: "center" }}>
+              <span style={{ color: "#5b6475", fontSize: "13px" }}>
+                {unpricedCleanupPreview.candidates.filter((candidate) => candidate.safeToArchive).length} safe to archive.
+              </span>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <button type="button" onClick={() => setUnpricedCleanupPreview(null)}>Cancel</button>
+                <button
+                  type="button"
+                  disabled={archiveUnpricedCatalogItems.isPending || unpricedCleanupPreview.candidates.every((candidate) => !candidate.safeToArchive)}
+                  onClick={() => void handleConfirmUnpricedCleanup()}
+                >
+                  {archiveUnpricedCatalogItems.isPending ? "Archiving..." : "Archive safe no-cost materials"}
+                </button>
               </div>
-              <button type="button" onClick={() => setUnpricedCleanupPreview(null)}>Close</button>
-            </header>
+            </div>
+          ) : null
+        }
+      >
+        {unpricedCleanupPreview ? (
+          <>
+            <p style={{ margin: 0, color: "#5b6475" }}>
+              Active materials with no cost and no sell price. Referenced rows are shown but blocked from archive.
+            </p>
 
             {unpricedCleanupPreview.candidates.length === 0 ? (
               <p style={{ color: "#5b6475", margin: 0 }}>No matching materials found.</p>
@@ -1027,25 +1021,9 @@ export function MaterialsPage() {
                 })}
               </div>
             )}
-
-            <footer style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
-              <span style={{ color: "#5b6475", fontSize: "13px", alignSelf: "center" }}>
-                {unpricedCleanupPreview.candidates.filter((candidate) => candidate.safeToArchive).length} safe to archive.
-              </span>
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                <button type="button" onClick={() => setUnpricedCleanupPreview(null)}>Cancel</button>
-                <button
-                  type="button"
-                  disabled={archiveUnpricedCatalogItems.isPending || unpricedCleanupPreview.candidates.every((candidate) => !candidate.safeToArchive)}
-                  onClick={() => void handleConfirmUnpricedCleanup()}
-                >
-                  {archiveUnpricedCatalogItems.isPending ? "Archiving..." : "Archive safe no-cost materials"}
-                </button>
-              </div>
-            </footer>
-          </div>
-        </section>
-      ) : null}
+          </>
+        ) : null}
+      </Modal>
     </main>
   );
 }

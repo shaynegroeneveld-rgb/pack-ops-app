@@ -5,6 +5,7 @@ import type {
   MaterialReconciliationPreview,
   MaterialReconciliationResolution,
 } from "@/domain/materials/types";
+import { Modal } from "@/ui";
 
 interface CatalogReconciliationPanelProps {
   preview: MaterialReconciliationPreview | null;
@@ -83,48 +84,34 @@ export function CatalogReconciliationPanel({
     [preview],
   );
 
-  if (!preview || !counts) {
-    return null;
-  }
-
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(23, 32, 51, 0.35)",
-        display: "grid",
-        placeItems: "center",
-        padding: "20px",
-        zIndex: 40,
-      }}
-    >
-      <section
-        style={{
-          width: "100%",
-          maxWidth: "980px",
-          maxHeight: "min(92vh, 980px)",
-          overflow: "auto",
-          border: "1px solid #d9dfeb",
-          borderRadius: "18px",
-          padding: "18px",
-          background: "#fff",
-          display: "grid",
-          gap: "16px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
-          <div>
-            <h3 style={{ margin: 0 }}>Review Purchase-History Reconciliation</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
-              Clear matches and true new materials are ready to apply. Low-confidence duplicates stay reviewable until
-              you choose what to do with them.
-            </p>
+    <Modal
+      open={Boolean(preview && counts)}
+      onClose={onClose}
+      title="Review Purchase-History Reconciliation"
+      footer={
+        preview ? (
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+            <button
+              onClick={() => void onApply(Object.values(resolutions))}
+              disabled={isPending}
+              style={{ fontWeight: 600 }}
+            >
+              {isPending ? "Applying..." : "Apply Reviewed Changes"}
+            </button>
+            <span style={{ color: "#5b6475", fontSize: "13px" }}>
+              Unreviewed likely duplicates will be skipped until you choose merge or create.
+            </span>
           </div>
-          <button onClick={onClose} disabled={isPending}>
-            Close
-          </button>
-        </div>
+        ) : null
+      }
+    >
+      {preview && counts ? (
+        <>
+        <p style={{ margin: 0, color: "#5b6475" }}>
+          Clear matches and true new materials are ready to apply. Low-confidence duplicates stay reviewable until
+          you choose what to do with them.
+        </p>
 
         <div
           style={{
@@ -275,20 +262,8 @@ export function CatalogReconciliationPanel({
             ))}
           </section>
         ) : null}
-
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <button
-            onClick={() => void onApply(Object.values(resolutions))}
-            disabled={isPending}
-            style={{ fontWeight: 600 }}
-          >
-            {isPending ? "Applying..." : "Apply Reviewed Changes"}
-          </button>
-          <span style={{ color: "#5b6475", fontSize: "13px", alignSelf: "center" }}>
-            Unreviewed likely duplicates will be skipped until you choose merge or create.
-          </span>
-        </div>
-      </section>
-    </div>
+        </>
+      ) : null}
+    </Modal>
   );
 }

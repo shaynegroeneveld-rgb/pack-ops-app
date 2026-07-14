@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { AssemblyView, CatalogItem } from "@/domain/materials/types";
 import { MaterialSearchSelect } from "@/features/materials/components/MaterialSearchSelect";
+import { Modal } from "@/ui";
 
 export interface AssemblyItemDraft {
   id?: string;
@@ -72,7 +73,7 @@ export function AssemblyEditorPanel({
   );
 
   if (!draft) {
-    return null;
+    return <Modal open={false} onClose={onClose} />;
   }
 
   const materialCostTotal = draft.items.reduce((total, item) => {
@@ -156,42 +157,26 @@ export function AssemblyEditorPanel({
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(23, 32, 51, 0.35)",
-        display: "grid",
-        placeItems: "center",
-        padding: "20px",
-        zIndex: 30,
-      }}
-    >
-      <section
-        style={{
-          width: "100%",
-          maxWidth: "880px",
-          maxHeight: "min(92vh, 920px)",
-          overflow: "auto",
-          border: "1px solid #d9dfeb",
-          borderRadius: "18px",
-          padding: "18px",
-          background: "#fff",
-          display: "grid",
-          gap: "14px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
-          <div>
-            <h3 style={{ margin: 0 }}>{draft.assemblyId ? "Edit Assembly" : "New Assembly"}</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
-              Build estimating assemblies from simple catalog materials and a labor-hours baseline.
-            </p>
-          </div>
-          <button onClick={onClose} disabled={isPending}>
-            Close
+    <Modal
+      open
+      onClose={onClose}
+      title={draft.assemblyId ? "Edit Assembly" : "New Assembly"}
+      footer={
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <button onClick={() => void onSubmit(draft)} disabled={isPending} style={{ fontWeight: 600 }}>
+            {isPending ? "Saving..." : "Save Assembly"}
           </button>
+          {draft.assemblyId && onArchive ? (
+            <button onClick={() => void onArchive()} disabled={isPending} style={{ color: "#b42318" }}>
+              {isPending ? "Working..." : "Archive Assembly"}
+            </button>
+          ) : null}
         </div>
+      }
+    >
+        <p style={{ margin: 0, color: "#5b6475" }}>
+          Build estimating assemblies from simple catalog materials and a labor-hours baseline.
+        </p>
 
         <div
           style={{
@@ -577,18 +562,6 @@ export function AssemblyEditorPanel({
             </div>
           </div>
         </section>
-
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <button onClick={() => void onSubmit(draft)} disabled={isPending} style={{ fontWeight: 600 }}>
-            {isPending ? "Saving..." : "Save Assembly"}
-          </button>
-          {draft.assemblyId && onArchive ? (
-            <button onClick={() => void onArchive()} disabled={isPending} style={{ color: "#b42318" }}>
-              {isPending ? "Working..." : "Archive Assembly"}
-            </button>
-          ) : null}
-        </div>
-      </section>
-    </div>
+    </Modal>
   );
 }

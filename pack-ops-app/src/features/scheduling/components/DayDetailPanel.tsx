@@ -2,6 +2,7 @@ import type { Job } from "@/domain/jobs/types";
 import type { UserId } from "@/domain/ids";
 import type { ScheduleBlock } from "@/domain/scheduling/types";
 import type { DailyJobGroup } from "@/domain/scheduling/board-groups";
+import { Modal } from "@/ui";
 
 interface DayDetailPanelProps {
   day: Date | null;
@@ -54,43 +55,11 @@ export function DayDetailPanel({
   onUnschedule,
   onRecalculate,
 }: DayDetailPanelProps) {
-  if (!day) {
-    return null;
-  }
-
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(23, 32, 51, 0.35)",
-        display: "grid",
-        placeItems: "center",
-        padding: "20px",
-        zIndex: 22,
-      }}
-    >
-      <section
-        style={{
-          width: "100%",
-          maxWidth: "760px",
-          maxHeight: "min(90vh, 860px)",
-          overflow: "auto",
-          border: "1px solid #d9dfeb",
-          borderRadius: "18px",
-          padding: "18px",
-          background: "#fff",
-          display: "grid",
-          gap: "16px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
-          <div>
-            <h3 style={{ margin: 0 }}>Day Detail</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>{getDayHeading(day)}</p>
-          </div>
-          <button onClick={onClose}>Close</button>
-        </div>
+    <Modal open={Boolean(day)} onClose={onClose} title="Day Detail">
+      {day ? (
+        <>
+        <p style={{ margin: 0, color: "#5b6475" }}>{getDayHeading(day)}</p>
 
         {groups.length === 0 ? (
           <div
@@ -242,7 +211,8 @@ export function DayDetailPanel({
             );
           })}
         </div>
-      </section>
-    </div>
+        </>
+      ) : null}
+    </Modal>
   );
 }

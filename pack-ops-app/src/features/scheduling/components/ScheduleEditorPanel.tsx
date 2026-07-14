@@ -5,6 +5,7 @@ import type { ScheduleBlock } from "@/domain/scheduling/types";
 import type { AuthenticatedUser } from "@/domain/users/types";
 import { computeJobCapacitySummary, getActiveUniqueAssignments } from "@/services/scheduling/job-capacity";
 import type { SchedulingUserOption } from "@/services/scheduling/scheduling-service";
+import { Modal } from "@/ui";
 
 export interface ScheduleEditorDraft {
   scheduleBlockId?: ScheduleBlock["id"];
@@ -118,47 +119,57 @@ export function ScheduleEditorPanel({
   );
   const selectedJobHasSchedule = selectedJob ? scheduledJobIds.has(selectedJob.id) : false;
 
-  if (!draft) {
-    return null;
-  }
-
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(23, 32, 51, 0.35)",
-        display: "grid",
-        placeItems: "center",
-        padding: "20px",
-        zIndex: 20,
-      }}
-    >
-      <section
-        style={{
-          width: "100%",
-          maxWidth: "640px",
-          maxHeight: "min(90vh, 760px)",
-          overflow: "auto",
-          border: "1px solid #d9dfeb",
-          borderRadius: "18px",
-          padding: "18px",
-          background: "#fff",
-          display: "grid",
-          gap: "14px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
-          <div>
-            <h3 style={{ margin: 0 }}>{draft.scheduleBlockId ? "Edit Schedule Block" : "Quick Schedule"}</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
-              Pick the start day and crew. New jobs auto-fill normal 8-hour workdays by default.
-            </p>
+    <Modal
+      open={Boolean(draft)}
+      onClose={onClose}
+      title={draft?.scheduleBlockId ? "Edit Schedule Block" : "Quick Schedule"}
+      footer={
+        draft ? (
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <button
+              onClick={() => void onSubmit(draft)}
+              disabled={isPending}
+              style={{ fontWeight: 600 }}
+            >
+              {isPending ? "Saving..." : draft.scheduleBlockId ? "Save Changes" : "Schedule Job"}
+            </button>
+            {!draft.scheduleBlockId && onAutoFillDays ? (
+              <button
+                type="button"
+                onClick={() => void onAutoFillDays(draft)}
+                disabled={isPending}
+              >
+                {isPending ? "Saving..." : "Auto-fill Days"}
+              </button>
+            ) : null}
+            {!draft.scheduleBlockId && onAutoFillNextAvailable ? (
+              <button
+                type="button"
+                onClick={() => void onAutoFillNextAvailable(draft)}
+                disabled={isPending}
+              >
+                {isPending ? "Saving..." : "Next Available"}
+              </button>
+            ) : null}
+            {draft.scheduleBlockId && onDelete ? (
+              <button
+                onClick={() => void onDelete()}
+                disabled={isPending}
+                style={{ color: "#b42318" }}
+              >
+                {isPending ? "Working..." : "Delete Block"}
+              </button>
+            ) : null}
           </div>
-          <button onClick={onClose} disabled={isPending}>
-            Close
-          </button>
-        </div>
+        ) : null
+      }
+    >
+      {draft ? (
+        <>
+        <p style={{ margin: 0, color: "#5b6475" }}>
+          Pick the start day and crew. New jobs auto-fill normal 8-hour workdays by default.
+        </p>
 
         <label style={{ display: "grid", gap: "6px" }}>
           <span>Job</span>
@@ -509,44 +520,8 @@ export function ScheduleEditorPanel({
             "Choose a job to see its planning defaults."
           )}
         </div>
-
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <button
-            onClick={() => void onSubmit(draft)}
-            disabled={isPending}
-            style={{ fontWeight: 600 }}
-          >
-            {isPending ? "Saving..." : draft.scheduleBlockId ? "Save Changes" : "Schedule Job"}
-          </button>
-          {!draft.scheduleBlockId && onAutoFillDays ? (
-            <button
-              type="button"
-              onClick={() => void onAutoFillDays(draft)}
-              disabled={isPending}
-            >
-              {isPending ? "Saving..." : "Auto-fill Days"}
-            </button>
-          ) : null}
-          {!draft.scheduleBlockId && onAutoFillNextAvailable ? (
-            <button
-              type="button"
-              onClick={() => void onAutoFillNextAvailable(draft)}
-              disabled={isPending}
-            >
-              {isPending ? "Saving..." : "Next Available"}
-            </button>
-          ) : null}
-          {draft.scheduleBlockId && onDelete ? (
-            <button
-              onClick={() => void onDelete()}
-              disabled={isPending}
-              style={{ color: "#b42318" }}
-            >
-              {isPending ? "Working..." : "Delete Block"}
-            </button>
-          ) : null}
-        </div>
-      </section>
-    </div>
+        </>
+      ) : null}
+    </Modal>
   );
 }

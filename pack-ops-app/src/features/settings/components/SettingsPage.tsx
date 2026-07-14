@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuthContext } from "@/app/contexts/auth-context";
+import { APP_ROUTES } from "@/app/router/routes";
+import { useUiStore } from "@/app/store/ui-store";
 import { getSupabaseClient } from "@/data/supabase/client";
 import {
   brand,
@@ -51,6 +53,7 @@ function labelStyle(): React.CSSProperties {
 
 export function SettingsPage() {
   const { currentUser } = useAuthContext();
+  const setActiveRoute = useUiStore((state) => state.setActiveRoute);
   const client = getSupabaseClient(import.meta.env);
   const queryClient = useQueryClient();
   const logoInputRef = useRef<HTMLInputElement | null>(null);
@@ -435,6 +438,15 @@ export function SettingsPage() {
                   {inviteUser.isPending ? "Sending..." : "Invite User"}
                 </button>
               </div>
+            </div>
+          </section>
+
+          <section style={{ ...cardStyle(), display: "grid", gap: "14px" }}>
+            {sectionHeader("Developer", "Internal reference for the shared UI components used across the app.")}
+            <div>
+              <button type="button" style={secondaryButtonStyle()} onClick={() => setActiveRoute(APP_ROUTES.designSystem)}>
+                Open Design System
+              </button>
             </div>
           </section>
 

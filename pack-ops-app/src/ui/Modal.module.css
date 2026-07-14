@@ -1,0 +1,156 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.42);
+  display: grid;
+  z-index: 1000;
+  padding: var(--space-4);
+  animation: fadeIn var(--duration-normal) var(--ease-standard);
+}
+
+.panel {
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  max-height: 88vh;
+  overflow-y: auto;
+  width: min(560px, 100%);
+  box-sizing: border-box;
+  outline: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.panelCenter {
+  align-self: center;
+  justify-self: center;
+  animation: scaleIn var(--duration-normal) var(--ease-standard);
+}
+
+.panelBottom {
+  align-self: end;
+  justify-self: center;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  width: min(760px, 100%);
+  animation: slideUp var(--duration-normal) var(--ease-standard);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  color: var(--color-text);
+}
+
+.closeButton {
+  border: none;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--color-text-soft);
+  padding: var(--space-2);
+  border-radius: var(--radius-full);
+}
+
+.closeButton:hover {
+  background: var(--color-surface-alt);
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.body {
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+  color: var(--color-text);
+}
+
+.footer {
+  padding: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop,
+  .panelCenter,
+  .panelBottom {
+    animation: none;
+  }
+}
+
+/* Without this, printing a page with an open modal clips output to whatever
+   fits the on-screen scrollable panel — the dialog chrome doesn't belong in
+   print output, and the content itself needs to flow across pages instead of
+   being clipped to `overflow-y: auto`. Callers that need to print specific
+   content still control that via their own print stylesheet on `children`. */
+@media print {
+  .backdrop {
+    position: static;
+    background: none;
+    display: block;
+    padding: 0;
+  }
+
+  .panel {
+    max-height: none;
+    overflow: visible;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-radius: 0;
+    width: auto;
+  }
+
+  .header,
+  .footer {
+    display: none;
+  }
+}

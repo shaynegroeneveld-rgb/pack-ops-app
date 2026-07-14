@@ -47,6 +47,7 @@ import { CreateJobPanel } from "@/features/workbench/components/CreateJobPanel";
 import { EditableTimeEntryItem } from "@/features/workbench/components/EditableTimeEntryItem";
 import { TimeTrackerPanel } from "@/features/workbench/components/TimeTrackerPanel";
 import { useWorkbenchSlice } from "@/features/workbench/hooks/use-workbench-slice";
+import { Modal } from "@/ui";
 
 type JobScreen = "main" | "attachments" | "actuals";
 type EditJobDraft = {
@@ -3697,47 +3698,16 @@ export function WorkbenchPage() {
         </div>
       </section>
 
-      {showAssignPeople && canManageAssignments ? (
-        <div
-          onClick={() => setShowAssignPeople(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(23, 32, 51, 0.42)",
-            zIndex: 50,
-            display: "flex",
-            alignItems: "flex-end",
-            justifyContent: "center",
-            padding: "16px",
-          }}
+      {canManageAssignments ? (
+        <Modal
+          open={showAssignPeople}
+          onClose={() => setShowAssignPeople(false)}
+          placement="bottom"
+          title="Add Person"
         >
-          <div
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: "480px",
-              maxHeight: "75vh",
-              overflow: "auto",
-              borderRadius: "20px",
-              background: "#fff",
-              border: "1px solid #d9dfeb",
-              boxShadow: "0 18px 48px rgba(23, 32, 51, 0.18)",
-              padding: "16px",
-              display: "grid",
-              gap: "12px",
-            }}
-          >
-            <div style={sectionHeadingRow()}>
-              <div>
-                <h3 style={{ margin: 0 }}>Add Person</h3>
-                <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
-                  Assign more people to this job.
-                </p>
-              </div>
-              <button type="button" onClick={() => setShowAssignPeople(false)} style={secondaryButtonStyle()}>
-                Close
-              </button>
-            </div>
+            <p style={{ margin: 0, color: "#5b6475" }}>
+              Assign more people to this job.
+            </p>
 
             <input
               value={assignmentSearch}
@@ -3791,51 +3761,20 @@ export function WorkbenchPage() {
                 })
               )}
             </div>
-          </div>
-        </div>
+        </Modal>
       ) : null}
 
-      {showEditJob && selectedJob && editJobDraft ? (
-        <div
-          onClick={() => setShowEditJob(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(23, 32, 51, 0.42)",
-            zIndex: 45,
-            display: "flex",
-            alignItems: "flex-end",
-            justifyContent: "center",
-            padding: "16px",
-          }}
-        >
-          <div
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: "560px",
-              maxHeight: "85vh",
-              overflow: "auto",
-              borderRadius: "20px",
-              background: "#fff",
-              border: "1px solid #d9dfeb",
-              boxShadow: "0 18px 48px rgba(23, 32, 51, 0.18)",
-              padding: "16px",
-              display: "grid",
-              gap: "14px",
-            }}
-          >
-            <div style={sectionHeadingRow()}>
-              <div>
-                <h3 style={{ margin: 0 }}>Edit Job</h3>
-                <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
-                  Update the practical job details without leaving the work screen.
-                </p>
-              </div>
-              <button type="button" onClick={() => setShowEditJob(false)} style={secondaryButtonStyle()}>
-                Close
-              </button>
-            </div>
+      <Modal
+        open={Boolean(showEditJob && selectedJob && editJobDraft)}
+        onClose={() => setShowEditJob(false)}
+        placement="bottom"
+        title="Edit Job"
+      >
+        {selectedJob && editJobDraft ? (
+          <>
+            <p style={{ margin: 0, color: "#5b6475" }}>
+              Update the practical job details without leaving the work screen.
+            </p>
 
             <div style={{ display: "grid", gap: "12px" }}>
               <label style={{ display: "grid", gap: "6px" }}>
@@ -4045,9 +3984,9 @@ export function WorkbenchPage() {
                 </div>
               </section>
             ) : null}
-          </div>
-        </div>
-      ) : null}
+          </>
+        ) : null}
+      </Modal>
     </div>
   ) : null;
 

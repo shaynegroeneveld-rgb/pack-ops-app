@@ -5,6 +5,7 @@ import type {
   SupplierInvoiceReviewPreview,
   SupplierInvoiceReviewResolution,
 } from "@/domain/materials/types";
+import { Modal } from "@/ui";
 
 interface SupplierInvoiceReviewPanelProps {
   preview: SupplierInvoiceReviewPreview | null;
@@ -344,47 +345,29 @@ export function SupplierInvoiceReviewPanel({
     [preview],
   );
 
-  if (!preview || !counts) {
-    return null;
-  }
-
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(23, 32, 51, 0.35)",
-        display: "grid",
-        placeItems: "center",
-        padding: "20px",
-        zIndex: 40,
-      }}
-    >
-      <section
-        style={{
-          width: "100%",
-          maxWidth: "980px",
-          maxHeight: "min(92vh, 980px)",
-          overflow: "auto",
-          border: "1px solid #d9dfeb",
-          borderRadius: "18px",
-          padding: "18px",
-          background: "#fff",
-          display: "grid",
-          gap: "16px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
-          <div>
-            <h3 style={{ margin: 0 }}>Review Supplier Invoice</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
-              Costs use the tax-included rule: unit price × 1.12. Review updates before touching the catalog.
-            </p>
+    <Modal
+      open={Boolean(preview && counts)}
+      onClose={onClose}
+      title="Review Supplier Invoice"
+      footer={
+        preview ? (
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+            <button onClick={() => void onApply(Object.values(resolutions))} disabled={isPending} style={{ fontWeight: 600 }}>
+              {isPending ? "Applying..." : "Apply Reviewed Changes"}
+            </button>
+            <span style={{ color: "#5b6475", fontSize: "13px" }}>
+              Nothing is auto-applied. Review actions stay explicit for every invoice item.
+            </span>
           </div>
-          <button onClick={onClose} disabled={isPending}>
-            Close
-          </button>
-        </div>
+        ) : null
+      }
+    >
+      {preview && counts ? (
+        <>
+        <p style={{ margin: 0, color: "#5b6475" }}>
+          Costs use the tax-included rule: unit price × 1.12. Review updates before touching the catalog.
+        </p>
 
         <div
           style={{
@@ -470,16 +453,8 @@ export function SupplierInvoiceReviewPanel({
             ))}
           </section>
         ) : null}
-
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <button onClick={() => void onApply(Object.values(resolutions))} disabled={isPending} style={{ fontWeight: 600 }}>
-            {isPending ? "Applying..." : "Apply Reviewed Changes"}
-          </button>
-          <span style={{ color: "#5b6475", fontSize: "13px", alignSelf: "center" }}>
-            Nothing is auto-applied. Review actions stay explicit for every invoice item.
-          </span>
-        </div>
-      </section>
-    </div>
+        </>
+      ) : null}
+    </Modal>
   );
 }

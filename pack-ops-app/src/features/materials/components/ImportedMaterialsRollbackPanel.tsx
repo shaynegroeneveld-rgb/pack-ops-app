@@ -1,4 +1,5 @@
 import type { MaterialImportRollbackPreview } from "@/domain/materials/types";
+import { Modal } from "@/ui";
 
 interface ImportedMaterialsRollbackPanelProps {
   preview: MaterialImportRollbackPreview | null;
@@ -13,48 +14,28 @@ export function ImportedMaterialsRollbackPanel({
   onConfirm,
   onClose,
 }: ImportedMaterialsRollbackPanelProps) {
-  if (!preview) {
-    return null;
-  }
-
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(23, 32, 51, 0.35)",
-        display: "grid",
-        placeItems: "center",
-        padding: "20px",
-        zIndex: 40,
-      }}
-    >
-      <section
-        style={{
-          width: "100%",
-          maxWidth: "820px",
-          maxHeight: "min(92vh, 900px)",
-          overflow: "auto",
-          border: "1px solid #d9dfeb",
-          borderRadius: "18px",
-          padding: "18px",
-          background: "#fff",
-          display: "grid",
-          gap: "16px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
-          <div>
-            <h3 style={{ margin: 0 }}>Remove Imported Materials</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
-              This safely removes materials created from purchase-history import. It does not blindly undo merged
-              changes on original catalog records.
-            </p>
-          </div>
-          <button onClick={onClose} disabled={isPending}>
-            Close
+    <Modal
+      open={Boolean(preview)}
+      onClose={onClose}
+      title="Remove Imported Materials"
+      footer={
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+          <button onClick={() => void onConfirm()} disabled={isPending} style={{ fontWeight: 600, color: "#b42318" }}>
+            {isPending ? "Removing..." : "Remove Imported Materials"}
           </button>
+          <span style={{ color: "#5b6475", fontSize: "13px" }}>
+            This archives imported materials out of the catalog. Merged originals stay in place for manual review.
+          </span>
         </div>
+      }
+    >
+      {preview ? (
+        <>
+        <p style={{ margin: 0, color: "#5b6475" }}>
+          This safely removes materials created from purchase-history import. It does not blindly undo merged
+          changes on original catalog records.
+        </p>
 
         <div
           style={{
@@ -137,16 +118,8 @@ export function ImportedMaterialsRollbackPanel({
             ))}
           </section>
         ) : null}
-
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <button onClick={() => void onConfirm()} disabled={isPending} style={{ fontWeight: 600, color: "#b42318" }}>
-            {isPending ? "Removing..." : "Remove Imported Materials"}
-          </button>
-          <span style={{ color: "#5b6475", fontSize: "13px", alignSelf: "center" }}>
-            This archives imported materials out of the catalog. Merged originals stay in place for manual review.
-          </span>
-        </div>
-      </section>
-    </div>
+        </>
+      ) : null}
+    </Modal>
   );
 }

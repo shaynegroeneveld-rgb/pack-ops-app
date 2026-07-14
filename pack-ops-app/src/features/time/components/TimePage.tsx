@@ -3,15 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuthContext } from "@/app/contexts/auth-context";
 import { getSupabaseClient } from "@/data/supabase/client";
-import {
-  cardStyle,
-  pageStyle,
-  primaryButtonStyle,
-  secondaryButtonStyle,
-  subtitleStyle,
-  titleStyle,
-} from "@/features/shared/ui/mobile-styles";
+import { pageStyle, subtitleStyle, titleStyle } from "@/features/shared/ui/mobile-styles";
 import { TimeService } from "@/services/time/time-service";
+import { Button, Card, Chip, Input, Select } from "@/ui";
 
 function sectionHeadingRow() {
   return {
@@ -111,146 +105,131 @@ export function TimePage() {
         </p>
       </header>
 
-      <section style={{ ...cardStyle(), display: "grid", gap: "12px", marginBottom: "16px" }}>
+      <Card variant="surface" style={{ display: "grid", gap: "12px", marginBottom: "16px" }}>
         <div style={sectionHeadingRow()}>
           <div>
             <h2 style={{ margin: 0, fontSize: "20px" }}>Filters</h2>
-            <p style={{ margin: "4px 0 0", color: "#5d6978" }}>
+            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
               Narrow entries by worker, job, date range, or a single month for payroll review.
             </p>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
             onClick={() => setFilters({ periodMode: "range", month: "", userId: "", jobId: "", dateFrom: "", dateTo: "" })}
-            style={secondaryButtonStyle()}
           >
             Clear Filters
-          </button>
+          </Button>
         </div>
 
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => setFilters((current) => ({ ...current, periodMode: "range" }))}
-            style={filters.periodMode === "range" ? primaryButtonStyle() : secondaryButtonStyle()}
-          >
+          <Chip active={filters.periodMode === "range"} onClick={() => setFilters((current) => ({ ...current, periodMode: "range" }))}>
             Date Range
-          </button>
-          <button
-            type="button"
+          </Chip>
+          <Chip
+            active={filters.periodMode === "month"}
             onClick={() => setFilters((current) => ({ ...current, periodMode: "month", dateFrom: "", dateTo: "" }))}
-            style={filters.periodMode === "month" ? primaryButtonStyle() : secondaryButtonStyle()}
           >
             Monthly
-          </button>
+          </Chip>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
-          <label style={{ display: "grid", gap: "6px" }}>
-            <span style={{ fontSize: "13px", color: "#5d6978" }}>User</span>
-            <select value={filters.userId} onChange={(event) => setFilters((current) => ({ ...current, userId: event.target.value }))}>
-              <option value="">All users</option>
-              {(report?.userOptions ?? []).map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Select
+            label="User"
+            value={filters.userId}
+            onChange={(event) => setFilters((current) => ({ ...current, userId: event.target.value }))}
+          >
+            <option value="">All users</option>
+            {(report?.userOptions ?? []).map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
 
-          <label style={{ display: "grid", gap: "6px" }}>
-            <span style={{ fontSize: "13px", color: "#5d6978" }}>Job</span>
-            <select value={filters.jobId} onChange={(event) => setFilters((current) => ({ ...current, jobId: event.target.value }))}>
-              <option value="">All jobs</option>
-              {(report?.jobOptions ?? []).map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Select
+            label="Job"
+            value={filters.jobId}
+            onChange={(event) => setFilters((current) => ({ ...current, jobId: event.target.value }))}
+          >
+            <option value="">All jobs</option>
+            {(report?.jobOptions ?? []).map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
 
           {filters.periodMode === "month" ? (
-            <label style={{ display: "grid", gap: "6px" }}>
-              <span style={{ fontSize: "13px", color: "#5d6978" }}>Month</span>
-              <input
-                type="month"
-                value={filters.month}
-                onChange={(event) => setFilters((current) => ({ ...current, month: event.target.value }))}
-              />
-            </label>
+            <Input
+              label="Month"
+              type="month"
+              value={filters.month}
+              onChange={(event) => setFilters((current) => ({ ...current, month: event.target.value }))}
+            />
           ) : (
             <>
-              <label style={{ display: "grid", gap: "6px" }}>
-                <span style={{ fontSize: "13px", color: "#5d6978" }}>Date From</span>
-                <input type="date" value={filters.dateFrom} onChange={(event) => setFilters((current) => ({ ...current, dateFrom: event.target.value }))} />
-              </label>
-
-              <label style={{ display: "grid", gap: "6px" }}>
-                <span style={{ fontSize: "13px", color: "#5d6978" }}>Date To</span>
-                <input type="date" value={filters.dateTo} onChange={(event) => setFilters((current) => ({ ...current, dateTo: event.target.value }))} />
-              </label>
+              <Input
+                label="Date From"
+                type="date"
+                value={filters.dateFrom}
+                onChange={(event) => setFilters((current) => ({ ...current, dateFrom: event.target.value }))}
+              />
+              <Input
+                label="Date To"
+                type="date"
+                value={filters.dateTo}
+                onChange={(event) => setFilters((current) => ({ ...current, dateTo: event.target.value }))}
+              />
             </>
           )}
         </div>
-      </section>
+      </Card>
 
       {report ? (
         <section style={{ display: "grid", gap: "16px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
-            <div style={cardStyle("#fafcff")}>
-              <div style={{ color: "#5d6978", fontSize: "13px" }}>Reporting Period</div>
+            <Card variant="soft">
+              <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Reporting Period</div>
               <strong style={{ fontSize: "20px" }}>{report.appliedPeriodLabel}</strong>
-            </div>
-            <div style={cardStyle("#fafcff")}>
-              <div style={{ color: "#5d6978", fontSize: "13px" }}>Total Hours</div>
+            </Card>
+            <Card variant="soft">
+              <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Total Hours</div>
               <strong style={{ fontSize: "26px" }}>{report.summary.totalHours.toFixed(2)}h</strong>
-            </div>
-            <div style={cardStyle("#fafcff")}>
-              <div style={{ color: "#5d6978", fontSize: "13px" }}>Workers</div>
+            </Card>
+            <Card variant="soft">
+              <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Workers</div>
               <strong style={{ fontSize: "26px" }}>{report.summary.hoursByUser.length}</strong>
-            </div>
-            <div style={cardStyle("#fafcff")}>
-              <div style={{ color: "#5d6978", fontSize: "13px" }}>Jobs</div>
+            </Card>
+            <Card variant="soft">
+              <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Jobs</div>
               <strong style={{ fontSize: "26px" }}>{report.summary.hoursByJob.length}</strong>
-            </div>
+            </Card>
           </div>
 
-          <section style={cardStyle()}>
+          <Card variant="surface">
             <div style={sectionHeadingRow()}>
               <div>
                 <h2 style={{ margin: 0, fontSize: "18px" }}>{hoursBreakdownTitle}</h2>
-                <p style={{ margin: "4px 0 0", color: "#5d6978" }}>
+                <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
                   Switch the hours view without losing the filters above.
                 </p>
               </div>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  onClick={() => setHoursView("job")}
-                  style={hoursView === "job" ? primaryButtonStyle() : secondaryButtonStyle()}
-                >
+                <Chip active={hoursView === "job"} onClick={() => setHoursView("job")}>
                   By Job
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHoursView("day")}
-                  style={hoursView === "day" ? primaryButtonStyle() : secondaryButtonStyle()}
-                >
+                </Chip>
+                <Chip active={hoursView === "day"} onClick={() => setHoursView("day")}>
                   By Day
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHoursView("user")}
-                  style={hoursView === "user" ? primaryButtonStyle() : secondaryButtonStyle()}
-                >
+                </Chip>
+                <Chip active={hoursView === "user"} onClick={() => setHoursView("user")}>
                   By User
-                </button>
+                </Chip>
               </div>
             </div>
             <div style={{ display: "grid", gap: "8px", marginTop: "12px" }}>
               {hoursBreakdownRows.length === 0 ? (
-                <div style={{ color: "#5d6978" }}>No hours match the current filters.</div>
+                <div style={{ color: "var(--color-text-soft)" }}>No hours match the current filters.</div>
               ) : (
                 hoursBreakdownRows.map((item) => (
                   <div key={item.id} style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
@@ -260,13 +239,13 @@ export function TimePage() {
                 ))
               )}
             </div>
-          </section>
+          </Card>
 
-          <section style={cardStyle()}>
+          <Card variant="surface">
             <div style={sectionHeadingRow()}>
               <div>
                 <h2 style={{ margin: 0, fontSize: "18px" }}>Entries</h2>
-                <p style={{ margin: "4px 0 0", color: "#5d6978" }}>
+                <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
                   Payroll-friendly list of all matching time entries.
                 </p>
               </div>
@@ -274,63 +253,50 @@ export function TimePage() {
 
             <div style={{ display: "grid", gap: "10px", marginTop: "12px" }}>
               {report.entries.length === 0 ? (
-                <div style={{ color: "#5d6978" }}>No time entries match the current filters.</div>
+                <div style={{ color: "var(--color-text-soft)" }}>No time entries match the current filters.</div>
               ) : (
                 report.entries.map((entry) => (
-                  <div
-                    key={entry.id}
-                    style={{
-                      border: "1px solid #e3e8e6",
-                      borderRadius: "16px",
-                      padding: "14px",
-                      display: "grid",
-                      gap: "6px",
-                      background: "#fff",
-                    }}
-                  >
+                  <Card key={entry.id} variant="soft" style={{ display: "grid", gap: "6px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
                       <strong>{entry.jobNumber} · {entry.jobTitle}</strong>
                       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" }}>
                         <strong>{entry.hours.toFixed(2)}h</strong>
                         {entry.status === "pending" && canApproveTime ? (
-                          <button
-                            type="button"
-                            style={primaryButtonStyle()}
-                            disabled={approveTimeEntry.isPending}
+                          <Button
+                            size="sm"
+                            loading={approveTimeEntry.isPending && approveTimeEntry.variables === entry.id}
                             onClick={() => void approveTimeEntry.mutateAsync(entry.id)}
                           >
-                            {approveTimeEntry.isPending && approveTimeEntry.variables === entry.id ? "Approving..." : "Approve"}
-                          </button>
+                            Approve
+                          </Button>
                         ) : null}
                       </div>
                     </div>
-                    <div style={{ color: "#5d6978", fontSize: "14px" }}>
+                    <div style={{ color: "var(--color-text-soft)", fontSize: "14px" }}>
                       {entry.date} · Worked by {entry.workedByName}
                       {entry.enteredByName ? ` · Entered by ${entry.enteredByName}` : ""}
                     </div>
-                    <div style={{ color: "#5d6978", fontSize: "14px" }}>
+                    <div style={{ color: "var(--color-text-soft)", fontSize: "14px" }}>
                       Source: {entry.sourceLabel ?? "—"} · Status: {entry.status.replaceAll("_", " ")}
                     </div>
-                    {entry.note ? <div style={{ color: "#172033" }}>{entry.note}</div> : null}
+                    {entry.note ? <div style={{ color: "var(--color-text)" }}>{entry.note}</div> : null}
                     {approveTimeEntry.isError && approveTimeEntry.variables === entry.id ? (
-                      <div style={{ color: "#8f1d1d", fontSize: "14px" }}>
+                      <div style={{ color: "var(--color-danger-strong)", fontSize: "14px" }}>
                         Could not approve this time entry.
                       </div>
                     ) : null}
-                  </div>
+                  </Card>
                 ))
               )}
             </div>
-          </section>
+          </Card>
         </section>
       ) : reportQuery.isLoading ? (
-        <section style={cardStyle()}>
-          Loading time report…
-        </section>
+        <Card variant="surface">Loading time report…</Card>
       ) : (
-        <section style={cardStyle()}>
-          <div style={{ color: "#8f1d1d" }}>Could not load time report.</div>
-        </section>
+        <Card variant="surface">
+          <div style={{ color: "var(--color-danger-strong)" }}>Could not load time report.</div>
+        </Card>
       )}
     </section>
   );

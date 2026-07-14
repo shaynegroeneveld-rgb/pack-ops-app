@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { CatalogCleanupPair, CatalogCleanupResolution } from "@/domain/materials/types";
+import { Modal } from "@/ui";
 
 interface CatalogCleanupPanelProps {
   pairs: CatalogCleanupPair[] | null;
@@ -25,47 +26,33 @@ export function CatalogCleanupPanel({
     setResolutions({});
   }, [pairs]);
 
-  if (!pairs) {
-    return null;
-  }
-
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(23, 32, 51, 0.35)",
-        display: "grid",
-        placeItems: "center",
-        padding: "20px",
-        zIndex: 40,
-      }}
-    >
-      <section
-        style={{
-          width: "100%",
-          maxWidth: "980px",
-          maxHeight: "min(92vh, 980px)",
-          overflow: "auto",
-          border: "1px solid #d9dfeb",
-          borderRadius: "18px",
-          padding: "18px",
-          background: "#fff",
-          display: "grid",
-          gap: "16px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
-          <div>
-            <h3 style={{ margin: 0 }}>Catalog Cleanup</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
-              Review likely duplicate materials, choose the primary record to keep, and merge only the rows you trust.
-            </p>
+    <Modal
+      open={Boolean(pairs)}
+      onClose={onClose}
+      title="Catalog Cleanup"
+      footer={
+        pairs ? (
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+            <button
+              onClick={() => void onApply(Object.values(resolutions))}
+              disabled={isPending}
+              style={{ fontWeight: 600 }}
+            >
+              {isPending ? "Applying..." : "Apply Cleanup Decisions"}
+            </button>
+            <span style={{ color: "#5b6475", fontSize: "13px" }}>
+              Pairs you leave on skip will not be merged.
+            </span>
           </div>
-          <button onClick={onClose} disabled={isPending}>
-            Close
-          </button>
-        </div>
+        ) : null
+      }
+    >
+      {pairs ? (
+        <>
+        <p style={{ margin: 0, color: "#5b6475" }}>
+          Review likely duplicate materials, choose the primary record to keep, and merge only the rows you trust.
+        </p>
 
         {pairs.length === 0 ? (
           <div
@@ -173,20 +160,8 @@ export function CatalogCleanupPanel({
             );
           })
         )}
-
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <button
-            onClick={() => void onApply(Object.values(resolutions))}
-            disabled={isPending}
-            style={{ fontWeight: 600 }}
-          >
-            {isPending ? "Applying..." : "Apply Cleanup Decisions"}
-          </button>
-          <span style={{ color: "#5b6475", fontSize: "13px", alignSelf: "center" }}>
-            Pairs you leave on skip will not be merged.
-          </span>
-        </div>
-      </section>
-    </div>
+        </>
+      ) : null}
+    </Modal>
   );
 }
