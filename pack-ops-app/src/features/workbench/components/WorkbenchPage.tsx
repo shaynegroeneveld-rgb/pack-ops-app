@@ -13,7 +13,7 @@ import type {
   InvoiceGenerationSource,
   SavedInvoiceSummary,
 } from "@/domain/invoices/types";
-import type { Job, JobMaterialView } from "@/domain/jobs/types";
+import type { Job, JobAssignment, JobMaterialView } from "@/domain/jobs/types";
 import type { TimeEntry } from "@/domain/time-entries/types";
 import type { JobManualActualCategory, JobManualActualCostLine } from "@/domain/jobs/types";
 import {
@@ -512,6 +512,144 @@ function sectionHeadingRow() {
   } satisfies React.CSSProperties;
 }
 
+function partGroupStyle() {
+  return {
+    display: "grid",
+    gap: "10px",
+    border: "1px solid #d9dfeb",
+    borderRadius: "14px",
+    padding: "12px",
+    minWidth: 0,
+  } satisfies React.CSSProperties;
+}
+
+interface JobListRowCardProps {
+  item: {
+    job: Job;
+    contactName: string | null;
+    contactSubtitle: string | null;
+  };
+  badge: { background: string; color: string; label: string };
+  onOpen: () => void;
+}
+
+function JobListRowCard({ item, badge, onOpen }: JobListRowCardProps) {
+  return (
+    <div style={{ ...cardStyle("#fff"), display: "grid", gap: "8px" }}>
+      <button
+        type="button"
+        onClick={onOpen}
+        style={{
+          border: 0,
+          background: "transparent",
+          padding: 0,
+          margin: 0,
+          textAlign: "left",
+          width: "100%",
+          display: "grid",
+          gap: "8px",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
+          <div>
+            <div style={{ color: "var(--color-text-soft)", fontSize: "13px", fontWeight: 700 }}>{item.job.number}</div>
+            <strong style={{ fontSize: "18px" }}>{item.job.title}</strong>
+            {item.job.fieldName ? (
+              <div style={{ color: "#0a4f45", fontSize: "13px", fontWeight: 700, marginTop: "4px" }}>
+                {item.job.fieldName}
+              </div>
+            ) : null}
+            {item.contactName ? (
+              <div style={{ color: "var(--color-text)", fontSize: "15px", fontWeight: 600, marginTop: "6px" }}>
+                {item.contactName}
+              </div>
+            ) : null}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={badgeStyle(badge.background, badge.color)}>{badge.label}</span>
+            <span aria-hidden="true" style={{ color: "var(--color-text-soft)" }}>›</span>
+          </div>
+        </div>
+        <div style={{ display: "grid", gap: "4px" }}>
+          {item.contactSubtitle ? (
+            <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{item.contactSubtitle}</div>
+          ) : null}
+          {item.job.description ? (
+            <div style={{ color: "var(--color-text-soft)", fontSize: "14px" }}>{item.job.description}</div>
+          ) : null}
+        </div>
+      </button>
+    </div>
+  );
+}
+
+interface AssignmentChipListProps {
+  assignments: JobAssignment[];
+  getUserLabel: (userId: JobAssignment["userId"]) => string;
+  canManage: boolean;
+  isRemoving: boolean;
+  onRemove: (assignmentId: JobAssignment["id"], userLabel: string) => void;
+  emptyLabel: string;
+}
+
+function AssignmentChipList({
+  assignments,
+  getUserLabel,
+  canManage,
+  isRemoving,
+  onRemove,
+  emptyLabel,
+}: AssignmentChipListProps) {
+  if (assignments.length === 0) {
+    return <div style={{ color: "var(--color-text-soft)" }}>{emptyLabel}</div>;
+  }
+
+  return (
+    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+      {assignments.map((assignment) => {
+        const userLabel = getUserLabel(assignment.userId);
+
+        return (
+          <span
+            key={assignment.id}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "10px 12px",
+              borderRadius: "999px",
+              background: "#ffffff",
+              border: "1px solid #d9dfeb",
+              fontSize: "14px",
+            }}
+          >
+            <span>{userLabel}</span>
+            {canManage ? (
+              <button
+                type="button"
+                onClick={() => onRemove(assignment.id, userLabel)}
+                disabled={isRemoving}
+                aria-label={`Remove ${userLabel}`}
+                style={{
+                  border: 0,
+                  background: "transparent",
+                  padding: 0,
+                  color: "#7a2430",
+                  fontWeight: 700,
+                  fontSize: "16px",
+                  lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            ) : null}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 interface ActualMaterialEditorCardProps {
   item: JobMaterialView;
   isSaving: boolean;
@@ -946,7 +1084,6 @@ export function WorkbenchPage() {
   );
   const activityNoteRef = useRef<HTMLTextAreaElement | null>(null);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
-  const createPanelRef = useRef<HTMLDivElement | null>(null);
   const neededMaterialSearchRef = useRef<{ focus: () => void; clear: () => void } | null>(null);
   const usedMaterialSearchRef = useRef<{ focus: () => void; clear: () => void } | null>(null);
   const assemblySearchRef = useRef<{ focus: () => void; clear: () => void } | null>(null);
@@ -1959,7 +2096,7 @@ export function WorkbenchPage() {
           <Button variant="secondary" onClick={() => refreshWorkbench.mutate()} loading={refreshWorkbench.isPending}>
             Refresh
           </Button>
-          <Button variant="secondary" onClick={() => signOut()}>Sign Out</Button>
+          <Button variant="ghost" onClick={() => signOut()}>Sign Out</Button>
         </div>
       </header>
 
@@ -1974,17 +2111,23 @@ export function WorkbenchPage() {
       ) : null}
 
       {feedback ? (
-        <div style={feedback.tone === "info" ? { ...feedbackStyle("success"), color: "#1f2b3d", background: "#f5f8ff", borderColor: "#c9d8f2" } : feedbackStyle(feedback.tone)}>
+        <div
+          style={
+            feedback.tone === "info"
+              ? { ...feedbackStyle("success"), color: "#1f2b3d", background: "#f5f8ff", borderColor: "#c9d8f2" }
+              : feedbackStyle(feedback.tone)
+          }
+          role={feedback.tone === "error" ? "alert" : "status"}
+          aria-live="polite"
+        >
           {feedback.text}
         </div>
       ) : null}
 
       {activeRunningTimerDraft ? (
-        <div
+        <Card
+          variant="elevated"
           style={{
-            border: "1px solid #c9d8f2",
-            borderRadius: "12px",
-            padding: "12px 14px",
             background: "#f5f8ff",
             color: "#1f2b3d",
             display: "flex",
@@ -2015,7 +2158,7 @@ export function WorkbenchPage() {
               </Button>
             <Button variant="primary" onClick={() => void stopTimer()}>Stop Timer</Button>
           </div>
-        </div>
+        </Card>
       ) : null}
 
       {capabilities.canViewAllActiveTimers ? (
@@ -2061,19 +2204,17 @@ export function WorkbenchPage() {
         </section>
       ) : null}
 
-      {showCreateJob ? (
-        <div ref={createPanelRef}>
-          <CreateJobPanel
-            canCreateJob={capabilities.canCreateJob}
-            contacts={contacts}
-            defaultContactId={null}
-            isPending={createJob.isPending}
-            isCreatingContact={createQuickContact.isPending}
-            onCreate={(input) => createJob.mutateAsync(input)}
-            onCreateContact={(input) => createQuickContact.mutateAsync(input)}
-          />
-        </div>
-      ) : null}
+      <Modal open={showCreateJob} onClose={() => setShowCreateJob(false)} placement="bottom" title="Create Job">
+        <CreateJobPanel
+          canCreateJob={capabilities.canCreateJob}
+          contacts={contacts}
+          defaultContactId={null}
+          isPending={createJob.isPending}
+          isCreatingContact={createQuickContact.isPending}
+          onCreate={(input) => createJob.mutateAsync(input)}
+          onCreateContact={(input) => createQuickContact.mutateAsync(input)}
+        />
+      </Modal>
 
       {jobsQuery.isLoading ? (
         <Card variant="soft" role="status" aria-live="polite" style={{ color: "var(--color-text-soft)" }}>
@@ -2090,15 +2231,21 @@ export function WorkbenchPage() {
       ) : null}
 
       {jobs.length > 0 ? (
-        <section style={{ ...cardStyle("#fafcff"), display: "grid", gap: "10px" }}>
+        <section
+          style={{
+            display: "grid",
+            gap: "10px",
+            paddingBottom: "14px",
+            borderBottom: "1px solid #e4e8f1",
+          }}
+        >
           <div style={sectionHeadingRow()}>
-            <div>
-              <strong style={{ display: "block" }}>Filter Jobs</strong>
-              <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
-                Search by number, title, field name, customer, or address while keeping the active vs completed grouping.
-              </span>
-            </div>
-            <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{searchFilteredJobs.length}</span>
+            <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
+              Search by number, title, field name, customer, or address.
+            </span>
+            <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
+              {searchFilteredJobs.length} shown
+            </span>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
             <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
@@ -2142,50 +2289,12 @@ export function WorkbenchPage() {
           </div>
           <div style={{ display: "grid", gap: "12px" }}>
             {activeJobs.map((item) => (
-              <div key={item.job.id} style={{ ...cardStyle("#fff"), display: "grid", gap: "8px" }}>
-                <button
-                  type="button"
-                  onClick={() => openSelectedJob(item.job.id)}
-                  style={{
-                    border: 0,
-                    background: "transparent",
-                    padding: 0,
-                    margin: 0,
-                    textAlign: "left",
-                    width: "100%",
-                    display: "grid",
-                    gap: "8px",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
-                    <div>
-                      <div style={{ color: "var(--color-text-soft)", fontSize: "13px", fontWeight: 700 }}>{item.job.number}</div>
-                      <strong style={{ fontSize: "18px" }}>{item.job.title}</strong>
-                      {item.job.fieldName ? (
-                        <div style={{ color: "#0a4f45", fontSize: "13px", fontWeight: 700, marginTop: "4px" }}>
-                          {item.job.fieldName}
-                        </div>
-                      ) : null}
-                      {item.contactName ? (
-                        <div style={{ color: "var(--color-text)", fontSize: "15px", fontWeight: 600, marginTop: "6px" }}>
-                          {item.contactName}
-                        </div>
-                      ) : null}
-                    </div>
-                    <span style={badgeStyle("#f0f5f4", "#173b36")}>
-                      {getWorkbenchJobPhaseLabel(item.job)}
-                    </span>
-                  </div>
-                  <div style={{ display: "grid", gap: "4px" }}>
-                    {item.contactSubtitle ? (
-                      <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{item.contactSubtitle}</div>
-                    ) : null}
-                    {item.job.description ? (
-                      <div style={{ color: "var(--color-text-soft)", fontSize: "14px" }}>{item.job.description}</div>
-                    ) : null}
-                  </div>
-                </button>
-              </div>
+              <JobListRowCard
+                key={item.job.id}
+                item={item}
+                badge={{ background: "#f0f5f4", color: "#173b36", label: getWorkbenchJobPhaseLabel(item.job) }}
+                onOpen={() => openSelectedJob(item.job.id)}
+              />
             ))}
           </div>
         </section>
@@ -2225,50 +2334,12 @@ export function WorkbenchPage() {
           {showHiddenJobs ? (
             <div style={{ display: "grid", gap: "12px" }}>
               {hiddenJobs.map((item) => (
-                <div key={item.job.id} style={{ ...cardStyle("#fff"), display: "grid", gap: "8px" }}>
-                  <button
-                    type="button"
-                    onClick={() => openSelectedJob(item.job.id)}
-                    style={{
-                      border: 0,
-                      background: "transparent",
-                      padding: 0,
-                      margin: 0,
-                      textAlign: "left",
-                      width: "100%",
-                      display: "grid",
-                      gap: "8px",
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
-                      <div>
-                        <div style={{ color: "var(--color-text-soft)", fontSize: "13px", fontWeight: 700 }}>{item.job.number}</div>
-                        <strong style={{ fontSize: "18px" }}>{item.job.title}</strong>
-                        {item.job.fieldName ? (
-                          <div style={{ color: "#0a4f45", fontSize: "13px", fontWeight: 700, marginTop: "4px" }}>
-                            {item.job.fieldName}
-                          </div>
-                        ) : null}
-                        {item.contactName ? (
-                          <div style={{ color: "var(--color-text)", fontSize: "15px", fontWeight: 600, marginTop: "6px" }}>
-                            {item.contactName}
-                          </div>
-                        ) : null}
-                      </div>
-                      <span style={badgeStyle("#f5f1ef", "#5f4332")}>
-                        {getJobStatusLabel(item.job.status)}
-                      </span>
-                    </div>
-                    <div style={{ display: "grid", gap: "4px" }}>
-                      {item.contactSubtitle ? (
-                        <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{item.contactSubtitle}</div>
-                      ) : null}
-                      {item.job.description ? (
-                        <div style={{ color: "var(--color-text-soft)", fontSize: "14px" }}>{item.job.description}</div>
-                      ) : null}
-                    </div>
-                  </button>
-                </div>
+                <JobListRowCard
+                  key={item.job.id}
+                  item={item}
+                  badge={{ background: "#f5f1ef", color: "#5f4332", label: getJobStatusLabel(item.job.status) }}
+                  onOpen={() => openSelectedJob(item.job.id)}
+                />
               ))}
             </div>
           ) : null}
@@ -2278,12 +2349,7 @@ export function WorkbenchPage() {
       {capabilities.canCreateJob ? (
         <button
           type="button"
-          onClick={() => {
-            setShowCreateJob((current) => !current);
-            window.setTimeout(() => {
-              createPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-            }, 0);
-          }}
+          onClick={() => setShowCreateJob(true)}
           style={floatingButtonStyle()}
           aria-label="Create job"
         >
@@ -2430,103 +2496,36 @@ export function WorkbenchPage() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
-        <div style={cardStyle("#fafcff")}>
-          <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Estimated Materials</div>
-          <strong style={{ fontSize: "22px" }}>{estimatedMaterialsSummary.length}</strong>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "20px",
+          padding: "2px 2px 14px",
+          borderBottom: "1px solid #e4e8f1",
+        }}
+      >
+        <div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Estimated Materials</div>
+          <strong style={{ fontSize: "18px" }}>{estimatedMaterialsSummary.length}</strong>
         </div>
-        <div style={cardStyle("#fafcff")}>
-          <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Materials Needed</div>
-          <strong style={{ fontSize: "22px" }}>{neededMaterialsSummary.length}</strong>
+        <div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Materials Needed</div>
+          <strong style={{ fontSize: "18px" }}>{neededMaterialsSummary.length}</strong>
         </div>
-        <div style={cardStyle("#fafcff")}>
-          <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Actual Material Lines</div>
-          <strong style={{ fontSize: "22px" }}>{(jobWorkspace?.usedMaterials ?? []).length}</strong>
+        <div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Actual Material Lines</div>
+          <strong style={{ fontSize: "18px" }}>{(jobWorkspace?.usedMaterials ?? []).length}</strong>
         </div>
-        <div style={cardStyle("#fafcff")}>
-          <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Actual Labour Entries</div>
-          <strong style={{ fontSize: "22px" }}>{(jobWorkspace?.timeEntries ?? []).length}</strong>
+        <div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Actual Labour Entries</div>
+          <strong style={{ fontSize: "18px" }}>{(jobWorkspace?.timeEntries ?? []).length}</strong>
         </div>
-        <div style={cardStyle("#fafcff")}>
-          <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Manual Actual Lines</div>
-          <strong style={{ fontSize: "22px" }}>{(jobWorkspace?.manualActualCostLines ?? []).length}</strong>
+        <div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Manual Actual Lines</div>
+          <strong style={{ fontSize: "18px" }}>{(jobWorkspace?.manualActualCostLines ?? []).length}</strong>
         </div>
       </div>
-
-      <section style={cardStyle("#fff")}>
-        <div style={sectionHeadingRow()}>
-          <div>
-            <h3 style={{ margin: 0 }}>Saved Invoices</h3>
-            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
-              Generated invoices stay attached to this job so you can open the saved snapshot again.
-            </p>
-          </div>
-        </div>
-        <div style={{ display: "grid", gap: "10px", marginTop: "12px" }}>
-          {(jobWorkspace?.invoices ?? []).length === 0 ? (
-            <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>No invoices saved for this job yet.</Card>
-          ) : (
-            (jobWorkspace?.invoices ?? []).map((invoice) => (
-              <button
-                key={invoice.id}
-                type="button"
-                onClick={() => setSelectedSavedInvoice(invoice)}
-                style={{
-                  border: "1px solid #d9dfeb",
-                  borderRadius: "14px",
-                  padding: "12px",
-                  background: "#fff",
-                  color: "inherit",
-                  textAlign: "left",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  cursor: "pointer",
-                }}
-              >
-                <span>
-                  <strong style={{ display: "block" }}>{invoice.number}</strong>
-                  <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
-                    {new Date(invoice.createdAt).toLocaleDateString()} · {invoice.lines.length} line{invoice.lines.length === 1 ? "" : "s"} · {invoice.status.replaceAll("_", " ")}
-                  </span>
-                </span>
-                <strong>{formatMoney(invoice.total)}</strong>
-              </button>
-            ))
-          )}
-        </div>
-      </section>
-
-      <section style={cardStyle("#fff")}>
-        <div style={sectionHeadingRow()}>
-          <div>
-            <h3 style={{ margin: 0 }}>Actual Parts</h3>
-            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
-              Group actual materials and labour by the part of the job they belong to, then invoice one part or all parts.
-            </p>
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px", marginTop: "12px", alignItems: "end" }}>
-          <label style={{ display: "grid", gap: "6px" }}>
-            <span>New Part</span>
-            <input
-              value={newActualPartName}
-              onChange={(event) => setNewActualPartName(event.target.value)}
-              placeholder="Service, Rough-in, Finish..."
-            />
-          </label>
-          <Button variant="secondary" onClick={addActualPart} disabled={!newActualPartName.trim()}>
-            Add Part
-          </Button>
-        </div>
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
-          {actualPartOptions.map((partName) => (
-            <span key={partName} style={badgeStyle("#eef2ff", "#163fcb")}>{partName}</span>
-          ))}
-        </div>
-      </section>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
         <div style={cardStyle("#fff")}>
@@ -2853,7 +2852,7 @@ export function WorkbenchPage() {
             <div style={{ display: "grid", gap: "10px" }}>
               {usedMaterialsByPart.map((section) =>
                 section.materials.length === 0 ? null : (
-                  <div key={section.name} style={{ display: "grid", gap: "10px", border: "1px solid #d9dfeb", borderRadius: "14px", padding: "12px", minWidth: 0 }}>
+                  <div key={section.name} style={partGroupStyle()}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
                       <strong>{section.name}</strong>
                       <strong>{formatMoney(section.materials.reduce((total, item) => total + roundMoney(item.quantity * (item.unitCost ?? item.currentCatalogCost ?? 0)), 0))}</strong>
@@ -2967,7 +2966,7 @@ export function WorkbenchPage() {
             <div style={{ display: "grid", gap: "10px" }}>
               {labourByPart.map((section) =>
                 section.entries.length === 0 ? null : (
-                  <div key={section.name} style={{ display: "grid", gap: "10px", border: "1px solid #d9dfeb", borderRadius: "14px", padding: "12px" }}>
+                  <div key={section.name} style={partGroupStyle()}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
                       <strong>{section.name}</strong>
                       <strong>{section.entries.reduce((total, entry) => total + entry.hours, 0).toFixed(2)}h</strong>
@@ -3003,6 +3002,87 @@ export function WorkbenchPage() {
           )}
         </div>
       </section>
+
+      <div style={{ marginTop: "4px", paddingTop: "16px", borderTop: "1px solid #e4e8f1" }}>
+        <span style={{ color: "var(--color-text-soft)", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          Invoicing &amp; job setup
+        </span>
+      </div>
+
+      <section style={cardStyle("#fff")}>
+        <div style={sectionHeadingRow()}>
+          <div>
+            <h3 style={{ margin: 0 }}>Saved Invoices</h3>
+            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
+              Generated invoices stay attached to this job so you can open the saved snapshot again.
+            </p>
+          </div>
+        </div>
+        <div style={{ display: "grid", gap: "10px", marginTop: "12px" }}>
+          {(jobWorkspace?.invoices ?? []).length === 0 ? (
+            <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>No invoices saved for this job yet.</Card>
+          ) : (
+            (jobWorkspace?.invoices ?? []).map((invoice) => (
+              <button
+                key={invoice.id}
+                type="button"
+                onClick={() => setSelectedSavedInvoice(invoice)}
+                style={{
+                  border: "1px solid #d9dfeb",
+                  borderRadius: "14px",
+                  padding: "12px",
+                  background: "#fff",
+                  color: "inherit",
+                  textAlign: "left",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  cursor: "pointer",
+                }}
+              >
+                <span>
+                  <strong style={{ display: "block" }}>{invoice.number}</strong>
+                  <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
+                    {new Date(invoice.createdAt).toLocaleDateString()} · {invoice.lines.length} line{invoice.lines.length === 1 ? "" : "s"} · {invoice.status.replaceAll("_", " ")}
+                  </span>
+                </span>
+                <strong>{formatMoney(invoice.total)}</strong>
+              </button>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section style={cardStyle("#fff")}>
+        <div style={sectionHeadingRow()}>
+          <div>
+            <h3 style={{ margin: 0 }}>Actual Parts</h3>
+            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
+              Group actual materials and labour by the part of the job they belong to, then invoice one part or all parts.
+            </p>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px", marginTop: "12px", alignItems: "end" }}>
+          <label style={{ display: "grid", gap: "6px" }}>
+            <span>New Part</span>
+            <input
+              value={newActualPartName}
+              onChange={(event) => setNewActualPartName(event.target.value)}
+              placeholder="Service, Rough-in, Finish..."
+            />
+          </label>
+          <Button variant="secondary" onClick={addActualPart} disabled={!newActualPartName.trim()}>
+            Add Part
+          </Button>
+        </div>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
+          {actualPartOptions.map((partName) => (
+            <span key={partName} style={badgeStyle("#eef2ff", "#163fcb")}>{partName}</span>
+          ))}
+        </div>
+      </section>
     </div>
   ) : null;
 
@@ -3021,8 +3101,8 @@ export function WorkbenchPage() {
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap", minWidth: 0 }}>
           <div style={{ display: "grid", gap: "4px", minWidth: 0, flex: "1 1 240px" }}>
-            <Button variant="secondary" onClick={() => setSelectedJobId(null)} style={{ justifySelf: "start" }}>
-              Back to Jobs
+            <Button variant="ghost" size="sm" onClick={() => setSelectedJobId(null)} style={{ justifySelf: "start", paddingLeft: 0 }}>
+              ‹ Back to Jobs
             </Button>
             <div style={{ color: "var(--color-text-soft)", fontSize: "13px", fontWeight: 700 }}>{selectedJob.job.number}</div>
             <h1 style={{ margin: 0, fontSize: "28px", overflowWrap: "anywhere" }}>{selectedJob.job.title}</h1>
@@ -3055,7 +3135,17 @@ export function WorkbenchPage() {
         </div>
 
         {canUpdateJobStatus ? (
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "end" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              flexWrap: "wrap",
+              alignItems: "end",
+              background: "var(--color-surface-alt)",
+              borderRadius: "12px",
+              padding: "10px 12px",
+            }}
+          >
             <label style={{ display: "grid", gap: "6px" }}>
               <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Job Status</span>
               <select
@@ -3103,9 +3193,9 @@ export function WorkbenchPage() {
           </div>
         ) : null}
 
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
           <Button
-            variant="secondary"
+            variant="primary"
             onClick={() => {
               if (selectedJobTimerIsRunning) {
                 void stopTimer();
@@ -3142,11 +3232,10 @@ export function WorkbenchPage() {
               Edit Job
             </Button>
           ) : null}
-        </div>
-
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <Button variant="secondary" onClick={() => setJobScreen("attachments")}>Attachments</Button>
-          <Button variant="secondary" onClick={() => setJobScreen("actuals")}>Actuals</Button>
+          <span style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginLeft: "auto" }}>
+            <Button variant="ghost" size="sm" onClick={() => setJobScreen("attachments")}>Attachments</Button>
+            <Button variant="ghost" size="sm" onClick={() => setJobScreen("actuals")}>Actuals</Button>
+          </span>
         </div>
       </div>
 
@@ -3165,52 +3254,15 @@ export function WorkbenchPage() {
             ) : null}
           </div>
           {selectedJob.assignments.length > 0 ? (
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              {selectedJob.assignments.map((assignment) => {
-                const userLabel =
-                  assignableUsers.find((user) => user.id === assignment.userId)?.label ?? "Unknown user";
-
-                return (
-                  <span
-                    key={assignment.id}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      padding: "10px 12px",
-                      borderRadius: "999px",
-                      background: "#ffffff",
-                      border: "1px solid #d9dfeb",
-                      fontSize: "14px",
-                    }}
-                  >
-                    <span>{userLabel}</span>
-                    {canManageAssignments ? (
-                      <button
-                        type="button"
-                        onClick={() => void handleRemoveAssignment(assignment.id, userLabel)}
-                        disabled={removeJobAssignment.isPending}
-                        aria-label={`Remove ${userLabel}`}
-                        style={{
-                          border: 0,
-                          background: "transparent",
-                          padding: 0,
-                          color: "#7a2430",
-                          fontWeight: 700,
-                          fontSize: "16px",
-                          lineHeight: 1,
-                        }}
-                      >
-                        ×
-                      </button>
-                    ) : null}
-                  </span>
-                );
-              })}
-            </div>
-          ) : (
-            <div style={{ color: "var(--color-text-soft)" }}>Nobody assigned yet.</div>
-          )}
+            <AssignmentChipList
+              assignments={selectedJob.assignments}
+              getUserLabel={(userId) => assignableUsers.find((user) => user.id === userId)?.label ?? "Unknown user"}
+              canManage={canManageAssignments}
+              isRemoving={removeJobAssignment.isPending}
+              onRemove={(assignmentId, userLabel) => void handleRemoveAssignment(assignmentId, userLabel)}
+              emptyLabel="Nobody assigned yet."
+            />
+          ) : null}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
           <div>
@@ -3471,12 +3523,11 @@ export function WorkbenchPage() {
               Direct costs entered here stay separate from materials and labour imports, but they still roll into job cost totals.
             </p>
           </div>
-          <Button
-            variant="secondary"
-            onClick={() => setShowManualActualComposer(true)}
-          >
-            {showManualActualComposer ? "Manual Cost Form Open" : "Add Manual Actual Line"}
-          </Button>
+          {!showManualActualComposer ? (
+            <Button variant="secondary" onClick={() => setShowManualActualComposer(true)}>
+              Add Manual Actual Line
+            </Button>
+          ) : null}
         </div>
 
         <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
@@ -3649,7 +3700,7 @@ export function WorkbenchPage() {
             <div style={{ display: "grid", gap: "10px" }}>
               {manualActualCostsByPart.map((section) =>
                 section.lines.length === 0 ? null : (
-                  <div key={section.name} style={{ display: "grid", gap: "10px", border: "1px solid #d9dfeb", borderRadius: "14px", padding: "12px", minWidth: 0 }}>
+                  <div key={section.name} style={partGroupStyle()}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
                       <strong>{section.name}</strong>
                       <strong>{formatMoney(section.lines.reduce((total, line) => total + line.totalCost, 0))}</strong>
@@ -3673,14 +3724,7 @@ export function WorkbenchPage() {
       </section>
 
       <section style={cardStyle("#fff")}>
-        <div style={sectionHeadingRow()}>
-          <div>
-            <h3 style={{ margin: 0 }}>Timer Info</h3>
-            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
-              Running timer and recent time entries stay close without taking over the whole screen.
-            </p>
-          </div>
-        </div>
+        <h3 style={{ margin: 0 }}>Timer Info</h3>
 
         <div style={{ display: "grid", gap: "16px", marginTop: "12px" }}>
           <TimeTrackerPanel
@@ -3958,52 +4002,15 @@ export function WorkbenchPage() {
                   </Button>
                 ) : null}
               </div>
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
-                {selectedJob.assignments.length === 0 ? (
-                  <span style={{ color: "var(--color-text-soft)" }}>Nobody assigned yet.</span>
-                ) : (
-                  selectedJob.assignments.map((assignment) => {
-                    const userLabel =
-                      assignableUsers.find((user) => user.id === assignment.userId)?.label ?? "Unknown user";
-
-                    return (
-                      <span
-                        key={assignment.id}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          padding: "10px 12px",
-                          borderRadius: "999px",
-                          background: "#ffffff",
-                          border: "1px solid #d9dfeb",
-                          fontSize: "14px",
-                        }}
-                      >
-                        <span>{userLabel}</span>
-                        {canManageAssignments ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleRemoveAssignment(assignment.id, userLabel)}
-                            disabled={removeJobAssignment.isPending}
-                            aria-label={`Remove ${userLabel}`}
-                            style={{
-                              border: 0,
-                              background: "transparent",
-                              padding: 0,
-                              color: "#7a2430",
-                              fontWeight: 700,
-                              fontSize: "16px",
-                              lineHeight: 1,
-                            }}
-                          >
-                            ×
-                          </button>
-                        ) : null}
-                      </span>
-                    );
-                  })
-                )}
+              <div style={{ marginTop: "12px" }}>
+                <AssignmentChipList
+                  assignments={selectedJob.assignments}
+                  getUserLabel={(userId) => assignableUsers.find((user) => user.id === userId)?.label ?? "Unknown user"}
+                  canManage={canManageAssignments}
+                  isRemoving={removeJobAssignment.isPending}
+                  onRemove={(assignmentId, userLabel) => void handleRemoveAssignment(assignmentId, userLabel)}
+                  emptyLabel="Nobody assigned yet."
+                />
               </div>
             </section>
 
