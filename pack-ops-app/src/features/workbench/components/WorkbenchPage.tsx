@@ -32,8 +32,6 @@ import {
   feedbackStyle,
   floatingButtonStyle,
   pageStyle,
-  primaryButtonStyle,
-  secondaryButtonStyle,
   subtitleStyle,
   titleStyle,
 } from "@/features/shared/ui/mobile-styles";
@@ -47,7 +45,7 @@ import { CreateJobPanel } from "@/features/workbench/components/CreateJobPanel";
 import { EditableTimeEntryItem } from "@/features/workbench/components/EditableTimeEntryItem";
 import { TimeTrackerPanel } from "@/features/workbench/components/TimeTrackerPanel";
 import { useWorkbenchSlice } from "@/features/workbench/hooks/use-workbench-slice";
-import { Modal, useConfirm } from "@/ui";
+import { Button, Card, Modal, useConfirm } from "@/ui";
 
 type JobScreen = "main" | "attachments" | "actuals";
 type EditJobDraft = {
@@ -600,46 +598,46 @@ function ActualMaterialEditorCard({
       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap" }}>
         <div style={{ display: "grid", gap: "4px" }}>
           <strong>{displayName || item.materialName}</strong>
-          <div style={{ color: "#5b6475", fontSize: "13px" }}>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
             {item.materialSku ? `${item.materialSku} · ` : ""}
             {item.sectionName ? `${item.sectionName} · ` : ""}
             {item.sourceAssemblyName ? `From ${item.sourceAssemblyName}` : "Manual actual"}
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <button type="button" onClick={() => setIsEditing((current) => !current)} disabled={isSaving}>
+          <Button type="button" variant="secondary" size="sm" onClick={() => setIsEditing((current) => !current)} disabled={isSaving}>
             {isEditing ? "Collapse" : "Edit"}
-          </button>
-          <button type="button" onClick={onDuplicate} disabled={isDuplicating}>
-            {isDuplicating ? "Duplicating..." : "Duplicate"}
-          </button>
-          <button type="button" onClick={onDelete} disabled={isDeleting}>
-            {isDeleting ? "Removing..." : "Delete"}
-          </button>
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={onDuplicate} loading={isDuplicating}>
+            Duplicate
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={onDelete} loading={isDeleting}>
+            Delete
+          </Button>
         </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px" }}>
         <div>
-          <div style={{ color: "#5b6475", fontSize: "12px" }}>Quantity</div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Quantity</div>
           <strong>{quantityNumber} {unit || item.materialUnit}</strong>
         </div>
         <div>
-          <div style={{ color: "#5b6475", fontSize: "12px" }}>Unit Cost</div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Unit Cost</div>
           <strong>{formatMoney(unitCostNumber)}</strong>
         </div>
         <div>
-          <div style={{ color: "#5b6475", fontSize: "12px" }}>Extended Cost</div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Extended Cost</div>
           <strong>{formatMoney(extendedCost)}</strong>
         </div>
         <div>
-          <div style={{ color: "#5b6475", fontSize: "12px" }}>Current Catalog</div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Current Catalog</div>
           <strong>
             {formatMoney(item.currentCatalogCost)} / {item.materialUnit}
           </strong>
         </div>
         <div>
-          <div style={{ color: "#5b6475", fontSize: "12px" }}>Sell Price</div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Sell Price</div>
           <strong>Generated in invoice</strong>
         </div>
       </div>
@@ -664,8 +662,9 @@ function ActualMaterialEditorCard({
           <input value={sectionName} onChange={(event) => setSectionName(event.target.value)} placeholder="Part: General, Service, Rough-in..." />
 
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <button
+            <Button
               type="button"
+              variant="primary"
               onClick={() => {
                 onSave({
                   jobMaterialId: String(item.id),
@@ -682,12 +681,14 @@ function ActualMaterialEditorCard({
                 });
                 setIsEditing(false);
               }}
-              disabled={isSaving || !displayName.trim() || quantityNumber <= 0}
+              disabled={!displayName.trim() || quantityNumber <= 0}
+              loading={isSaving}
             >
-              {isSaving ? "Saving..." : "Save Changes"}
-            </button>
-            <button
+              Save Changes
+            </Button>
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => {
                 setDisplayName(item.displayName ?? item.materialName);
                 setQuantity(String(item.quantity));
@@ -700,7 +701,7 @@ function ActualMaterialEditorCard({
               disabled={isSaving}
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </>
       ) : null}
@@ -744,32 +745,32 @@ function ManualActualCostEditorCard({
       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap" }}>
         <div style={{ display: "grid", gap: "4px" }}>
           <strong>{description || "Manual actual cost"}</strong>
-          <div style={{ color: "#5b6475", fontSize: "13px" }}>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
             {formatManualActualCategoryLabel(category)}
             {sectionName.trim() ? ` · ${sectionName.trim()}` : ""}
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <button type="button" onClick={() => setIsEditing((current) => !current)} disabled={isSaving}>
+          <Button type="button" variant="secondary" size="sm" onClick={() => setIsEditing((current) => !current)} disabled={isSaving}>
             {isEditing ? "Collapse" : "Edit"}
-          </button>
-          <button type="button" onClick={onDelete} disabled={isDeleting}>
-            {isDeleting ? "Removing..." : "Delete"}
-          </button>
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={onDelete} loading={isDeleting}>
+            Delete
+          </Button>
         </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>
         <div>
-          <div style={{ color: "#5b6475", fontSize: "12px" }}>Quantity</div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Quantity</div>
           <strong>{quantityNumber}</strong>
         </div>
         <div>
-          <div style={{ color: "#5b6475", fontSize: "12px" }}>Unit Cost</div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Unit Cost</div>
           <strong>{formatMoney(unitCostNumber)}</strong>
         </div>
         <div>
-          <div style={{ color: "#5b6475", fontSize: "12px" }}>Total Cost</div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Total Cost</div>
           <strong>{formatMoney(totalCostNumber)}</strong>
         </div>
       </div>
@@ -838,8 +839,9 @@ function ManualActualCostEditorCard({
           <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Optional note" />
 
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <button
+            <Button
               type="button"
+              variant="primary"
               onClick={() => {
                 onSave({
                   id: String(item.id),
@@ -853,12 +855,14 @@ function ManualActualCostEditorCard({
                 });
                 setIsEditing(false);
               }}
-              disabled={isSaving || !description.trim() || quantityNumber < 0 || unitCostNumber < 0 || totalCostNumber < 0}
+              disabled={!description.trim() || quantityNumber < 0 || unitCostNumber < 0 || totalCostNumber < 0}
+              loading={isSaving}
             >
-              {isSaving ? "Saving..." : "Save Changes"}
-            </button>
-            <button
+              Save Changes
+            </Button>
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => {
                 setCategory(item.category);
                 setDescription(item.description);
@@ -872,7 +876,7 @@ function ManualActualCostEditorCard({
               disabled={isSaving}
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </>
       ) : null}
@@ -1948,19 +1952,23 @@ export function WorkbenchPage() {
             {syncStatus}
           </span>
           {queueCount > 0 ? (
-            <button onClick={() => flushSync.mutate()} disabled={flushSync.isPending} style={secondaryButtonStyle()}>
-              {flushSync.isPending ? "Flushing..." : `Flush Sync (${queueCount})`}
-            </button>
+            <Button variant="secondary" onClick={() => flushSync.mutate()} loading={flushSync.isPending}>
+              {`Flush Sync (${queueCount})`}
+            </Button>
           ) : null}
-          <button onClick={() => refreshWorkbench.mutate()} disabled={refreshWorkbench.isPending} style={secondaryButtonStyle()}>
-            {refreshWorkbench.isPending ? "Refreshing..." : "Refresh"}
-          </button>
-          <button onClick={() => signOut()} style={secondaryButtonStyle()}>Sign Out</button>
+          <Button variant="secondary" onClick={() => refreshWorkbench.mutate()} loading={refreshWorkbench.isPending}>
+            Refresh
+          </Button>
+          <Button variant="secondary" onClick={() => signOut()}>Sign Out</Button>
         </div>
       </header>
 
       {localFeedback ? (
-        <div style={feedbackStyle(localFeedback.tone)}>
+        <div
+          style={feedbackStyle(localFeedback.tone)}
+          role={localFeedback.tone === "error" ? "alert" : "status"}
+          aria-live="polite"
+        >
           {localFeedback.text}
         </div>
       ) : null}
@@ -1990,22 +1998,22 @@ export function WorkbenchPage() {
             <strong style={{ display: "block", marginBottom: "4px" }}>
               Timer running on {runningTimerJob ? `${runningTimerJob.job.number} · ${runningTimerJob.job.title}` : "another job"}
             </strong>
-            <span style={{ color: "#5b6475", fontSize: "13px" }}>
+            <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
               Elapsed {runningTimerElapsedLabel ?? "00:00:00"}
             </span>
           </div>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              <button
+              <Button
+                variant="secondary"
                 onClick={() => {
                   if (activeRunningTimerDraft.jobId) {
                     openSelectedJob(activeRunningTimerDraft.jobId);
                   }
                 }}
-                style={secondaryButtonStyle()}
               >
                 Open Running Job
-              </button>
-            <button onClick={() => void stopTimer()} style={primaryButtonStyle()}>Stop Timer</button>
+              </Button>
+            <Button variant="primary" onClick={() => void stopTimer()}>Stop Timer</Button>
           </div>
         </div>
       ) : null}
@@ -2015,15 +2023,15 @@ export function WorkbenchPage() {
           <div style={sectionHeadingRow()}>
             <div>
               <h2 style={{ margin: 0 }}>Team Timers</h2>
-              <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
+              <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
                 Owner view of all currently running timers.
               </p>
             </div>
-            <span style={{ color: "#5b6475", fontSize: "13px" }}>{activeTimers.length}</span>
+            <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{activeTimers.length}</span>
           </div>
           <div style={{ display: "grid", gap: "10px", marginTop: "12px" }}>
             {activeTimers.length === 0 ? (
-              <div style={{ color: "#5b6475" }}>No active timers right now.</div>
+              <div style={{ color: "var(--color-text-soft)" }}>No active timers right now.</div>
             ) : (
               activeTimers.map((timer) => (
                 <div
@@ -2037,14 +2045,14 @@ export function WorkbenchPage() {
                   }}
                 >
                   <strong>{timer.userName}</strong>
-                  <div style={{ fontWeight: 600, color: "#172033" }}>
+                  <div style={{ fontWeight: 600, color: "var(--color-text)" }}>
                     {timer.jobNumber} · {timer.jobTitle}
                   </div>
-                  <div style={{ color: "#5b6475", fontSize: "13px" }}>
+                  <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
                     Running for {formatElapsedSince(timer.startedAt, now)}
                   </div>
                   {timer.description ? (
-                    <div style={{ color: "#5b6475", fontSize: "13px" }}>{timer.description}</div>
+                    <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{timer.description}</div>
                   ) : null}
                 </div>
               ))
@@ -2067,14 +2075,18 @@ export function WorkbenchPage() {
         </div>
       ) : null}
 
-      {jobsQuery.isLoading ? <p>Loading your visible jobs...</p> : null}
+      {jobsQuery.isLoading ? (
+        <Card variant="soft" role="status" aria-live="polite" style={{ color: "var(--color-text-soft)" }}>
+          Loading your visible jobs…
+        </Card>
+      ) : null}
       {!jobsQuery.isLoading && jobs.length === 0 ? (
-        <div style={{ ...cardStyle("#fafcff"), borderStyle: "dashed", color: "#5b6475" }}>
-          <strong style={{ display: "block", color: "#172033", marginBottom: "6px" }}>No jobs are showing yet.</strong>
+        <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>
+          <strong style={{ display: "block", color: "var(--color-text)", marginBottom: "6px" }}>No jobs are showing yet.</strong>
           {capabilities.canCreateJob
             ? "Use the + button to create your first job."
             : "You will see jobs here once you are assigned to them."}
-        </div>
+        </Card>
       ) : null}
 
       {jobs.length > 0 ? (
@@ -2082,15 +2094,15 @@ export function WorkbenchPage() {
           <div style={sectionHeadingRow()}>
             <div>
               <strong style={{ display: "block" }}>Filter Jobs</strong>
-              <span style={{ color: "#5b6475", fontSize: "13px" }}>
+              <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
                 Search by number, title, field name, customer, or address while keeping the active vs completed grouping.
               </span>
             </div>
-            <span style={{ color: "#5b6475", fontSize: "13px" }}>{searchFilteredJobs.length}</span>
+            <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{searchFilteredJobs.length}</span>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
             <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
-              <span style={{ color: "#5b6475", fontSize: "13px" }}>Search jobs</span>
+              <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Search jobs</span>
               <input
                 value={jobSearch}
                 onChange={(event) => setJobSearch(event.target.value)}
@@ -2099,7 +2111,7 @@ export function WorkbenchPage() {
               />
             </label>
             <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
-              <span style={{ color: "#5b6475", fontSize: "13px" }}>Job status</span>
+              <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Job status</span>
               <select
                 value={jobStatusFilter}
                 onChange={(event) => setJobStatusFilter(event.target.value as "all" | JobStatus)}
@@ -2122,11 +2134,11 @@ export function WorkbenchPage() {
           <div style={sectionHeadingRow()}>
             <div>
               <h2 style={{ margin: 0, fontSize: "18px" }}>Active Jobs</h2>
-              <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
+              <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
                 Current work stays visible by default.
               </p>
             </div>
-            <span style={{ color: "#5b6475", fontSize: "13px" }}>{activeJobs.length}</span>
+            <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{activeJobs.length}</span>
           </div>
           <div style={{ display: "grid", gap: "12px" }}>
             {activeJobs.map((item) => (
@@ -2147,7 +2159,7 @@ export function WorkbenchPage() {
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
                     <div>
-                      <div style={{ color: "#5b6475", fontSize: "13px", fontWeight: 700 }}>{item.job.number}</div>
+                      <div style={{ color: "var(--color-text-soft)", fontSize: "13px", fontWeight: 700 }}>{item.job.number}</div>
                       <strong style={{ fontSize: "18px" }}>{item.job.title}</strong>
                       {item.job.fieldName ? (
                         <div style={{ color: "#0a4f45", fontSize: "13px", fontWeight: 700, marginTop: "4px" }}>
@@ -2155,7 +2167,7 @@ export function WorkbenchPage() {
                         </div>
                       ) : null}
                       {item.contactName ? (
-                        <div style={{ color: "#172033", fontSize: "15px", fontWeight: 600, marginTop: "6px" }}>
+                        <div style={{ color: "var(--color-text)", fontSize: "15px", fontWeight: 600, marginTop: "6px" }}>
                           {item.contactName}
                         </div>
                       ) : null}
@@ -2166,10 +2178,10 @@ export function WorkbenchPage() {
                   </div>
                   <div style={{ display: "grid", gap: "4px" }}>
                     {item.contactSubtitle ? (
-                      <div style={{ color: "#5b6475", fontSize: "13px" }}>{item.contactSubtitle}</div>
+                      <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{item.contactSubtitle}</div>
                     ) : null}
                     {item.job.description ? (
-                      <div style={{ color: "#5b6475", fontSize: "14px" }}>{item.job.description}</div>
+                      <div style={{ color: "var(--color-text-soft)", fontSize: "14px" }}>{item.job.description}</div>
                     ) : null}
                   </div>
                 </button>
@@ -2178,13 +2190,13 @@ export function WorkbenchPage() {
           </div>
         </section>
       ) : searchFilteredJobs.length > 0 ? (
-        <section style={{ ...cardStyle("#fafcff"), borderStyle: "dashed", color: "#5b6475" }}>
+        <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>
           No active jobs right now.
-        </section>
+        </Card>
       ) : jobs.length > 0 ? (
-        <section style={{ ...cardStyle("#fafcff"), borderStyle: "dashed", color: "#5b6475" }}>
+        <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>
           No jobs matched that search.
-        </section>
+        </Card>
       ) : null}
 
       {hiddenJobs.length > 0 ? (
@@ -2203,11 +2215,11 @@ export function WorkbenchPage() {
           >
             <span>
               <strong style={{ display: "block" }}>Completed / Hidden</strong>
-              <span style={{ color: "#5b6475", fontSize: "14px" }}>
+              <span style={{ color: "var(--color-text-soft)", fontSize: "14px" }}>
                 {hiddenJobs.length} job{hiddenJobs.length === 1 ? "" : "s"}
               </span>
             </span>
-            <span style={{ color: "#5b6475", fontWeight: 700 }}>{showHiddenJobs ? "Hide" : "Show"}</span>
+            <span style={{ color: "var(--color-text-soft)", fontWeight: 700 }}>{showHiddenJobs ? "Hide" : "Show"}</span>
           </button>
 
           {showHiddenJobs ? (
@@ -2230,7 +2242,7 @@ export function WorkbenchPage() {
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start" }}>
                       <div>
-                        <div style={{ color: "#5b6475", fontSize: "13px", fontWeight: 700 }}>{item.job.number}</div>
+                        <div style={{ color: "var(--color-text-soft)", fontSize: "13px", fontWeight: 700 }}>{item.job.number}</div>
                         <strong style={{ fontSize: "18px" }}>{item.job.title}</strong>
                         {item.job.fieldName ? (
                           <div style={{ color: "#0a4f45", fontSize: "13px", fontWeight: 700, marginTop: "4px" }}>
@@ -2238,7 +2250,7 @@ export function WorkbenchPage() {
                           </div>
                         ) : null}
                         {item.contactName ? (
-                          <div style={{ color: "#172033", fontSize: "15px", fontWeight: 600, marginTop: "6px" }}>
+                          <div style={{ color: "var(--color-text)", fontSize: "15px", fontWeight: 600, marginTop: "6px" }}>
                             {item.contactName}
                           </div>
                         ) : null}
@@ -2249,10 +2261,10 @@ export function WorkbenchPage() {
                     </div>
                     <div style={{ display: "grid", gap: "4px" }}>
                       {item.contactSubtitle ? (
-                        <div style={{ color: "#5b6475", fontSize: "13px" }}>{item.contactSubtitle}</div>
+                        <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{item.contactSubtitle}</div>
                       ) : null}
                       {item.job.description ? (
-                        <div style={{ color: "#5b6475", fontSize: "14px" }}>{item.job.description}</div>
+                        <div style={{ color: "var(--color-text-soft)", fontSize: "14px" }}>{item.job.description}</div>
                       ) : null}
                     </div>
                   </button>
@@ -2286,23 +2298,27 @@ export function WorkbenchPage() {
       <div style={sectionHeadingRow()}>
         <div>
           <h3 style={{ margin: 0 }}>Attachments</h3>
-          <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
+          <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
             Photos and documents for this job.
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <button type="button" onClick={() => setJobScreen("main")}>Back to Job</button>
-          <button type="button" onClick={() => attachmentInputRef.current?.click()} disabled={uploadJobAttachment.isPending}>
-            {uploadJobAttachment.isPending ? "Uploading..." : "Upload Attachment"}
-          </button>
+          <Button variant="secondary" onClick={() => setJobScreen("main")}>Back to Job</Button>
+          <Button variant="secondary" onClick={() => attachmentInputRef.current?.click()} loading={uploadJobAttachment.isPending}>
+            Upload Attachment
+          </Button>
         </div>
       </div>
 
-      {jobWorkspaceQuery.isLoading ? <p style={{ color: "#5b6475" }}>Loading attachments…</p> : null}
+      {jobWorkspaceQuery.isLoading ? (
+        <Card variant="soft" role="status" aria-live="polite" style={{ color: "var(--color-text-soft)" }}>
+          Loading attachments…
+        </Card>
+      ) : null}
       {!jobWorkspaceQuery.isLoading && (jobWorkspace?.attachments.length ?? 0) === 0 ? (
-        <div style={{ ...cardStyle("#fafcff"), borderStyle: "dashed", color: "#5b6475" }}>
+        <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>
           No attachments yet. Photos, PDFs, load calcs, and docs will show here.
-        </div>
+        </Card>
       ) : null}
 
       {(jobWorkspace?.attachments ?? []).length > 0 ? (
@@ -2341,31 +2357,32 @@ export function WorkbenchPage() {
                         style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", borderRadius: "12px", background: "#eef3fb" }}
                       />
                     ) : (
-                      <div style={{ width: "100%", aspectRatio: "4 / 3", borderRadius: "12px", background: "#eef3fb", display: "grid", placeItems: "center", color: "#5b6475" }}>
+                      <div style={{ width: "100%", aspectRatio: "4 / 3", borderRadius: "12px", background: "#eef3fb", display: "grid", placeItems: "center", color: "var(--color-text-soft)" }}>
                         Loading photo…
                       </div>
                     )
                   ) : (
-                    <div style={{ width: "100%", aspectRatio: "4 / 3", borderRadius: "12px", background: "#f8fafc", display: "grid", placeItems: "center", color: "#5b6475", fontWeight: 700 }}>
+                    <div style={{ width: "100%", aspectRatio: "4 / 3", borderRadius: "12px", background: "#f8fafc", display: "grid", placeItems: "center", color: "var(--color-text-soft)", fontWeight: 700 }}>
                       {attachment.mimeType.includes("pdf") ? "PDF" : attachment.mimeType.includes("html") ? "HTML" : "FILE"}
                     </div>
                   )}
                   <div>
                     <strong style={{ display: "block" }}>{attachment.fileName}</strong>
-                    <div style={{ color: "#5b6475", fontSize: "13px", marginTop: "4px" }}>
+                    <div style={{ color: "var(--color-text-soft)", fontSize: "13px", marginTop: "4px" }}>
                       {attachment.sizeBytes > 0 ? `${Math.max(1, Math.round(attachment.sizeBytes / 1024))} KB · ` : ""}
                       {formatDateTimeLabel(attachment.createdAt)}
                     </div>
                   </div>
                 </button>
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => void handleRemoveAttachment(attachment)}
-                    disabled={deleteJobAttachment.isPending}
+                    loading={deleteJobAttachment.isPending}
                   >
-                    {deleteJobAttachment.isPending ? "Removing..." : "Remove"}
-                  </button>
+                    Remove
+                  </Button>
                 </div>
               </div>
             );
@@ -2377,52 +2394,61 @@ export function WorkbenchPage() {
 
   const actualsScreen = selectedJob ? (
     <div style={{ display: "grid", gap: "16px" }}>
+      {localFeedback ? (
+        <div
+          style={feedbackStyle(localFeedback.tone)}
+          role={localFeedback.tone === "error" ? "alert" : "status"}
+          aria-live="polite"
+        >
+          {localFeedback.text}
+        </div>
+      ) : null}
+
       <div style={sectionHeadingRow()}>
         <div>
           <h3 style={{ margin: 0 }}>Actuals</h3>
-          <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
+          <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
             Enter real materials, labour, and assemblies so job costing stays trustworthy.
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
             onClick={() => setShowManualActualComposer(true)}
           >
             Add Manual Actual Line
-          </button>
+          </Button>
           {canGenerateInvoices ? (
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={() => openInvoiceGenerator("actuals")}
-              style={primaryButtonStyle()}
             >
               Generate Invoice
-            </button>
+            </Button>
           ) : null}
-          <button type="button" onClick={() => setJobScreen("main")}>Back to Job</button>
+          <Button variant="secondary" onClick={() => setJobScreen("main")}>Back to Job</Button>
         </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
         <div style={cardStyle("#fafcff")}>
-          <div style={{ color: "#5b6475", fontSize: "13px" }}>Estimated Materials</div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Estimated Materials</div>
           <strong style={{ fontSize: "22px" }}>{estimatedMaterialsSummary.length}</strong>
         </div>
         <div style={cardStyle("#fafcff")}>
-          <div style={{ color: "#5b6475", fontSize: "13px" }}>Materials Needed</div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Materials Needed</div>
           <strong style={{ fontSize: "22px" }}>{neededMaterialsSummary.length}</strong>
         </div>
         <div style={cardStyle("#fafcff")}>
-          <div style={{ color: "#5b6475", fontSize: "13px" }}>Actual Material Lines</div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Actual Material Lines</div>
           <strong style={{ fontSize: "22px" }}>{(jobWorkspace?.usedMaterials ?? []).length}</strong>
         </div>
         <div style={cardStyle("#fafcff")}>
-          <div style={{ color: "#5b6475", fontSize: "13px" }}>Actual Labour Entries</div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Actual Labour Entries</div>
           <strong style={{ fontSize: "22px" }}>{(jobWorkspace?.timeEntries ?? []).length}</strong>
         </div>
         <div style={cardStyle("#fafcff")}>
-          <div style={{ color: "#5b6475", fontSize: "13px" }}>Manual Actual Lines</div>
+          <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Manual Actual Lines</div>
           <strong style={{ fontSize: "22px" }}>{(jobWorkspace?.manualActualCostLines ?? []).length}</strong>
         </div>
       </div>
@@ -2431,14 +2457,14 @@ export function WorkbenchPage() {
         <div style={sectionHeadingRow()}>
           <div>
             <h3 style={{ margin: 0 }}>Saved Invoices</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
+            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
               Generated invoices stay attached to this job so you can open the saved snapshot again.
             </p>
           </div>
         </div>
         <div style={{ display: "grid", gap: "10px", marginTop: "12px" }}>
           {(jobWorkspace?.invoices ?? []).length === 0 ? (
-            <p style={{ color: "#5b6475", margin: 0 }}>No invoices saved for this job yet.</p>
+            <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>No invoices saved for this job yet.</Card>
           ) : (
             (jobWorkspace?.invoices ?? []).map((invoice) => (
               <button
@@ -2462,7 +2488,7 @@ export function WorkbenchPage() {
               >
                 <span>
                   <strong style={{ display: "block" }}>{invoice.number}</strong>
-                  <span style={{ color: "#5b6475", fontSize: "13px" }}>
+                  <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
                     {new Date(invoice.createdAt).toLocaleDateString()} · {invoice.lines.length} line{invoice.lines.length === 1 ? "" : "s"} · {invoice.status.replaceAll("_", " ")}
                   </span>
                 </span>
@@ -2477,7 +2503,7 @@ export function WorkbenchPage() {
         <div style={sectionHeadingRow()}>
           <div>
             <h3 style={{ margin: 0 }}>Actual Parts</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
+            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
               Group actual materials and labour by the part of the job they belong to, then invoice one part or all parts.
             </p>
           </div>
@@ -2491,9 +2517,9 @@ export function WorkbenchPage() {
               placeholder="Service, Rough-in, Finish..."
             />
           </label>
-          <button type="button" onClick={addActualPart} disabled={!newActualPartName.trim()}>
+          <Button variant="secondary" onClick={addActualPart} disabled={!newActualPartName.trim()}>
             Add Part
-          </button>
+          </Button>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
           {actualPartOptions.map((partName) => (
@@ -2506,8 +2532,9 @@ export function WorkbenchPage() {
         <div style={cardStyle("#fff")}>
           <div style={sectionHeadingRow()}>
             <h3 style={{ margin: 0 }}>Estimated Materials</h3>
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() =>
                 void handleCopyJobMaterialList(
                   "estimated",
@@ -2521,18 +2548,18 @@ export function WorkbenchPage() {
               }
             >
               Copy List
-            </button>
+            </Button>
           </div>
-          {estimatedCopyFeedback ? <div style={{ color: "#5b6475", fontSize: "13px", marginTop: "8px" }}>{estimatedCopyFeedback}</div> : null}
+          {estimatedCopyFeedback ? <div style={{ color: "var(--color-text-soft)", fontSize: "13px", marginTop: "8px" }}>{estimatedCopyFeedback}</div> : null}
           <div style={{ marginTop: "12px" }}>
             {estimatedMaterialsSummary.length === 0 ? (
-              <p style={{ color: "#5b6475", margin: 0 }}>No quoted material estimate was carried onto this job.</p>
+              <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>No quoted material estimate was carried onto this job.</Card>
             ) : (
               <div style={{ display: "grid", gap: "8px" }}>
                 {estimatedMaterialsSummary.map((item) => (
                   <div key={`estimated-${item.key}`} style={{ display: "grid", gap: "2px" }}>
                     <strong>{item.description}</strong>
-                    <div style={{ color: "#5b6475", fontSize: "13px" }}>
+                    <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
                       {item.sectionName ? `${item.sectionName} · ` : ""}
                       {item.sku ? `${item.sku} · ` : ""}
                       {item.quantity} {item.unit}
@@ -2547,8 +2574,9 @@ export function WorkbenchPage() {
         <div style={cardStyle("#fff")}>
           <div style={sectionHeadingRow()}>
             <h3 style={{ margin: 0 }}>Materials Needed</h3>
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() =>
                 void handleCopyJobMaterialList(
                   "needed",
@@ -2562,18 +2590,18 @@ export function WorkbenchPage() {
               }
             >
               Copy List
-            </button>
+            </Button>
           </div>
-          {neededCopyFeedback ? <div style={{ color: "#5b6475", fontSize: "13px", marginTop: "8px" }}>{neededCopyFeedback}</div> : null}
+          {neededCopyFeedback ? <div style={{ color: "var(--color-text-soft)", fontSize: "13px", marginTop: "8px" }}>{neededCopyFeedback}</div> : null}
           <div style={{ marginTop: "12px" }}>
             {neededMaterialsSummary.length === 0 ? (
-              <p style={{ color: "#5b6475", margin: 0 }}>No operational materials list yet.</p>
+              <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>No operational materials list yet.</Card>
             ) : (
               <div style={{ display: "grid", gap: "8px" }}>
                 {neededMaterialsSummary.map((item) => (
                   <div key={`needed-${item.key}`} style={{ display: "grid", gap: "2px" }}>
                     <strong>{item.description}</strong>
-                    <div style={{ color: "#5b6475", fontSize: "13px" }}>
+                    <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
                       {item.sectionName ? `${item.sectionName} · ` : ""}
                       {item.sku ? `${item.sku} · ` : ""}
                       {item.quantity} {item.unit}
@@ -2590,7 +2618,7 @@ export function WorkbenchPage() {
         <div style={sectionHeadingRow()}>
           <div>
             <h3 style={{ margin: 0 }}>Assemblies</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
+            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
               Add repeatable bundles like rough-ins and fixture installs without losing the ability to edit the real material lines afterward.
             </p>
           </div>
@@ -2659,12 +2687,12 @@ export function WorkbenchPage() {
               <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
                 <div>
                   <strong>{selectedAssembly.name}</strong>
-                  <div style={{ color: "#5b6475", fontSize: "13px", marginTop: "4px" }}>
+                  <div style={{ color: "var(--color-text-soft)", fontSize: "13px", marginTop: "4px" }}>
                     {selectedAssembly.items.length} materials · {selectedAssembly.defaultLaborHours.toFixed(2)} labour hrs each
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ color: "#5b6475", fontSize: "13px" }}>At current multiplier</div>
+                  <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>At current multiplier</div>
                   <strong>{formatMoney(selectedAssemblyMaterialCost)} materials · {selectedAssemblyLaborHours.toFixed(2)} labour hrs</strong>
                 </div>
               </div>
@@ -2672,7 +2700,7 @@ export function WorkbenchPage() {
                 {selectedAssembly.items.map((item) => (
                   <div key={item.id} style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
                     <span>{item.materialName}</span>
-                    <span style={{ color: "#5b6475" }}>
+                    <span style={{ color: "var(--color-text-soft)" }}>
                       {roundMoney(item.quantity * (Number.isFinite(selectedAssemblyMultiplier) ? selectedAssemblyMultiplier : 1))} {item.materialUnit}
                     </span>
                   </div>
@@ -2682,13 +2710,14 @@ export function WorkbenchPage() {
           ) : null}
 
           <div>
-            <button
-              type="button"
+            <Button
+              variant="secondary"
               onClick={() => void handleAddAssemblyToActuals()}
-              disabled={addAssemblyToActuals.isPending || !assemblyActualDraft.assemblyId}
+              disabled={!assemblyActualDraft.assemblyId}
+              loading={addAssemblyToActuals.isPending}
             >
-              {addAssemblyToActuals.isPending ? "Adding Assembly..." : "Add Assembly to Actuals"}
-            </button>
+              Add Assembly to Actuals
+            </Button>
           </div>
         </div>
       </section>
@@ -2697,12 +2726,13 @@ export function WorkbenchPage() {
         <div style={sectionHeadingRow()}>
           <div>
             <h3 style={{ margin: 0 }}>Materials Used</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
+            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
               Enter real material usage with visible cost now. Sell-side pricing gets set later in Generate Invoice.
             </p>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() =>
               void handleCopyJobMaterialList(
                 "used",
@@ -2716,11 +2746,11 @@ export function WorkbenchPage() {
             }
           >
             Copy List
-          </button>
+          </Button>
         </div>
 
         <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
-          {usedCopyFeedback ? <div style={{ color: "#5b6475", fontSize: "13px" }}>{usedCopyFeedback}</div> : null}
+          {usedCopyFeedback ? <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{usedCopyFeedback}</div> : null}
           <MaterialSearchSelect
             ref={usedMaterialSearchRef}
             catalogItems={(jobWorkspace?.materialCatalogOptions ?? []).map((item) => ({
@@ -2795,29 +2825,30 @@ export function WorkbenchPage() {
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px" }}>
             <div style={{ ...cardStyle("#fafcff"), padding: "12px" }}>
-              <div style={{ color: "#5b6475", fontSize: "12px" }}>Extended Cost</div>
+              <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Extended Cost</div>
               <strong>
                 {formatMoney(roundMoney((Number(usedMaterialDraft.quantity) || 0) * (Number(usedMaterialDraft.unitCost) || 0)))}
               </strong>
             </div>
             <div style={{ ...cardStyle("#fafcff"), padding: "12px" }}>
-              <div style={{ color: "#5b6475", fontSize: "12px" }}>Sell Price</div>
+              <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Sell Price</div>
               <strong>Generate in invoice</strong>
             </div>
           </div>
 
           <div>
-            <button
-              type="button"
-              disabled={createJobMaterial.isPending || !usedMaterialDraft.materialId || !usedMaterialDraft.displayName.trim() || Number(usedMaterialDraft.quantity) <= 0}
+            <Button
+              variant="secondary"
+              disabled={!usedMaterialDraft.materialId || !usedMaterialDraft.displayName.trim() || Number(usedMaterialDraft.quantity) <= 0}
+              loading={createJobMaterial.isPending}
               onClick={() => void handleAddJobMaterial("used")}
             >
-              {createJobMaterial.isPending ? "Adding..." : "Add Material Actual"}
-            </button>
+              Add Material Actual
+            </Button>
           </div>
 
           {(jobWorkspace?.usedMaterials ?? []).length === 0 ? (
-            <p style={{ color: "#5b6475", margin: 0 }}>No actual materials logged yet.</p>
+            <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>No actual materials logged yet.</Card>
           ) : (
             <div style={{ display: "grid", gap: "10px" }}>
               {usedMaterialsByPart.map((section) =>
@@ -2851,7 +2882,7 @@ export function WorkbenchPage() {
         <div style={sectionHeadingRow()}>
           <div>
             <h3 style={{ margin: 0 }}>Labour Actuals</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
+            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
               Add real labour slots directly from Actuals so hours and cost are captured here. Sell-side labour billing is set in Generate Invoice.
             </p>
           </div>
@@ -2910,27 +2941,28 @@ export function WorkbenchPage() {
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px" }}>
             <div style={{ ...cardStyle("#fafcff"), padding: "12px" }}>
-              <div style={{ color: "#5b6475", fontSize: "12px" }}>Hours Used</div>
+              <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Hours Used</div>
               <strong>{((actualLaborHoursFromSlot ?? Number(actualLaborDraft.hours)) || 0).toFixed(2)}h</strong>
             </div>
             <div style={{ ...cardStyle("#fafcff"), padding: "12px" }}>
-              <div style={{ color: "#5b6475", fontSize: "12px" }}>Sell Price</div>
+              <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Sell Price</div>
               <strong>Generate in invoice</strong>
             </div>
           </div>
 
           <div>
-            <button
-              type="button"
+            <Button
+              variant="secondary"
               onClick={() => void handleAddActualLaborEntry()}
-              disabled={createActualTimeEntry.isPending || !(actualLaborHoursFromSlot ?? Number(actualLaborDraft.hours)) || !actualLaborDraft.description.trim()}
+              disabled={!(actualLaborHoursFromSlot ?? Number(actualLaborDraft.hours)) || !actualLaborDraft.description.trim()}
+              loading={createActualTimeEntry.isPending}
             >
-              {createActualTimeEntry.isPending ? "Adding Labour..." : "Add Labour Entry"}
-            </button>
+              Add Labour Entry
+            </Button>
           </div>
 
           {(jobWorkspace?.timeEntries ?? []).length === 0 ? (
-            <p style={{ color: "#5b6475", margin: 0 }}>No labour entries logged yet.</p>
+            <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>No labour entries logged yet.</Card>
           ) : (
             <div style={{ display: "grid", gap: "10px" }}>
               {labourByPart.map((section) =>
@@ -2989,10 +3021,10 @@ export function WorkbenchPage() {
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap", minWidth: 0 }}>
           <div style={{ display: "grid", gap: "4px", minWidth: 0, flex: "1 1 240px" }}>
-            <button type="button" onClick={() => setSelectedJobId(null)} style={{ justifySelf: "start" }}>
+            <Button variant="secondary" onClick={() => setSelectedJobId(null)} style={{ justifySelf: "start" }}>
               Back to Jobs
-            </button>
-            <div style={{ color: "#5b6475", fontSize: "13px", fontWeight: 700 }}>{selectedJob.job.number}</div>
+            </Button>
+            <div style={{ color: "var(--color-text-soft)", fontSize: "13px", fontWeight: 700 }}>{selectedJob.job.number}</div>
             <h1 style={{ margin: 0, fontSize: "28px", overflowWrap: "anywhere" }}>{selectedJob.job.title}</h1>
             {selectedJob.job.fieldName ? (
               <div style={{ color: "#0a4f45", fontSize: "14px", fontWeight: 700, overflowWrap: "anywhere" }}>
@@ -3000,12 +3032,12 @@ export function WorkbenchPage() {
               </div>
             ) : null}
             {selectedJob.contactName ? (
-              <div style={{ color: "#172033", fontSize: "16px", fontWeight: 600, overflowWrap: "anywhere" }}>
+              <div style={{ color: "var(--color-text)", fontSize: "16px", fontWeight: 600, overflowWrap: "anywhere" }}>
                 {selectedJob.contactName}
               </div>
             ) : null}
             {selectedJob.contactSubtitle ? (
-              <div style={{ color: "#5b6475", fontSize: "13px", overflowWrap: "anywhere" }}>{selectedJob.contactSubtitle}</div>
+              <div style={{ color: "var(--color-text-soft)", fontSize: "13px", overflowWrap: "anywhere" }}>{selectedJob.contactSubtitle}</div>
             ) : null}
           </div>
           <div
@@ -3025,7 +3057,7 @@ export function WorkbenchPage() {
         {canUpdateJobStatus ? (
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "end" }}>
             <label style={{ display: "grid", gap: "6px" }}>
-              <span style={{ color: "#5b6475", fontSize: "13px" }}>Job Status</span>
+              <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Job Status</span>
               <select
                 value={selectedJob.job.status}
                 onChange={(event) =>
@@ -3047,7 +3079,7 @@ export function WorkbenchPage() {
             </label>
             {selectedJob.job.status === "waiting" ? (
               <label style={{ display: "grid", gap: "6px" }}>
-                <span style={{ color: "#5b6475", fontSize: "13px" }}>Waiting Reason</span>
+                <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Waiting Reason</span>
                 <select
                   value={selectedJob.job.waitingReason ?? "other"}
                   onChange={(event) =>
@@ -3072,8 +3104,8 @@ export function WorkbenchPage() {
         ) : null}
 
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
             onClick={() => {
               if (selectedJobTimerIsRunning) {
                 void stopTimer();
@@ -3082,43 +3114,39 @@ export function WorkbenchPage() {
               }
             }}
             disabled={!selectedJobTimerIsRunning && startWorkDisabled}
-            style={{ padding: "14px 16px", fontWeight: 700 }}
           >
             {selectedJobTimerIsRunning ? "Stop Timer" : "Start Work"}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="secondary"
             onClick={() => {
               window.setTimeout(() => {
                 activityNoteRef.current?.focus();
                 activityNoteRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
               }, 0);
             }}
-            style={{ padding: "14px 16px", fontWeight: 700 }}
           >
             Add Note
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="secondary"
             onClick={() => attachmentInputRef.current?.click()}
-            style={{ padding: "14px 16px", fontWeight: 700 }}
           >
             Add Attachment
-          </button>
+          </Button>
           {canArchiveJobs ? (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
               onClick={openEditJob}
-              style={{ padding: "14px 16px", fontWeight: 700 }}
             >
               Edit Job
-            </button>
+            </Button>
           ) : null}
         </div>
 
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <button type="button" onClick={() => setJobScreen("attachments")}>Attachments</button>
-          <button type="button" onClick={() => setJobScreen("actuals")}>Actuals</button>
+          <Button variant="secondary" onClick={() => setJobScreen("attachments")}>Attachments</Button>
+          <Button variant="secondary" onClick={() => setJobScreen("actuals")}>Actuals</Button>
         </div>
       </div>
 
@@ -3127,13 +3155,13 @@ export function WorkbenchPage() {
         <div style={{ display: "grid", gap: "10px", marginBottom: "16px" }}>
           <div style={sectionHeadingRow()}>
             <div>
-              <div style={{ color: "#5b6475", fontSize: "13px" }}>Assigned Crew</div>
+              <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Assigned Crew</div>
               <strong>{selectedJob.assignments.length > 0 ? getAssignmentNames(selectedJob.assignments) : "Nobody assigned yet"}</strong>
             </div>
             {canManageAssignments ? (
-              <button type="button" onClick={() => setShowAssignPeople(true)} style={secondaryButtonStyle()}>
+              <Button variant="secondary" onClick={() => setShowAssignPeople(true)}>
                 + Add Person
-              </button>
+              </Button>
             ) : null}
           </div>
           {selectedJob.assignments.length > 0 ? (
@@ -3181,21 +3209,21 @@ export function WorkbenchPage() {
               })}
             </div>
           ) : (
-            <div style={{ color: "#5b6475" }}>Nobody assigned yet.</div>
+            <div style={{ color: "var(--color-text-soft)" }}>Nobody assigned yet.</div>
           )}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
           <div>
-            <div style={{ color: "#5b6475", fontSize: "13px" }}>Customer / Contact</div>
+            <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Customer / Contact</div>
             <strong>{jobWorkspace?.contactName ?? "No contact linked"}</strong>
-            {jobWorkspace?.contactSubtitle ? <div style={{ color: "#5b6475", fontSize: "13px", marginTop: "4px" }}>{jobWorkspace.contactSubtitle}</div> : null}
+            {jobWorkspace?.contactSubtitle ? <div style={{ color: "var(--color-text-soft)", fontSize: "13px", marginTop: "4px" }}>{jobWorkspace.contactSubtitle}</div> : null}
           </div>
           <div>
-            <div style={{ color: "#5b6475", fontSize: "13px" }}>Linked Quote</div>
+            <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Linked Quote</div>
             <strong>{jobWorkspace?.linkedQuote ? jobWorkspace.linkedQuote.number : "No linked quote"}</strong>
           </div>
           <div>
-            <div style={{ color: "#5b6475", fontSize: "13px" }}>Next Scheduled Work</div>
+            <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Next Scheduled Work</div>
             <strong>
               {jobWorkspace?.nextScheduledWork
                 ? formatNextScheduledLabel(jobWorkspace.nextScheduledWork.startAt, jobWorkspace.nextScheduledWork.endAt)
@@ -3203,12 +3231,12 @@ export function WorkbenchPage() {
             </strong>
           </div>
           <div>
-            <div style={{ color: "#5b6475", fontSize: "13px" }}>Estimated Hours</div>
+            <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Estimated Hours</div>
             <strong>{selectedJob.job.estimatedHours ? `${selectedJob.job.estimatedHours.toFixed(2)}h` : "Not set"}</strong>
           </div>
         </div>
         {selectedJob.job.description ? (
-          <div style={{ marginTop: "12px", color: "#445168" }}>{selectedJob.job.description}</div>
+          <div style={{ marginTop: "12px", color: "var(--color-text-muted)" }}>{selectedJob.job.description}</div>
         ) : null}
       </section>
 
@@ -3216,7 +3244,7 @@ export function WorkbenchPage() {
         <div style={sectionHeadingRow()}>
           <div>
             <h3 style={{ margin: 0 }}>Activity</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
+            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
               Notes and uploads build the working history for this job.
             </p>
           </div>
@@ -3232,31 +3260,35 @@ export function WorkbenchPage() {
             style={{ width: "100%", resize: "vertical" }}
           />
           <div>
-            <button type="button" onClick={() => void handleSubmitActivityNote()} disabled={addJobNote.isPending || !activityNoteDraft.trim()}>
-              {addJobNote.isPending ? "Saving Note..." : "Add Note"}
-            </button>
+            <Button variant="primary" onClick={() => void handleSubmitActivityNote()} disabled={!activityNoteDraft.trim()} loading={addJobNote.isPending}>
+              Add Note
+            </Button>
           </div>
         </div>
 
         <div style={{ display: "grid", gap: "12px", marginTop: "16px" }}>
-          {jobWorkspaceQuery.isLoading ? <p style={{ color: "#5b6475" }}>Loading activity…</p> : null}
+          {jobWorkspaceQuery.isLoading ? (
+            <Card variant="soft" role="status" aria-live="polite" style={{ color: "var(--color-text-soft)" }}>
+              Loading activity…
+            </Card>
+          ) : null}
           {!jobWorkspaceQuery.isLoading && (jobWorkspace?.activity.length ?? 0) === 0 ? (
-            <div style={{ ...cardStyle("#fafcff"), borderStyle: "dashed", color: "#5b6475" }}>
+            <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>
               No activity yet. Notes and uploads will start building the job history here.
-            </div>
+            </Card>
           ) : null}
           {(jobWorkspace?.activity ?? []).map((entry) => (
             <div key={entry.id} style={{ ...cardStyle("#fafcff"), padding: "14px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap" }}>
                 <div>
                   <strong>{entry.title}</strong>
-                  <div style={{ color: "#5b6475", fontSize: "13px", marginTop: "4px" }}>{formatDateTimeLabel(entry.createdAt)}</div>
+                  <div style={{ color: "var(--color-text-soft)", fontSize: "13px", marginTop: "4px" }}>{formatDateTimeLabel(entry.createdAt)}</div>
                 </div>
-                <span style={{ color: "#5b6475", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                <span style={{ color: "var(--color-text-soft)", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                   {entry.type.replace("_", " ")}
                 </span>
               </div>
-              {entry.body ? <div style={{ marginTop: "10px", color: "#445168", whiteSpace: "pre-wrap" }}>{entry.body}</div> : null}
+              {entry.body ? <div style={{ marginTop: "10px", color: "var(--color-text-muted)", whiteSpace: "pre-wrap" }}>{entry.body}</div> : null}
             </div>
           ))}
         </div>
@@ -3266,12 +3298,13 @@ export function WorkbenchPage() {
         <div style={sectionHeadingRow()}>
           <div>
             <h3 style={{ margin: 0 }}>Materials Needed</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
+            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
               Keep the grab list current without mixing it into actuals.
             </p>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() =>
               void handleCopyJobMaterialList(
                 "needed",
@@ -3284,11 +3317,11 @@ export function WorkbenchPage() {
             }
           >
             Copy List
-          </button>
+          </Button>
         </div>
 
         <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
-          {neededCopyFeedback ? <div style={{ color: "#5b6475", fontSize: "13px" }}>{neededCopyFeedback}</div> : null}
+          {neededCopyFeedback ? <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{neededCopyFeedback}</div> : null}
           <MaterialSearchSelect
             ref={neededMaterialSearchRef}
             catalogItems={(jobWorkspace?.materialCatalogOptions ?? []).map((item) => ({
@@ -3332,17 +3365,19 @@ export function WorkbenchPage() {
               onChange={(event) => setNeededMaterialDraft((current) => ({ ...current, note: event.target.value }))}
               placeholder="Optional note"
             />
-            <button
-              type="button"
-              disabled={createJobMaterial.isPending || !neededMaterialDraft.materialId || !neededMaterialDraft.quantity}
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!neededMaterialDraft.materialId || !neededMaterialDraft.quantity}
+              loading={createJobMaterial.isPending}
               onClick={() => void handleAddJobMaterial("needed")}
             >
               Add
-            </button>
+            </Button>
           </div>
 
           {neededMaterialDisplayItems.length === 0 ? (
-            <p style={{ color: "#5b6475", margin: 0 }}>No materials needed listed yet.</p>
+            <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>No materials needed listed yet.</Card>
           ) : (
             <div style={{ display: "grid", gap: "10px" }}>
               {neededMaterialDisplayItems.map((item) => (
@@ -3350,26 +3385,27 @@ export function WorkbenchPage() {
                   <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap", minWidth: 0 }}>
                     <div>
                       <strong style={{ overflowWrap: "anywhere" }}>{item.materialName}</strong>
-                      <div style={{ color: "#5b6475", fontSize: "13px", marginTop: "4px" }}>
+                      <div style={{ color: "var(--color-text-soft)", fontSize: "13px", marginTop: "4px" }}>
                         {item.sectionName ? `${item.sectionName} · ` : ""}
                         {item.materialSku ? `${item.materialSku} · ` : ""}
                         {item.quantity} {item.materialUnit}
                       </div>
                       {!item.isPersisted ? (
-                        <div style={{ color: "#5b6475", fontSize: "12px", marginTop: "4px" }}>
+                        <div style={{ color: "var(--color-text-soft)", fontSize: "12px", marginTop: "4px" }}>
                           From quote estimate
                         </div>
                       ) : null}
                     </div>
                     {item.isPersisted && item.id ? (
-                      <button
-                        type="button"
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => void handleRemoveJobMaterial(item.id as string, item.materialName)}
-                        disabled={deleteJobMaterial.isPending}
+                        loading={deleteJobMaterial.isPending}
                       >
                         Remove
-                      </button>
+                      </Button>
                     ) : null}
                   </div>
                   {item.isPersisted && item.id ? (
@@ -3415,10 +3451,10 @@ export function WorkbenchPage() {
                           }
                         }}
                       />
-                      <span style={{ color: "#5b6475", fontSize: "13px", alignSelf: "center" }}>{item.materialUnit}</span>
+                      <span style={{ color: "var(--color-text-soft)", fontSize: "13px", alignSelf: "center" }}>{item.materialUnit}</span>
                     </div>
                   ) : item.note ? (
-                    <div style={{ color: "#5b6475", fontSize: "13px" }}>{item.note}</div>
+                    <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{item.note}</div>
                   ) : null}
                 </div>
               ))}
@@ -3431,16 +3467,16 @@ export function WorkbenchPage() {
         <div style={sectionHeadingRow()}>
           <div style={{ minWidth: 0 }}>
             <h3 style={{ margin: 0 }}>Manual Actual Cost Lines</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
+            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
               Direct costs entered here stay separate from materials and labour imports, but they still roll into job cost totals.
             </p>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
             onClick={() => setShowManualActualComposer(true)}
           >
             {showManualActualComposer ? "Manual Cost Form Open" : "Add Manual Actual Line"}
-          </button>
+          </Button>
         </div>
 
         <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
@@ -3455,7 +3491,7 @@ export function WorkbenchPage() {
                 }}
               >
                 <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
-                  <span style={{ color: "#5b6475", fontSize: "13px" }}>Category</span>
+                  <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Category</span>
                   <select
                     value={manualActualCostDraft.category}
                     onChange={(event) => setManualActualCostDraft((current) => ({ ...current, category: event.target.value as JobManualActualCategory }))}
@@ -3469,7 +3505,7 @@ export function WorkbenchPage() {
                   </select>
                 </label>
                 <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
-                  <span style={{ color: "#5b6475", fontSize: "13px" }}>Description</span>
+                  <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Description</span>
                   <input
                     ref={manualActualDescriptionRef}
                     value={manualActualCostDraft.description}
@@ -3489,7 +3525,7 @@ export function WorkbenchPage() {
                 }}
               >
                 <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
-                  <span style={{ color: "#5b6475", fontSize: "13px" }}>Part</span>
+                  <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Part</span>
                   <select
                     value={manualActualCostDraft.sectionName}
                     onChange={(event) => setManualActualCostDraft((current) => ({ ...current, sectionName: event.target.value }))}
@@ -3503,7 +3539,7 @@ export function WorkbenchPage() {
                   </select>
                 </label>
                 <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
-                  <span style={{ color: "#5b6475", fontSize: "13px" }}>Quantity</span>
+                  <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Quantity</span>
                   <input
                     value={manualActualCostDraft.quantity}
                     onChange={(event) =>
@@ -3524,7 +3560,7 @@ export function WorkbenchPage() {
                   />
                 </label>
                 <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
-                  <span style={{ color: "#5b6475", fontSize: "13px" }}>Unit Cost</span>
+                  <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Unit Cost</span>
                   <input
                     value={manualActualCostDraft.unitCost}
                     onChange={(event) =>
@@ -3545,7 +3581,7 @@ export function WorkbenchPage() {
                   />
                 </label>
                 <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
-                  <span style={{ color: "#5b6475", fontSize: "13px" }}>Total Cost</span>
+                  <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Total Cost</span>
                   <input
                     value={manualActualCostDraft.totalCost}
                     onChange={(event) =>
@@ -3568,7 +3604,7 @@ export function WorkbenchPage() {
               </div>
 
               <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
-                <span style={{ color: "#5b6475", fontSize: "13px" }}>Note</span>
+                <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Note</span>
                 <input
                   value={manualActualCostDraft.note}
                   onChange={(event) => setManualActualCostDraft((current) => ({ ...current, note: event.target.value }))}
@@ -3578,21 +3614,21 @@ export function WorkbenchPage() {
               </label>
 
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
                   onClick={() => void handleAddManualActualCostLine()}
                   disabled={
-                    createManualActualCostLine.isPending ||
                     !manualActualCostDraft.description.trim() ||
                     Number(manualActualCostDraft.quantity) < 0 ||
                     Number(manualActualCostDraft.unitCost) < 0 ||
                     Number(manualActualCostDraft.totalCost) < 0
                   }
+                  loading={createManualActualCostLine.isPending}
                 >
-                  {createManualActualCostLine.isPending ? "Adding..." : "Save Manual Actual Line"}
-                </button>
-                <button
-                  type="button"
+                  Save Manual Actual Line
+                </Button>
+                <Button
+                  variant="secondary"
                   onClick={() => {
                     setManualActualCostDraft(createEmptyManualActualCostDraft());
                     setShowManualActualComposer(false);
@@ -3600,15 +3636,15 @@ export function WorkbenchPage() {
                   disabled={createManualActualCostLine.isPending}
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             </div>
           ) : null}
 
           {(jobWorkspace?.manualActualCostLines ?? []).length === 0 ? (
-            <p style={{ color: "#5b6475", margin: 0 }}>
+            <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>
               No manual actual cost lines logged yet. Use the Add Manual Actual Line button in this section to start one here.
-            </p>
+            </Card>
           ) : (
             <div style={{ display: "grid", gap: "10px" }}>
               {manualActualCostsByPart.map((section) =>
@@ -3640,7 +3676,7 @@ export function WorkbenchPage() {
         <div style={sectionHeadingRow()}>
           <div>
             <h3 style={{ margin: 0 }}>Timer Info</h3>
-            <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
+            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
               Running timer and recent time entries stay close without taking over the whole screen.
             </p>
           </div>
@@ -3694,7 +3730,7 @@ export function WorkbenchPage() {
           <div style={{ display: "grid", gap: "10px" }}>
             <h4 style={{ margin: 0 }}>Recent Entries</h4>
             {selectedJob.timeEntries.length === 0 ? (
-              <p style={{ color: "#5b6475", margin: 0 }}>No time entries yet.</p>
+              <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>No time entries yet.</Card>
             ) : (
               <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                 {selectedJob.timeEntries.slice(0, 5).map((entry) => (
@@ -3732,7 +3768,7 @@ export function WorkbenchPage() {
           placement="bottom"
           title="Add Person"
         >
-            <p style={{ margin: 0, color: "#5b6475" }}>
+            <p style={{ margin: 0, color: "var(--color-text-soft)" }}>
               Assign more people to this job.
             </p>
 
@@ -3745,7 +3781,7 @@ export function WorkbenchPage() {
 
             <div style={{ display: "grid", gap: "8px" }}>
               {filteredAssignableUsers.length === 0 ? (
-                <div style={{ color: "#5b6475" }}>No matching users.</div>
+                <div style={{ color: "var(--color-text-soft)" }}>No matching users.</div>
               ) : (
                 filteredAssignableUsers.map((user) => {
                   const alreadyAssigned = selectedAssignedUserIds.has(user.id);
@@ -3775,12 +3811,12 @@ export function WorkbenchPage() {
                         borderRadius: "14px",
                         border: "1px solid #d9dfeb",
                         background: alreadyAssigned ? "#f6f8fb" : "#fff",
-                        color: alreadyAssigned ? "#8a93a5" : "#172033",
+                        color: alreadyAssigned ? "#8a93a5" : "var(--color-text)",
                         textAlign: "left",
                       }}
                     >
                       <span>{user.label}</span>
-                      <span style={{ fontSize: "13px", color: alreadyAssigned ? "#8a93a5" : "#5b6475" }}>
+                      <span style={{ fontSize: "13px", color: alreadyAssigned ? "#8a93a5" : "var(--color-text-soft)" }}>
                         {alreadyAssigned ? "Already assigned" : "Add"}
                       </span>
                     </button>
@@ -3799,13 +3835,13 @@ export function WorkbenchPage() {
       >
         {selectedJob && editJobDraft ? (
           <>
-            <p style={{ margin: 0, color: "#5b6475" }}>
+            <p style={{ margin: 0, color: "var(--color-text-soft)" }}>
               Update the practical job details without leaving the work screen.
             </p>
 
             <div style={{ display: "grid", gap: "12px" }}>
               <label style={{ display: "grid", gap: "6px" }}>
-                <span style={{ color: "#5b6475", fontSize: "13px" }}>Job Title</span>
+                <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Job Title</span>
                 <input
                   value={editJobDraft.title}
                   onChange={(event) => setEditJobDraft((current) => current ? { ...current, title: event.target.value } : current)}
@@ -3814,7 +3850,7 @@ export function WorkbenchPage() {
               </label>
 
               <label style={{ display: "grid", gap: "6px" }}>
-                <span style={{ color: "#5b6475", fontSize: "13px" }}>Field Name / Nickname</span>
+                <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Field Name / Nickname</span>
                 <input
                   value={editJobDraft.fieldName}
                   onChange={(event) =>
@@ -3826,7 +3862,7 @@ export function WorkbenchPage() {
               </label>
 
               <label style={{ display: "grid", gap: "6px" }}>
-                <span style={{ color: "#5b6475", fontSize: "13px" }}>Customer / Contact</span>
+                <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Customer / Contact</span>
                 <select
                   value={editJobDraft.contactId}
                   onChange={(event) => setEditJobDraft((current) => current ? { ...current, contactId: event.target.value } : current)}
@@ -3842,7 +3878,7 @@ export function WorkbenchPage() {
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
                 <label style={{ display: "grid", gap: "6px" }}>
-                  <span style={{ color: "#5b6475", fontSize: "13px" }}>Estimated Hours</span>
+                  <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Estimated Hours</span>
                   <input
                     value={editJobDraft.estimatedHours}
                     onChange={(event) => setEditJobDraft((current) => current ? { ...current, estimatedHours: event.target.value } : current)}
@@ -3852,7 +3888,7 @@ export function WorkbenchPage() {
                   />
                 </label>
                 <label style={{ display: "grid", gap: "6px" }}>
-                  <span style={{ color: "#5b6475", fontSize: "13px" }}>Status</span>
+                  <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Status</span>
                   <select
                     value={editJobDraft.status}
                     onChange={(event) =>
@@ -3882,7 +3918,7 @@ export function WorkbenchPage() {
 
               {editJobDraft.status === "waiting" ? (
                 <label style={{ display: "grid", gap: "6px" }}>
-                  <span style={{ color: "#5b6475", fontSize: "13px" }}>Waiting Reason</span>
+                  <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Waiting Reason</span>
                   <select
                     value={editJobDraft.waitingReason}
                     onChange={(event) => setEditJobDraft((current) => current ? { ...current, waitingReason: event.target.value } : current)}
@@ -3898,7 +3934,7 @@ export function WorkbenchPage() {
               ) : null}
 
               <label style={{ display: "grid", gap: "6px" }}>
-                <span style={{ color: "#5b6475", fontSize: "13px" }}>Description / Scope</span>
+                <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Description / Scope</span>
                 <textarea
                   value={editJobDraft.description}
                   onChange={(event) => setEditJobDraft((current) => current ? { ...current, description: event.target.value } : current)}
@@ -3912,19 +3948,19 @@ export function WorkbenchPage() {
               <div style={sectionHeadingRow()}>
                 <div>
                   <strong>Assigned Crew</strong>
-                  <div style={{ color: "#5b6475", fontSize: "13px", marginTop: "4px" }}>
+                  <div style={{ color: "var(--color-text-soft)", fontSize: "13px", marginTop: "4px" }}>
                     Manage who is currently assigned to this job.
                   </div>
                 </div>
                 {canManageAssignments ? (
-                  <button type="button" onClick={() => setShowAssignPeople(true)} style={secondaryButtonStyle()}>
+                  <Button variant="secondary" onClick={() => setShowAssignPeople(true)}>
                     + Add Person
-                  </button>
+                  </Button>
                 ) : null}
               </div>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
                 {selectedJob.assignments.length === 0 ? (
-                  <span style={{ color: "#5b6475" }}>Nobody assigned yet.</span>
+                  <span style={{ color: "var(--color-text-soft)" }}>Nobody assigned yet.</span>
                 ) : (
                   selectedJob.assignments.map((assignment) => {
                     const userLabel =
@@ -3972,17 +4008,16 @@ export function WorkbenchPage() {
             </section>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", flexWrap: "wrap" }}>
-              <button type="button" onClick={() => setShowEditJob(false)} style={secondaryButtonStyle()}>
+              <Button variant="secondary" onClick={() => setShowEditJob(false)}>
                 Cancel
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="primary"
                 onClick={() => void handleSaveJobEdits()}
-                disabled={updateJob.isPending || updateJobStatus.isPending}
-                style={primaryButtonStyle()}
+                loading={updateJob.isPending || updateJobStatus.isPending}
               >
-                {updateJob.isPending || updateJobStatus.isPending ? "Saving..." : "Save Changes"}
-              </button>
+                Save Changes
+              </Button>
             </div>
 
             {canArchiveJobs ? (
@@ -3996,18 +4031,18 @@ export function WorkbenchPage() {
               >
                 <div>
                   <strong style={{ color: "#7a2430" }}>Danger Zone</strong>
-                  <p style={{ margin: "4px 0 0", color: "#5b6475" }}>
+                  <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
                     Archiving hides this job from the active jobs list without changing old records.
                   </p>
                 </div>
                 <div>
-                  <button
-                    type="button"
+                  <Button
+                    variant="danger"
                     onClick={() => void handleArchiveJob(selectedJob.job.id, selectedJob.job.title)}
-                    disabled={archiveJob.isPending}
+                    loading={archiveJob.isPending}
                   >
-                    {archiveJob.isPending ? "Archiving..." : "Archive Job"}
-                  </button>
+                    Archive Job
+                  </Button>
                 </div>
               </section>
             ) : null}

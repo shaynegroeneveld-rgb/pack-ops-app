@@ -8,18 +8,18 @@ import { QuoteEditorPanel, type QuoteEditorDraft } from "@/features/quotes/compo
 import { useQuotesSlice } from "@/features/quotes/hooks/use-quotes-slice";
 import {
   badgeStyle,
-  cardStyle,
-  chipStyle,
   feedbackStyle,
   pageHeaderStyle,
   pageStyle,
-  primaryButtonStyle,
-  secondaryButtonStyle,
   subtitleStyle,
   titleStyle,
 } from "@/features/shared/ui/mobile-styles";
 import type { CustomerQuotePreview, QuoteView } from "@/domain/quotes/types";
-import { useConfirm } from "@/ui";
+import { Button, Card, Chip, useConfirm } from "@/ui";
+
+function actionRowStyle(): React.CSSProperties {
+  return { display: "flex", gap: "8px", flexWrap: "wrap" };
+}
 
 const STATUS_OPTIONS: Array<{ value: QuoteView["status"] | "all"; label: string }> = [
   { value: "all", label: "All" },
@@ -470,8 +470,9 @@ export function QuotesPage() {
           </p>
         </div>
         {canManage ? (
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <button
+          <div style={actionRowStyle()}>
+            <Button
+              variant="primary"
               onClick={() =>
                 setEditorDraft(
                   createEmptyDraft(
@@ -482,87 +483,72 @@ export function QuotesPage() {
                   ),
                 )
               }
-              style={primaryButtonStyle()}
             >
               New Quote
-            </button>
-            <button onClick={() => setActiveRoute(APP_ROUTES.leads)} style={secondaryButtonStyle()}>
+            </Button>
+            <Button variant="secondary" onClick={() => setActiveRoute(APP_ROUTES.leads)}>
               Create From Lead
-            </button>
+            </Button>
           </div>
         ) : null}
       </header>
 
       {feedback ? (
-        <section style={feedbackStyle(feedback.tone)}>
+        <section style={feedbackStyle(feedback.tone)} role={feedback.tone === "error" ? "alert" : "status"} aria-live="polite">
           {feedback.text}
         </section>
       ) : null}
 
-      <section style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "16px" }}>
-        {STATUS_OPTIONS.map((option) => {
-          const isActive = activeStatus === option.value;
-          return (
-            <button
-              key={option.value}
-              onClick={() => setActiveStatus(option.value)}
-              style={chipStyle(isActive)}
-            >
-              {option.label}
-            </button>
-          );
-        })}
+      <section style={{ ...actionRowStyle(), marginBottom: "16px" }}>
+        {STATUS_OPTIONS.map((option) => (
+          <Chip key={option.value} active={activeStatus === option.value} onClick={() => setActiveStatus(option.value)}>
+            {option.label}
+          </Chip>
+        ))}
       </section>
 
       <section style={{ display: "grid", gap: "12px" }}>
-        {quotesQuery.isLoading ? <p>Loading quotes...</p> : null}
+        {quotesQuery.isLoading ? (
+          <Card variant="soft" role="status" aria-live="polite" style={{ color: "var(--color-text-soft)" }}>
+            Loading quotes…
+          </Card>
+        ) : null}
         {!quotesQuery.isLoading && quotes.length === 0 ? (
-          <div style={{ ...cardStyle("#fafcff"), borderStyle: "dashed", color: "#5d6978" }}>
-            <strong style={{ display: "block", color: "#172033", marginBottom: "6px" }}>
+          <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>
+            <strong style={{ display: "block", color: "var(--color-text)", marginBottom: "6px" }}>
               No quotes are showing for this filter.
             </strong>
             Create a standalone quote here, or start one from a lead when you want it linked.
-          </div>
+          </Card>
         ) : null}
 
         {quotes.map((quote) => {
           const tone = getQuoteStatusTone(quote.status);
           return (
-            <article
-              key={quote.id}
-              style={{
-                ...cardStyle("#fff"),
-                display: "grid",
-                gap: "12px",
-              }}
-            >
+            <Card key={quote.id} variant="surface" style={{ display: "grid", gap: "12px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap" }}>
                 <div>
                   <div style={{ fontWeight: 700 }}>{quote.number}</div>
                   <div style={{ fontWeight: 600, marginTop: "4px" }}>{quote.title}</div>
-                  <div style={{ color: "#5b6475", marginTop: "4px" }}>
+                  <div style={{ color: "var(--color-text-soft)", marginTop: "4px" }}>
                     {quote.customerName} · {quote.contactName}
                   </div>
-                  <div style={{ color: "#5b6475", marginTop: "4px", fontSize: "13px" }}>
+                  <div style={{ color: "var(--color-text-soft)", marginTop: "4px", fontSize: "13px" }}>
                     Linked Lead: {quote.linkedLeadLabel ?? "None"}
                   </div>
                 </div>
-                <span
-                  style={badgeStyle(tone.background, tone.color)}
-                >
-                  {quote.status}
-                </span>
+                <span style={badgeStyle(tone.background, tone.color)}>{quote.status}</span>
               </div>
 
               {quote.customerNotes ? <div style={{ fontSize: "15px", lineHeight: 1.45 }}>{quote.customerNotes}</div> : null}
-              {quote.internalNotes ? <div style={{ color: "#445168", lineHeight: 1.45 }}>{quote.internalNotes}</div> : null}
+              {quote.internalNotes ? <div style={{ color: "var(--color-text-muted)", lineHeight: 1.45 }}>{quote.internalNotes}</div> : null}
               {quote.hasLinkedInvoice ? (
-                <div style={{ color: "#b54708", fontSize: "14px", lineHeight: 1.45 }}>
+                <div style={{ color: "var(--color-warning)", fontSize: "14px", lineHeight: 1.45 }}>
                   This quote is tied to an invoice. Editing is locked to avoid inconsistencies.
                 </div>
               ) : null}
 
-              <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", color: "#5d6978", fontSize: "14px" }}>
+              <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", color: "var(--color-text-soft)", fontSize: "14px" }}>
                 <span>Subtotal: ${quote.subtotal.toFixed(2)}</span>
                 <span>Tax: ${(quote.taxAmount ?? 0).toFixed(2)}</span>
                 <span>Total: ${quote.total.toFixed(2)}</span>
@@ -573,28 +559,38 @@ export function QuotesPage() {
               </div>
 
               {canManage ? (
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                  <button onClick={() => setEditorDraft(toDraft(quote, builderResources.defaultMaterialMarkup))} style={secondaryButtonStyle()}>Edit</button>
-                  <button onClick={() => void handlePreviewCustomerQuote(quote.id)} disabled={previewCustomerQuote.isPending} style={secondaryButtonStyle()}>
-                    {previewCustomerQuote.isPending ? "Preparing Preview..." : "Preview Customer Quote"}
-                  </button>
+                <div style={actionRowStyle()}>
+                  <Button variant="secondary" onClick={() => setEditorDraft(toDraft(quote, builderResources.defaultMaterialMarkup))}>
+                    Edit
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    loading={previewCustomerQuote.isPending}
+                    onClick={() => void handlePreviewCustomerQuote(quote.id)}
+                  >
+                    Preview Customer Quote
+                  </Button>
                   {quote.status === "draft" || quote.status === "sent" || quote.status === "viewed" ? (
-                    <button onClick={() => void handleAcceptQuote(toDraft(quote, builderResources.defaultMaterialMarkup))} disabled={acceptQuote.isPending} style={primaryButtonStyle()}>
-                      {acceptQuote.isPending ? "Accepting..." : "Mark as Accepted"}
-                    </button>
+                    <Button
+                      variant="primary"
+                      loading={acceptQuote.isPending}
+                      onClick={() => void handleAcceptQuote(toDraft(quote, builderResources.defaultMaterialMarkup))}
+                    >
+                      Mark as Accepted
+                    </Button>
                   ) : null}
                   {quote.status === "accepted" ? (
-                    <button onClick={() => void handleCreateJob(quote)} disabled={createJobFromQuote.isPending} style={primaryButtonStyle()}>
-                      {createJobFromQuote.isPending
-                        ? "Creating Job..."
-                        : quote.linkedJobId
-                          ? "Open Job"
-                          : "Create Job"}
-                    </button>
+                    <Button
+                      variant="primary"
+                      loading={createJobFromQuote.isPending}
+                      onClick={() => void handleCreateJob(quote)}
+                    >
+                      {quote.linkedJobId ? "Open Job" : "Create Job"}
+                    </Button>
                   ) : null}
                 </div>
               ) : null}
-            </article>
+            </Card>
           );
         })}
       </section>

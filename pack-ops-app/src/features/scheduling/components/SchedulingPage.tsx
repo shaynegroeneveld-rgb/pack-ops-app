@@ -16,7 +16,6 @@ import {
   feedbackStyle,
   pageHeaderStyle,
   pageStyle,
-  primaryButtonStyle,
   secondaryButtonStyle,
   subtitleStyle,
   titleStyle,
@@ -27,7 +26,7 @@ import {
   hasUnassignedBlocksWithCrew,
 } from "@/services/scheduling/job-capacity";
 import type { SchedulingUserOption } from "@/services/scheduling/scheduling-service";
-import { Modal, useConfirm } from "@/ui";
+import { Button, Card, Chip, Modal, useConfirm } from "@/ui";
 
 function startOfWeekMonday(input: Date): Date {
   const date = new Date(input);
@@ -117,6 +116,14 @@ function getAssigneeLabel(
   }
 
   return `Assigned · ${scheduleBlock.userId.slice(0, 8)}`;
+}
+
+function mutedCaptionStyle(): React.CSSProperties {
+  return { margin: 0, color: "var(--color-text-soft)", fontSize: "13px" };
+}
+
+function emptyStateStyle(): React.CSSProperties {
+  return { borderStyle: "dashed", color: "var(--color-text-soft)" };
 }
 
 function getTimeBucketLabel(timeBucket: ScheduleBlock["timeBucket"]): string {
@@ -1030,22 +1037,22 @@ export function SchedulingPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          <button onClick={() => setWeekStart((current) => addDays(current, -7))} style={secondaryButtonStyle()}>Previous Week</button>
+          <Button variant="secondary" onClick={() => setWeekStart((current) => addDays(current, -7))}>Previous Week</Button>
           <strong>{getWeekRangeLabel(weekDays)}</strong>
-          <button onClick={() => setWeekStart((current) => addDays(current, 7))} style={secondaryButtonStyle()}>Next Week</button>
-          <button onClick={() => refreshScheduling.mutate()} disabled={refreshScheduling.isPending} style={secondaryButtonStyle()}>
-            {refreshScheduling.isPending ? "Refreshing..." : "Refresh"}
-          </button>
+          <Button variant="secondary" onClick={() => setWeekStart((current) => addDays(current, 7))}>Next Week</Button>
+          <Button variant="secondary" loading={refreshScheduling.isPending} onClick={() => refreshScheduling.mutate()}>
+            Refresh
+          </Button>
           {canManageScheduling ? (
-            <button onClick={() => setIsAvailabilityPanelOpen(true)} style={primaryButtonStyle()}>
+            <Button variant="primary" onClick={() => setIsAvailabilityPanelOpen(true)}>
               Mark Worker Away
-            </button>
+            </Button>
           ) : null}
         </div>
       </header>
 
       {feedback ? (
-        <section style={feedbackStyle(feedback.tone)}>
+        <section style={feedbackStyle(feedback.tone)} role={feedback.tone === "error" ? "alert" : "status"} aria-live="polite">
           {feedback.text}
         </section>
       ) : null}
@@ -1057,12 +1064,12 @@ export function SchedulingPage() {
           placement={isMobileLayout ? "bottom" : "center"}
           title="Mark Worker Away"
           footer={
-            <button onClick={() => void handleMarkUnavailable()} disabled={markWorkerUnavailable.isPending} style={primaryButtonStyle()}>
-              {markWorkerUnavailable.isPending ? "Saving..." : "Mark Away"}
-            </button>
+            <Button variant="primary" loading={markWorkerUnavailable.isPending} onClick={() => void handleMarkUnavailable()}>
+              Mark Away
+            </Button>
           }
         >
-            <p style={{ margin: 0, color: "#5b6475", fontSize: "13px" }}>
+            <p style={mutedCaptionStyle()}>
               Auto-fill scheduling will avoid this person on the selected day.
             </p>
 
@@ -1102,7 +1109,7 @@ export function SchedulingPage() {
             <div style={{ display: "grid", gap: "8px" }}>
               <strong>Days Off This Week</strong>
               {workerUnavailability.length === 0 ? (
-                <div style={{ color: "#5b6475", fontSize: "13px" }}>No one is marked away this week.</div>
+                <div style={mutedCaptionStyle()}>No one is marked away this week.</div>
               ) : null}
               {workerUnavailability.map((entry) => (
                 <div
@@ -1121,13 +1128,13 @@ export function SchedulingPage() {
                     <strong style={{ display: "block", fontSize: "13px" }}>
                       {userNamesById.get(entry.userId) ?? entry.userId.slice(0, 8)}
                     </strong>
-                    <span style={{ color: "#5b6475", fontSize: "13px" }}>
+                    <span style={mutedCaptionStyle()}>
                       {entry.day}{entry.reason ? ` · ${entry.reason}` : ""}
                     </span>
                   </div>
-                  <button onClick={() => void handleRemoveUnavailable(entry.id)} disabled={removeWorkerUnavailability.isPending}>
+                  <Button variant="secondary" size="sm" loading={removeWorkerUnavailability.isPending} onClick={() => void handleRemoveUnavailable(entry.id)}>
                     Remove
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
@@ -1159,9 +1166,9 @@ export function SchedulingPage() {
               placeholder="Reason, optional"
               onChange={(event) => setAvailabilityDraft((current) => ({ ...current, reason: event.target.value }))}
             />
-            <button onClick={() => void handleMarkUnavailable()} disabled={markWorkerUnavailable.isPending} style={secondaryButtonStyle()}>
-              {markWorkerUnavailable.isPending ? "Saving..." : "Mark Unavailable"}
-            </button>
+            <Button variant="secondary" loading={markWorkerUnavailable.isPending} onClick={() => void handleMarkUnavailable()}>
+              Mark Unavailable
+            </Button>
             {workerUnavailability.map((entry) => (
               <div
                 key={entry.id}
@@ -1179,13 +1186,13 @@ export function SchedulingPage() {
                   <strong style={{ display: "block", fontSize: "13px" }}>
                     {userNamesById.get(entry.userId) ?? entry.userId.slice(0, 8)}
                   </strong>
-                  <span style={{ color: "#5b6475", fontSize: "13px" }}>
+                  <span style={mutedCaptionStyle()}>
                     {entry.day}{entry.reason ? ` · ${entry.reason}` : ""}
                   </span>
                 </div>
-                <button onClick={() => void handleRemoveUnavailable(entry.id)} disabled={removeWorkerUnavailability.isPending}>
+                <Button variant="secondary" size="sm" loading={removeWorkerUnavailability.isPending} onClick={() => void handleRemoveUnavailable(entry.id)}>
                   Remove
-                </button>
+                </Button>
               </div>
             ))}
           </div>
@@ -1195,30 +1202,26 @@ export function SchedulingPage() {
       <section style={{ display: "grid", gridTemplateColumns: showPlanningSidebar ? "repeat(auto-fit, minmax(280px, 1fr))" : "1fr", gap: "20px", alignItems: "start" }}>
         {showPlanningSidebar ? (
         <aside style={{ display: "grid", gap: "16px" }}>
-          <section style={cardStyle("#fff")}>
+          <Card variant="surface">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
               <h2 style={{ margin: 0 }}>Unscheduled Jobs</h2>
-              <span style={{ color: "#5b6475", fontSize: "13px" }}>{orderedUnscheduledJobs.length}</span>
+              <span style={mutedCaptionStyle()}>{orderedUnscheduledJobs.length}</span>
             </div>
 
-            {unscheduledJobsQuery.isLoading ? <p>Loading unscheduled jobs...</p> : null}
+            {unscheduledJobsQuery.isLoading ? (
+              <Card variant="soft" role="status" aria-live="polite" style={{ color: "var(--color-text-soft)" }}>
+                Loading unscheduled jobs…
+              </Card>
+            ) : null}
             {!unscheduledJobsQuery.isLoading && orderedUnscheduledJobs.length === 0 ? (
-              <div
-                style={{
-                  border: "1px dashed #d9dfeb",
-                  borderRadius: "12px",
-                  padding: "14px",
-                  background: "#fafcff",
-                  color: "#5b6475",
-                }}
-              >
+              <Card variant="soft" style={emptyStateStyle()}>
                 Every active job already has upcoming work scheduled.
-              </div>
+              </Card>
             ) : null}
 
             <div style={{ display: "grid", gap: "10px" }}>
               {orderedUnscheduledJobs.map((item) => (
-                <article
+                <Card
                   key={item.job.id}
                   draggable={!pendingDropDay}
                   onDragStart={(event) => {
@@ -1227,9 +1230,6 @@ export function SchedulingPage() {
                   }}
                   onDragEnd={handleDragEnd}
                   style={{
-                    ...cardStyle("#fff"),
-                    borderRadius: "16px",
-                    padding: "14px",
                     opacity:
                       draggingPayload?.kind === "unscheduled_job" && draggingPayload.jobId === item.job.id ? 0.55 : 1,
                     cursor: pendingDropDay ? "default" : "grab",
@@ -1237,25 +1237,25 @@ export function SchedulingPage() {
                 >
                   <strong>{item.job.number}</strong>
                   <div style={{ fontWeight: 600, margin: "4px 0" }}>{item.job.title}</div>
-                  <div style={{ color: "#5b6475", fontSize: "13px", marginBottom: "8px" }}>
+                  <div style={{ ...mutedCaptionStyle(), marginBottom: "8px" }}>
                     {item.job.estimatedHours ? `${item.job.estimatedHours}h estimated` : "No estimate yet"}
                     {" · "}
                     {item.assignments.length > 0 ? `${item.assignments.length} assigned` : "No one assigned"}
                   </div>
-                  <div style={{ color: "#5b6475", fontSize: "13px", marginBottom: "10px" }}>
+                  <div style={{ ...mutedCaptionStyle(), marginBottom: "10px" }}>
                     {getCapacitySummaryLabel(item.job, item.assignments)}
                   </div>
-                  <button onClick={() => openCreateForJob(item.job, weekDays[0]!)} style={primaryButtonStyle()}>Schedule</button>
-                </article>
+                  <Button variant="primary" onClick={() => openCreateForJob(item.job, weekDays[0]!)}>Schedule</Button>
+                </Card>
               ))}
             </div>
-          </section>
+          </Card>
 
-          <section style={cardStyle("#fff")}>
+          <Card variant="surface">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
               <div>
                 <h2 style={{ margin: 0 }}>Crew Days Off</h2>
-                <span style={{ color: "#5b6475", fontSize: "13px" }}>Auto-fill will work around these days.</span>
+                <span style={mutedCaptionStyle()}>Auto-fill will work around these days.</span>
               </div>
             </div>
             <div style={{ display: "grid", gap: "10px" }}>
@@ -1280,14 +1280,14 @@ export function SchedulingPage() {
                 placeholder="Reason, optional"
                 onChange={(event) => setAvailabilityDraft((current) => ({ ...current, reason: event.target.value }))}
               />
-              <button onClick={() => void handleMarkUnavailable()} disabled={markWorkerUnavailable.isPending} style={secondaryButtonStyle()}>
-                {markWorkerUnavailable.isPending ? "Saving..." : "Mark Unavailable"}
-              </button>
+              <Button variant="secondary" loading={markWorkerUnavailable.isPending} onClick={() => void handleMarkUnavailable()}>
+                Mark Unavailable
+              </Button>
             </div>
 
             <div style={{ display: "grid", gap: "8px", marginTop: "14px" }}>
               {workerUnavailability.length === 0 ? (
-                <div style={{ color: "#5b6475", fontSize: "13px" }}>No days off marked for this week.</div>
+                <div style={mutedCaptionStyle()}>No days off marked for this week.</div>
               ) : null}
               {workerUnavailability.map((entry) => (
                 <div
@@ -1306,17 +1306,17 @@ export function SchedulingPage() {
                     <strong style={{ display: "block", fontSize: "13px" }}>
                       {userNamesById.get(entry.userId) ?? entry.userId.slice(0, 8)}
                     </strong>
-                    <span style={{ color: "#5b6475", fontSize: "13px" }}>
+                    <span style={mutedCaptionStyle()}>
                       {entry.day}{entry.reason ? ` · ${entry.reason}` : ""}
                     </span>
                   </div>
-                  <button onClick={() => void handleRemoveUnavailable(entry.id)} disabled={removeWorkerUnavailability.isPending}>
+                  <Button variant="secondary" size="sm" loading={removeWorkerUnavailability.isPending} onClick={() => void handleRemoveUnavailable(entry.id)}>
                     Remove
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
-          </section>
+          </Card>
 
         </aside>
         ) : null}
@@ -1352,11 +1352,12 @@ export function SchedulingPage() {
             >
               <div>
                 <strong style={{ display: "block", fontSize: "16px" }}>Week Schedule</strong>
-                <span style={{ color: "#5b6475", fontSize: "13px" }}>
+                <span style={mutedCaptionStyle()}>
                   Focus on scheduled work first, then add jobs into the day as needed.
                 </span>
               </div>
-              <button
+              <Button
+                variant="primary"
                 onClick={() => {
                   if (orderedUnscheduledJobs.length === 0) {
                     setFeedback({ tone: "error", text: "There are no unscheduled jobs available to add." });
@@ -1364,10 +1365,9 @@ export function SchedulingPage() {
                   }
                   setMobileAddJobDay(weekDays[0] ?? new Date());
                 }}
-                style={primaryButtonStyle()}
               >
                 Add Job
-              </button>
+              </Button>
             </div>
           ) : null}
           <div
@@ -1432,14 +1432,14 @@ export function SchedulingPage() {
                   <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "start" }}>
                     <div style={{ flex: 1 }}>
                       <strong style={{ display: "block" }}>{getDayLabel(day)}</strong>
-                      <small style={{ color: "#5b6475" }}>
+                      <small style={{ color: "var(--color-text-soft)" }}>
                         {dayGroups.length} job{dayGroups.length === 1 ? "" : "s"}
                       </small>
                       <div style={{ marginTop: "8px" }}>
                         <div style={{ fontSize: "12px", color: workload.tone, marginBottom: "4px" }}>
                           {totalHours.toFixed(1)}h planned · {workload.label}
                         </div>
-                        <div style={{ fontSize: "12px", color: "#5d6978", marginBottom: "6px" }}>
+                        <div style={{ fontSize: "12px", color: "var(--color-text-soft)", marginBottom: "6px" }}>
                           {totalCrewDays.toFixed(2)} crew-days
                         </div>
                         <div style={{ height: "6px", borderRadius: "999px", background: "#e6ebf5", overflow: "hidden" }}>
@@ -1463,9 +1463,11 @@ export function SchedulingPage() {
                       ) : null}
                     </div>
                     <div style={{ display: "grid", gap: "8px" }}>
-                      <button onClick={() => setSelectedDayDetail(day)}>Open Day</button>
+                      <Button variant="secondary" size="sm" onClick={() => setSelectedDayDetail(day)}>Open Day</Button>
                       {canManageScheduling ? (
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => {
                             if (isMobileLayout) {
                               if (orderedUnscheduledJobs.length === 0) {
@@ -1487,7 +1489,7 @@ export function SchedulingPage() {
                           }}
                         >
                           {isMobileLayout ? "Add Job" : "Add Block"}
-                        </button>
+                        </Button>
                       ) : null}
                     </div>
                   </div>
@@ -1498,7 +1500,7 @@ export function SchedulingPage() {
                         border: "1px dashed #d9dfeb",
                         borderRadius: "12px",
                         padding: "12px",
-                        color: "#5b6475",
+                        color: "var(--color-text-soft)",
                         background: "#ffffff",
                       }}
                     >
@@ -1560,7 +1562,7 @@ export function SchedulingPage() {
                         >
                           <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
                             <strong>{group.job.number}</strong>
-                            <small style={{ color: "#5b6475" }}>{group.totalHoursThisDay}h</small>
+                            <small style={{ color: "var(--color-text-soft)" }}>{group.totalHoursThisDay}h</small>
                           </div>
                           <div style={{ fontWeight: 600 }}>{group.job.title}</div>
                           <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
@@ -1580,10 +1582,10 @@ export function SchedulingPage() {
                               Day {group.dayIndex} of {group.totalDays}
                             </span>
                           </div>
-                          <div style={{ color: "#5b6475", fontSize: "13px" }}>
+                          <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
                             Crew: {getCrewLabel(group.scheduledUserIds, userNamesById)}
                           </div>
-                          <div style={{ color: "#5b6475", fontSize: "13px" }}>
+                          <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
                             {getCapacitySummaryLabel(group.job, group.assignments)}
                           </div>
                           {group.unavailableWorkerIds.length > 0 ? (
@@ -1605,7 +1607,7 @@ export function SchedulingPage() {
                             <div style={{ color: "#1f6b37", fontSize: "13px", fontWeight: 700 }}>Auto-filled</div>
                           ) : null}
                           {group.requiresFullCrewTogether ? (
-                            <div style={{ color: "#445168", fontSize: "13px", fontWeight: 700 }}>
+                            <div style={{ color: "var(--color-text-muted)", fontSize: "13px", fontWeight: 700 }}>
                               Full crew required
                             </div>
                           ) : null}
@@ -1615,53 +1617,62 @@ export function SchedulingPage() {
                             </div>
                           ) : null}
                           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                            <button onClick={() => handleStartWork(group.job.id)}>Start Work</button>
+                            <Button variant="secondary" size="sm" onClick={() => handleStartWork(group.job.id)}>Start Work</Button>
                             {canManageScheduling ? (
                               <>
-                                <button
-                                  onClick={() => openEditForBlock(firstBlock)}
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
                                   disabled={isPending}
+                                  onClick={() => openEditForBlock(firstBlock)}
                                 >
                                   Edit
-                                </button>
-                                <button
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={isPending}
+                                  loading={isPending && pendingGroupAction?.action === "today"}
                                   onClick={() => handleMoveGroupToday(group)}
-                                  disabled={isPending}
                                 >
-                                  {isPending && pendingGroupAction?.action === "today"
-                                    ? "Moving..."
-                                    : "Today"}
-                                </button>
-                                <button
+                                  Today
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={isPending}
+                                  loading={isPending && pendingGroupAction?.action === "tomorrow"}
                                   onClick={() => handleMoveGroupTomorrow(group)}
-                                  disabled={isPending}
                                 >
-                                  {isPending && pendingGroupAction?.action === "tomorrow"
-                                    ? "Moving..."
-                                    : "Tomorrow"}
-                                </button>
-                                <button
+                                  Tomorrow
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={isPending}
+                                  loading={isPending && pendingGroupAction?.action === "carryover"}
                                   onClick={() => openCarryOverForGroup(group)}
-                                  disabled={isPending}
                                 >
-                                  {isPending && pendingGroupAction?.action === "carryover"
-                                    ? "Moving..."
-                                    : "Carry Over"}
-                                </button>
-                                <button
+                                  Carry Over
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={isPending}
+                                  loading={autoFillScheduleBlocks.isPending}
                                   onClick={() => void handleRecalculateJobSchedule(group.job.id, group.day)}
-                                  disabled={isPending || autoFillScheduleBlocks.isPending}
                                 >
-                                  {autoFillScheduleBlocks.isPending ? "Reflowing..." : "Recalculate"}
-                                </button>
-                                <button
-                                  onClick={() => void unscheduleGroup(group)}
+                                  Recalculate
+                                </Button>
+                                <Button
+                                  variant="danger"
+                                  size="sm"
                                   disabled={isPending}
+                                  loading={isPending && pendingGroupAction?.action === "unschedule"}
+                                  onClick={() => void unscheduleGroup(group)}
                                 >
-                                  {isPending && pendingGroupAction?.action === "unschedule"
-                                    ? "Unscheduling..."
-                                    : "Unschedule Day"}
-                                </button>
+                                  Unschedule Day
+                                </Button>
                               </>
                             ) : null}
                           </div>
@@ -1672,7 +1683,7 @@ export function SchedulingPage() {
 
                   {untimedGroups.length > 0 ? (
                     <div style={{ display: "grid", gap: "10px" }}>
-                      <strong style={{ fontSize: "13px", color: "#5b6475" }}>Untimed Jobs</strong>
+                      <strong style={{ fontSize: "13px", color: "var(--color-text-soft)" }}>Untimed Jobs</strong>
                       {untimedGroups.map((group) => {
                         const firstBlock = group.blocks[0]!;
                         const isPending = pendingGroupAction?.groupKey === group.key;
@@ -1708,7 +1719,7 @@ export function SchedulingPage() {
                           >
                             <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
                               <strong>{group.job.number}</strong>
-                              <small style={{ color: "#5b6475" }}>{group.totalHoursThisDay}h</small>
+                              <small style={{ color: "var(--color-text-soft)" }}>{group.totalHoursThisDay}h</small>
                             </div>
                             <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                               <span style={{ fontWeight: 600, color: "#172033" }}>{group.job.title}</span>
@@ -1716,7 +1727,7 @@ export function SchedulingPage() {
                                 style={{
                                   borderRadius: "999px",
                                   background: "#eef2f8",
-                                  color: "#445168",
+                                  color: "var(--color-text-muted)",
                                   fontSize: "12px",
                                   padding: "4px 8px",
                                 }}
@@ -1736,10 +1747,10 @@ export function SchedulingPage() {
                                 Day {group.dayIndex} of {group.totalDays}
                               </span>
                             </div>
-                            <div style={{ color: "#5b6475", fontSize: "13px" }}>
+                            <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
                               Crew: {getCrewLabel(group.scheduledUserIds, userNamesById)}
                             </div>
-                            <div style={{ color: "#5b6475", fontSize: "13px" }}>
+                            <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
                               {getCapacitySummaryLabel(group.job, group.assignments)}
                             </div>
                             {group.unavailableWorkerIds.length > 0 ? (
@@ -1761,7 +1772,7 @@ export function SchedulingPage() {
                               <div style={{ color: "#1f6b37", fontSize: "13px", fontWeight: 700 }}>Auto-filled</div>
                             ) : null}
                             {group.requiresFullCrewTogether ? (
-                              <div style={{ color: "#445168", fontSize: "13px", fontWeight: 700 }}>
+                              <div style={{ color: "var(--color-text-muted)", fontSize: "13px", fontWeight: 700 }}>
                                 Full crew required
                               </div>
                             ) : null}
@@ -1771,53 +1782,62 @@ export function SchedulingPage() {
                               </div>
                             ) : null}
                             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                              <button onClick={() => handleStartWork(group.job.id)}>Start Work</button>
+                              <Button variant="secondary" size="sm" onClick={() => handleStartWork(group.job.id)}>Start Work</Button>
                               {canManageScheduling ? (
                                 <>
-                                  <button
-                                    onClick={() => openEditForBlock(firstBlock)}
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
                                     disabled={isPending}
+                                    onClick={() => openEditForBlock(firstBlock)}
                                   >
                                     Edit
-                                  </button>
-                                  <button
+                                  </Button>
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={isPending}
+                                    loading={isPending && pendingGroupAction?.action === "today"}
                                     onClick={() => handleMoveGroupToday(group)}
-                                    disabled={isPending}
                                   >
-                                    {isPending && pendingGroupAction?.action === "today"
-                                      ? "Moving..."
-                                      : "Today"}
-                                  </button>
-                                  <button
+                                    Today
+                                  </Button>
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={isPending}
+                                    loading={isPending && pendingGroupAction?.action === "tomorrow"}
                                     onClick={() => handleMoveGroupTomorrow(group)}
-                                    disabled={isPending}
                                   >
-                                    {isPending && pendingGroupAction?.action === "tomorrow"
-                                      ? "Moving..."
-                                      : "Tomorrow"}
-                                  </button>
-                                  <button
+                                    Tomorrow
+                                  </Button>
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={isPending}
+                                    loading={isPending && pendingGroupAction?.action === "carryover"}
                                     onClick={() => openCarryOverForGroup(group)}
-                                    disabled={isPending}
                                   >
-                                    {isPending && pendingGroupAction?.action === "carryover"
-                                      ? "Moving..."
-                                      : "Carry Over"}
-                                  </button>
-                                  <button
+                                    Carry Over
+                                  </Button>
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={isPending}
+                                    loading={autoFillScheduleBlocks.isPending}
                                     onClick={() => void handleRecalculateJobSchedule(group.job.id, group.day)}
-                                    disabled={isPending || autoFillScheduleBlocks.isPending}
                                   >
-                                    {autoFillScheduleBlocks.isPending ? "Reflowing..." : "Recalculate"}
-                                  </button>
-                                  <button
-                                    onClick={() => void unscheduleGroup(group)}
+                                    Recalculate
+                                  </Button>
+                                  <Button
+                                    variant="danger"
+                                    size="sm"
                                     disabled={isPending}
+                                    loading={isPending && pendingGroupAction?.action === "unschedule"}
+                                    onClick={() => void unscheduleGroup(group)}
                                   >
-                                    {isPending && pendingGroupAction?.action === "unschedule"
-                                      ? "Unscheduling..."
-                                      : "Unschedule Day"}
-                                  </button>
+                                    Unschedule Day
+                                  </Button>
                                 </>
                               ) : null}
                             </div>
@@ -1867,22 +1887,14 @@ export function SchedulingPage() {
           placement="bottom"
           title="Add Job"
         >
-            <p style={{ margin: 0, color: "#5b6475", fontSize: "13px" }}>
+            <p style={mutedCaptionStyle()}>
               {mobileAddJobDay ? `Choose an unscheduled job for ${getDayLabel(mobileAddJobDay)}.` : null}
             </p>
 
             {orderedUnscheduledJobs.length === 0 ? (
-              <div
-                style={{
-                  border: "1px dashed #d9dfeb",
-                  borderRadius: "14px",
-                  padding: "14px",
-                  color: "#5b6475",
-                  background: "#fafcff",
-                }}
-              >
+              <Card variant="soft" style={emptyStateStyle()}>
                 There are no unscheduled jobs available right now.
-              </div>
+              </Card>
             ) : (
               <div style={{ display: "grid", gap: "10px" }}>
                 {orderedUnscheduledJobs.map((item) => (
@@ -1907,12 +1919,12 @@ export function SchedulingPage() {
                   >
                     <strong>{item.job.number}</strong>
                     <span style={{ fontWeight: 600, color: "#162033" }}>{item.job.title}</span>
-                    <span style={{ color: "#5b6475", fontSize: "13px" }}>
+                    <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
                       {item.job.estimatedHours ? `${item.job.estimatedHours}h estimated` : "No estimate yet"}
                       {" · "}
                       {item.assignments.length > 0 ? `${item.assignments.length} assigned` : "No one assigned"}
                     </span>
-                    <span style={{ color: "#5b6475", fontSize: "13px" }}>
+                    <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
                       {getCapacitySummaryLabel(item.job, item.assignments)}
                     </span>
                   </button>
