@@ -1,5 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import {
+  Calculator,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Copy,
+  Info,
+  LogOut,
+  MoreVertical,
+  Paperclip,
+  Pencil,
+  Play,
+  Plus,
+  RefreshCw,
+  Search,
+  SlidersHorizontal,
+  Square,
+  StickyNote,
+  Upload,
+  UserPlus,
+  X,
+} from "lucide-react";
 
 import { useAuthContext } from "@/app/contexts/auth-context";
 import { useUiStore } from "@/app/store/ui-store";
@@ -523,6 +547,170 @@ function partGroupStyle() {
   } satisfies React.CSSProperties;
 }
 
+function SkeletonBlock({ width = "100%", height = "14px" }: { width?: string; height?: string }) {
+  return (
+    <span
+      style={{
+        display: "block",
+        width,
+        height,
+        borderRadius: "6px",
+        background: "linear-gradient(90deg, var(--color-surface-alt) 25%, #e9edec 37%, var(--color-surface-alt) 63%)",
+        backgroundSize: "400% 100%",
+        animation: "workbench-skeleton-pulse 1.4s ease-in-out infinite",
+      }}
+    />
+  );
+}
+
+function JobListSkeletonRow() {
+  return (
+    <div style={{ ...cardStyle("#fff"), display: "grid", gap: "8px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+        <div style={{ display: "grid", gap: "6px", flex: 1 }}>
+          <SkeletonBlock width="70px" height="11px" />
+          <SkeletonBlock width="60%" height="16px" />
+          <SkeletonBlock width="40%" height="12px" />
+        </div>
+        <SkeletonBlock width="64px" height="22px" />
+      </div>
+    </div>
+  );
+}
+
+interface OverflowMenuAction {
+  label: string;
+  icon?: React.ReactNode;
+  onSelect: () => void;
+  tone?: "default" | "danger";
+  disabled?: boolean;
+}
+
+function OverflowMenu({ actions, ariaLabel = "More actions" }: { actions: OverflowMenuAction[]; ariaLabel?: string }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        title={ariaLabel}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "36px",
+          height: "36px",
+          borderRadius: "8px",
+          border: "1px solid var(--color-border)",
+          background: "var(--color-surface)",
+          color: "var(--color-text-soft)",
+          cursor: "pointer",
+        }}
+      >
+        <MoreVertical size={16} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            right: 0,
+            zIndex: 20,
+            minWidth: "180px",
+            background: "var(--color-surface)",
+            border: "1px solid var(--color-border)",
+            borderRadius: "10px",
+            boxShadow: "var(--shadow-md)",
+            padding: "6px",
+            display: "grid",
+            gap: "2px",
+          }}
+        >
+          {actions.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              role="menuitem"
+              disabled={action.disabled}
+              onClick={() => {
+                setOpen(false);
+                action.onSelect();
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                border: 0,
+                background: "transparent",
+                borderRadius: "6px",
+                padding: "8px 10px",
+                textAlign: "left",
+                fontSize: "13px",
+                fontWeight: 600,
+                color: action.tone === "danger" ? "var(--color-danger)" : "var(--color-text)",
+                cursor: action.disabled ? "not-allowed" : "pointer",
+                opacity: action.disabled ? 0.5 : 1,
+              }}
+            >
+              {action.icon}
+              {action.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function InfoHint({ text }: { text: string }) {
+  return (
+    <span
+      title={text}
+      aria-label={text}
+      tabIndex={0}
+      style={{
+        display: "inline-flex",
+        color: "var(--color-text-soft)",
+        cursor: "help",
+        verticalAlign: "middle",
+      }}
+    >
+      <Info size={14} aria-hidden="true" />
+    </span>
+  );
+}
+
 interface JobListRowCardProps {
   item: {
     job: Job;
@@ -567,7 +755,7 @@ function JobListRowCard({ item, badge, onOpen }: JobListRowCardProps) {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <span style={badgeStyle(badge.background, badge.color)}>{badge.label}</span>
-            <span aria-hidden="true" style={{ color: "var(--color-text-soft)" }}>›</span>
+            <ChevronRight size={16} aria-hidden="true" style={{ color: "var(--color-text-soft)" }} />
           </div>
         </div>
         <div style={{ display: "grid", gap: "4px" }}>
@@ -636,11 +824,11 @@ function AssignmentChipList({
                   padding: 0,
                   color: "#7a2430",
                   fontWeight: 700,
-                  fontSize: "16px",
                   lineHeight: 1,
+                  display: "inline-flex",
                 }}
               >
-                ×
+                <X size={13} aria-hidden="true" />
               </button>
             ) : null}
           </span>
@@ -2069,34 +2257,60 @@ export function WorkbenchPage() {
   const jobsListScreen = (
     <section style={{ display: "grid", gap: "16px" }}>
       <header style={{ display: "flex", gap: "16px", alignItems: "start", justifyContent: "space-between", flexWrap: "wrap" }}>
-        <div>
-          <h1 style={titleStyle()}>Jobs</h1>
-          <p style={subtitleStyle()}>
-            Open a job and work from one clear screen. Attachments and actuals stay one tap away.
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+        <h1 style={titleStyle()}>Jobs</h1>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
           <span
             style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
               border: "1px solid #d9dfeb",
               borderRadius: "999px",
               padding: "6px 10px",
               background: queueCount > 0 ? "#fff8e8" : "#f3f8f2",
               color: queueCount > 0 ? "#8a5a00" : "#1f6b37",
               fontSize: "13px",
+              fontWeight: 600,
             }}
           >
+            {queueCount > 0 ? <RefreshCw size={13} aria-hidden="true" /> : <Check size={13} aria-hidden="true" />}
             {syncStatus}
           </span>
           {queueCount > 0 ? (
-            <Button variant="secondary" onClick={() => flushSync.mutate()} loading={flushSync.isPending}>
-              {`Flush Sync (${queueCount})`}
+            <Button variant="secondary" size="sm" onClick={() => flushSync.mutate()} loading={flushSync.isPending}>
+              <RefreshCw size={14} aria-hidden="true" style={{ marginRight: "6px" }} />
+              {`Sync (${queueCount})`}
             </Button>
           ) : null}
-          <Button variant="secondary" onClick={() => refreshWorkbench.mutate()} loading={refreshWorkbench.isPending}>
-            Refresh
-          </Button>
-          <Button variant="ghost" onClick={() => signOut()}>Sign Out</Button>
+          <button
+            type="button"
+            onClick={() => refreshWorkbench.mutate()}
+            disabled={refreshWorkbench.isPending}
+            aria-label="Refresh"
+            title="Refresh"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "36px",
+              height: "36px",
+              borderRadius: "8px",
+              border: "1px solid var(--color-border)",
+              background: "var(--color-surface)",
+              color: "var(--color-text-soft)",
+              cursor: refreshWorkbench.isPending ? "default" : "pointer",
+            }}
+          >
+            <RefreshCw
+              size={16}
+              aria-hidden="true"
+              style={refreshWorkbench.isPending ? { animation: "workbench-spin 0.8s linear infinite" } : undefined}
+            />
+          </button>
+          <OverflowMenu
+            ariaLabel="Account menu"
+            actions={[{ label: "Sign out", icon: <LogOut size={15} aria-hidden="true" />, onSelect: () => signOut() }]}
+          />
         </div>
       </header>
 
@@ -2137,13 +2351,16 @@ export function WorkbenchPage() {
             flexWrap: "wrap",
           }}
         >
-          <div>
-            <strong style={{ display: "block", marginBottom: "4px" }}>
-              Timer running on {runningTimerJob ? `${runningTimerJob.job.number} · ${runningTimerJob.job.title}` : "another job"}
-            </strong>
-            <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
-              Elapsed {runningTimerElapsedLabel ?? "00:00:00"}
-            </span>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <Clock size={18} aria-hidden="true" />
+            <div>
+              <strong style={{ display: "block", marginBottom: "2px" }}>
+                {runningTimerJob ? `${runningTimerJob.job.number} · ${runningTimerJob.job.title}` : "Timer running on another job"}
+              </strong>
+              <span style={{ color: "var(--color-text-soft)", fontSize: "13px", fontVariantNumeric: "tabular-nums" }}>
+                {runningTimerElapsedLabel ?? "00:00:00"}
+              </span>
+            </div>
           </div>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               <Button
@@ -2154,9 +2371,12 @@ export function WorkbenchPage() {
                   }
                 }}
               >
-                Open Running Job
+                Open job
               </Button>
-            <Button variant="primary" onClick={() => void stopTimer()}>Stop Timer</Button>
+            <Button variant="primary" onClick={() => void stopTimer()}>
+              <Square size={14} aria-hidden="true" fill="currentColor" style={{ marginRight: "6px" }} />
+              Stop
+            </Button>
           </div>
         </Card>
       ) : null}
@@ -2164,11 +2384,9 @@ export function WorkbenchPage() {
       {capabilities.canViewAllActiveTimers ? (
         <section style={cardStyle("#fff")}>
           <div style={sectionHeadingRow()}>
-            <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <h2 style={{ margin: 0 }}>Team Timers</h2>
-              <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
-                Owner view of all currently running timers.
-              </p>
+              <InfoHint text="Owner view of every currently running timer across the team." />
             </div>
             <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{activeTimers.length}</span>
           </div>
@@ -2204,7 +2422,7 @@ export function WorkbenchPage() {
         </section>
       ) : null}
 
-      <Modal open={showCreateJob} onClose={() => setShowCreateJob(false)} placement="bottom" title="Create Job">
+      <Modal open={showCreateJob} onClose={() => setShowCreateJob(false)} placement="bottom" title="New Job">
         <CreateJobPanel
           canCreateJob={capabilities.canCreateJob}
           contacts={contacts}
@@ -2217,9 +2435,13 @@ export function WorkbenchPage() {
       </Modal>
 
       {jobsQuery.isLoading ? (
-        <Card variant="soft" role="status" aria-live="polite" style={{ color: "var(--color-text-soft)" }}>
-          Loading your visible jobs…
-        </Card>
+        <div role="status" aria-live="polite" style={{ display: "grid", gap: "12px" }}>
+          <span style={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+            Loading your visible jobs…
+          </span>
+          <JobListSkeletonRow />
+          <JobListSkeletonRow />
+        </div>
       ) : null}
       {!jobsQuery.isLoading && jobs.length === 0 ? (
         <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>
@@ -2239,30 +2461,31 @@ export function WorkbenchPage() {
             borderBottom: "1px solid #e4e8f1",
           }}
         >
-          <div style={sectionHeadingRow()}>
-            <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
-              Search by number, title, field name, customer, or address.
-            </span>
-            <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
-              {searchFilteredJobs.length} shown
-            </span>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{searchFilteredJobs.length} shown</span>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
-            <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
-              <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Search jobs</span>
+            <label style={{ position: "relative", display: "flex", alignItems: "center", minWidth: 0 }}>
+              <span style={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+                Search jobs
+              </span>
+              <Search size={16} aria-hidden="true" style={{ position: "absolute", left: "12px", color: "var(--color-text-soft)" }} />
               <input
                 value={jobSearch}
                 onChange={(event) => setJobSearch(event.target.value)}
-                placeholder="Job #, title, customer, address..."
-                style={{ minHeight: "44px", borderRadius: "12px", padding: "10px 12px", fontSize: "16px" }}
+                placeholder="Search jobs, customers, addresses…"
+                style={{ minHeight: "44px", borderRadius: "12px", padding: "10px 12px 10px 36px", fontSize: "16px", width: "100%" }}
               />
             </label>
-            <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
-              <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Job status</span>
+            <label style={{ position: "relative", display: "flex", alignItems: "center", minWidth: 0 }}>
+              <span style={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+                Job status
+              </span>
+              <SlidersHorizontal size={15} aria-hidden="true" style={{ position: "absolute", left: "12px", color: "var(--color-text-soft)" }} />
               <select
                 value={jobStatusFilter}
                 onChange={(event) => setJobStatusFilter(event.target.value as "all" | JobStatus)}
-                style={{ minHeight: "44px", borderRadius: "12px", padding: "10px 12px" }}
+                style={{ minHeight: "44px", borderRadius: "12px", padding: "10px 12px 10px 36px", width: "100%" }}
               >
                 <option value="all">All statuses</option>
                 {JOB_STATUSES.map((status) => (
@@ -2279,12 +2502,7 @@ export function WorkbenchPage() {
       {activeJobs.length > 0 ? (
         <section style={{ display: "grid", gap: "12px" }}>
           <div style={sectionHeadingRow()}>
-            <div>
-              <h2 style={{ margin: 0, fontSize: "18px" }}>Active Jobs</h2>
-              <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
-                Current work stays visible by default.
-              </p>
-            </div>
+            <h2 style={{ margin: 0, fontSize: "18px" }}>Active Jobs</h2>
             <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{activeJobs.length}</span>
           </div>
           <div style={{ display: "grid", gap: "12px" }}>
@@ -2313,6 +2531,7 @@ export function WorkbenchPage() {
           <button
             type="button"
             onClick={() => setShowHiddenJobs((current) => !current)}
+            aria-expanded={showHiddenJobs}
             style={{
               ...cardStyle("#fafcff"),
               display: "flex",
@@ -2328,7 +2547,15 @@ export function WorkbenchPage() {
                 {hiddenJobs.length} job{hiddenJobs.length === 1 ? "" : "s"}
               </span>
             </span>
-            <span style={{ color: "var(--color-text-soft)", fontWeight: 700 }}>{showHiddenJobs ? "Hide" : "Show"}</span>
+            <ChevronDown
+              size={18}
+              aria-hidden="true"
+              style={{
+                color: "var(--color-text-soft)",
+                transition: "transform var(--duration-fast) var(--ease-standard)",
+                transform: showHiddenJobs ? "rotate(180deg)" : "none",
+              }}
+            />
           </button>
 
           {showHiddenJobs ? (
@@ -2351,9 +2578,10 @@ export function WorkbenchPage() {
           type="button"
           onClick={() => setShowCreateJob(true)}
           style={floatingButtonStyle()}
-          aria-label="Create job"
+          aria-label="New job"
+          title="New job"
         >
-          +
+          <Plus size={22} aria-hidden="true" />
         </button>
       ) : null}
     </section>
@@ -2362,24 +2590,38 @@ export function WorkbenchPage() {
   const attachmentsScreen = selectedJob ? (
     <div style={{ display: "grid", gap: "16px" }}>
       <div style={sectionHeadingRow()}>
-        <div>
-          <h3 style={{ margin: 0 }}>Attachments</h3>
-          <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
-            Photos and documents for this job.
-          </p>
-        </div>
+        <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+          <Paperclip size={16} aria-hidden="true" style={{ color: "var(--color-text-soft)" }} />
+          Attachments
+          <span style={{ color: "var(--color-text-soft)", fontWeight: 400, fontSize: "14px" }}>
+            {jobWorkspace?.attachments.length ?? 0}
+          </span>
+        </h3>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <Button variant="secondary" onClick={() => setJobScreen("main")}>Back to Job</Button>
+          <Button variant="ghost" size="sm" onClick={() => setJobScreen("main")}>
+            <ChevronLeft size={16} aria-hidden="true" style={{ marginRight: "2px" }} />
+            Job
+          </Button>
           <Button variant="secondary" onClick={() => attachmentInputRef.current?.click()} loading={uploadJobAttachment.isPending}>
-            Upload Attachment
+            <Upload size={14} aria-hidden="true" style={{ marginRight: "6px" }} />
+            Upload
           </Button>
         </div>
       </div>
 
       {jobWorkspaceQuery.isLoading ? (
-        <Card variant="soft" role="status" aria-live="polite" style={{ color: "var(--color-text-soft)" }}>
-          Loading attachments…
-        </Card>
+        <div
+          role="status"
+          aria-live="polite"
+          style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}
+        >
+          <span style={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+            Loading attachments…
+          </span>
+          <SkeletonBlock height="150px" />
+          <SkeletonBlock height="150px" />
+          <SkeletonBlock height="150px" />
+        </div>
       ) : null}
       {!jobWorkspaceQuery.isLoading && (jobWorkspace?.attachments.length ?? 0) === 0 ? (
         <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>
@@ -2471,28 +2713,22 @@ export function WorkbenchPage() {
       ) : null}
 
       <div style={sectionHeadingRow()}>
-        <div>
-          <h3 style={{ margin: 0 }}>Actuals</h3>
-          <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
-            Enter real materials, labour, and assemblies so job costing stays trustworthy.
-          </p>
-        </div>
+        <h3 style={{ margin: 0 }}>Actuals</h3>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <Button
-            variant="secondary"
-            onClick={() => setShowManualActualComposer(true)}
-          >
-            Add Manual Actual Line
+          <Button variant="secondary" size="sm" onClick={() => setShowManualActualComposer(true)}>
+            <Plus size={14} aria-hidden="true" style={{ marginRight: "6px" }} />
+            Manual cost
           </Button>
           {canGenerateInvoices ? (
-            <Button
-              variant="primary"
-              onClick={() => openInvoiceGenerator("actuals")}
-            >
-              Generate Invoice
+            <Button variant="primary" onClick={() => openInvoiceGenerator("actuals")}>
+              <Calculator size={14} aria-hidden="true" style={{ marginRight: "6px" }} />
+              Generate invoice
             </Button>
           ) : null}
-          <Button variant="secondary" onClick={() => setJobScreen("main")}>Back to Job</Button>
+          <Button variant="ghost" size="sm" onClick={() => setJobScreen("main")}>
+            <ChevronLeft size={16} aria-hidden="true" style={{ marginRight: "2px" }} />
+            Job
+          </Button>
         </div>
       </div>
 
@@ -2546,7 +2782,8 @@ export function WorkbenchPage() {
                 )
               }
             >
-              Copy List
+              <Copy size={13} aria-hidden="true" style={{ marginRight: "5px" }} />
+              Copy
             </Button>
           </div>
           {estimatedCopyFeedback ? <div style={{ color: "var(--color-text-soft)", fontSize: "13px", marginTop: "8px" }}>{estimatedCopyFeedback}</div> : null}
@@ -2588,7 +2825,8 @@ export function WorkbenchPage() {
                 )
               }
             >
-              Copy List
+              <Copy size={13} aria-hidden="true" style={{ marginRight: "5px" }} />
+              Copy
             </Button>
           </div>
           {neededCopyFeedback ? <div style={{ color: "var(--color-text-soft)", fontSize: "13px", marginTop: "8px" }}>{neededCopyFeedback}</div> : null}
@@ -2614,13 +2852,9 @@ export function WorkbenchPage() {
       </div>
 
       <section style={cardStyle("#fff")}>
-        <div style={sectionHeadingRow()}>
-          <div>
-            <h3 style={{ margin: 0 }}>Assemblies</h3>
-            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
-              Add repeatable bundles like rough-ins and fixture installs without losing the ability to edit the real material lines afterward.
-            </p>
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <h3 style={{ margin: 0 }}>Assemblies</h3>
+          <InfoHint text="Add repeatable bundles like rough-ins and fixture installs — you can still edit the resulting material lines afterward." />
         </div>
 
         <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
@@ -2723,11 +2957,9 @@ export function WorkbenchPage() {
 
       <section style={cardStyle("#fff")}>
         <div style={sectionHeadingRow()}>
-          <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <h3 style={{ margin: 0 }}>Materials Used</h3>
-            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
-              Enter real material usage with visible cost now. Sell-side pricing gets set later in Generate Invoice.
-            </p>
+            <InfoHint text="Sell-side pricing is set later in Generate Invoice — this is just real cost." />
           </div>
           <Button
             variant="secondary"
@@ -2744,7 +2976,8 @@ export function WorkbenchPage() {
               )
             }
           >
-            Copy List
+            <Copy size={13} aria-hidden="true" style={{ marginRight: "5px" }} />
+            Copy
           </Button>
         </div>
 
@@ -2878,13 +3111,9 @@ export function WorkbenchPage() {
       </section>
 
       <section style={cardStyle("#fff")}>
-        <div style={sectionHeadingRow()}>
-          <div>
-            <h3 style={{ margin: 0 }}>Labour Actuals</h3>
-            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
-              Add real labour slots directly from Actuals so hours and cost are captured here. Sell-side labour billing is set in Generate Invoice.
-            </p>
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <h3 style={{ margin: 0 }}>Labour Actuals</h3>
+          <InfoHint text="Sell-side labour billing is set later in Generate Invoice — this is just real hours and cost." />
         </div>
 
         <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
@@ -3010,14 +3239,7 @@ export function WorkbenchPage() {
       </div>
 
       <section style={cardStyle("#fff")}>
-        <div style={sectionHeadingRow()}>
-          <div>
-            <h3 style={{ margin: 0 }}>Saved Invoices</h3>
-            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
-              Generated invoices stay attached to this job so you can open the saved snapshot again.
-            </p>
-          </div>
-        </div>
+        <h3 style={{ margin: 0 }}>Saved Invoices</h3>
         <div style={{ display: "grid", gap: "10px", marginTop: "12px" }}>
           {(jobWorkspace?.invoices ?? []).length === 0 ? (
             <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>No invoices saved for this job yet.</Card>
@@ -3056,13 +3278,9 @@ export function WorkbenchPage() {
       </section>
 
       <section style={cardStyle("#fff")}>
-        <div style={sectionHeadingRow()}>
-          <div>
-            <h3 style={{ margin: 0 }}>Actual Parts</h3>
-            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
-              Group actual materials and labour by the part of the job they belong to, then invoice one part or all parts.
-            </p>
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <h3 style={{ margin: 0 }}>Actual Parts</h3>
+          <InfoHint text="Group actual materials and labour by part of the job, then invoice one part or all parts." />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px", marginTop: "12px", alignItems: "end" }}>
           <label style={{ display: "grid", gap: "6px" }}>
@@ -3102,7 +3320,8 @@ export function WorkbenchPage() {
         <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap", minWidth: 0 }}>
           <div style={{ display: "grid", gap: "4px", minWidth: 0, flex: "1 1 240px" }}>
             <Button variant="ghost" size="sm" onClick={() => setSelectedJobId(null)} style={{ justifySelf: "start", paddingLeft: 0 }}>
-              ‹ Back to Jobs
+              <ChevronLeft size={16} aria-hidden="true" style={{ marginRight: "2px" }} />
+              Jobs
             </Button>
             <div style={{ color: "var(--color-text-soft)", fontSize: "13px", fontWeight: 700 }}>{selectedJob.job.number}</div>
             <h1 style={{ margin: 0, fontSize: "28px", overflowWrap: "anywhere" }}>{selectedJob.job.title}</h1>
@@ -3205,10 +3424,21 @@ export function WorkbenchPage() {
             }}
             disabled={!selectedJobTimerIsRunning && startWorkDisabled}
           >
-            {selectedJobTimerIsRunning ? "Stop Timer" : "Start Work"}
+            {selectedJobTimerIsRunning ? (
+              <>
+                <Square size={14} aria-hidden="true" fill="currentColor" style={{ marginRight: "6px" }} />
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>{runningTimerElapsedLabel ?? "00:00:00"}</span>
+              </>
+            ) : (
+              <>
+                <Play size={14} aria-hidden="true" fill="currentColor" style={{ marginRight: "6px" }} />
+                Start
+              </>
+            )}
           </Button>
           <Button
             variant="secondary"
+            title="Add a field note"
             onClick={() => {
               window.setTimeout(() => {
                 activityNoteRef.current?.focus();
@@ -3216,25 +3446,54 @@ export function WorkbenchPage() {
               }, 0);
             }}
           >
-            Add Note
+            <StickyNote size={14} aria-hidden="true" style={{ marginRight: "6px" }} />
+            Note
           </Button>
           <Button
             variant="secondary"
+            title="Attach a photo or document"
             onClick={() => attachmentInputRef.current?.click()}
           >
-            Add Attachment
+            <Paperclip size={14} aria-hidden="true" style={{ marginRight: "6px" }} />
+            Attach
           </Button>
           {canArchiveJobs ? (
-            <Button
-              variant="secondary"
+            <button
+              type="button"
               onClick={openEditJob}
+              aria-label="Edit job"
+              title="Edit job"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "36px",
+                height: "36px",
+                borderRadius: "8px",
+                border: "1px solid var(--color-border)",
+                background: "var(--color-surface)",
+                color: "var(--color-text-soft)",
+                cursor: "pointer",
+              }}
             >
-              Edit Job
-            </Button>
+              <Pencil size={15} aria-hidden="true" />
+            </button>
           ) : null}
           <span style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginLeft: "auto" }}>
-            <Button variant="ghost" size="sm" onClick={() => setJobScreen("attachments")}>Attachments</Button>
-            <Button variant="ghost" size="sm" onClick={() => setJobScreen("actuals")}>Actuals</Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setJobScreen("attachments")}
+              aria-label={`Attachments (${jobWorkspace?.attachments.length ?? 0})`}
+              title="Attachments"
+            >
+              <Paperclip size={14} aria-hidden="true" style={{ marginRight: "5px" }} />
+              {jobWorkspace?.attachments.length ?? 0}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setJobScreen("actuals")} title="Actuals">
+              <Calculator size={14} aria-hidden="true" style={{ marginRight: "5px" }} />
+              Actuals
+            </Button>
           </span>
         </div>
       </div>
@@ -3248,8 +3507,9 @@ export function WorkbenchPage() {
               <strong>{selectedJob.assignments.length > 0 ? getAssignmentNames(selectedJob.assignments) : "Nobody assigned yet"}</strong>
             </div>
             {canManageAssignments ? (
-              <Button variant="secondary" onClick={() => setShowAssignPeople(true)}>
-                + Add Person
+              <Button variant="secondary" size="sm" onClick={() => setShowAssignPeople(true)}>
+                <UserPlus size={14} aria-hidden="true" style={{ marginRight: "6px" }} />
+                Add
               </Button>
             ) : null}
           </div>
@@ -3293,14 +3553,7 @@ export function WorkbenchPage() {
       </section>
 
       <section style={{ ...cardStyle("#fff"), minWidth: 0 }}>
-        <div style={sectionHeadingRow()}>
-          <div>
-            <h3 style={{ margin: 0 }}>Activity</h3>
-            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
-              Notes and uploads build the working history for this job.
-            </p>
-          </div>
-        </div>
+        <h3 style={{ margin: 0 }}>Activity</h3>
 
         <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
           <textarea
@@ -3313,6 +3566,7 @@ export function WorkbenchPage() {
           />
           <div>
             <Button variant="primary" onClick={() => void handleSubmitActivityNote()} disabled={!activityNoteDraft.trim()} loading={addJobNote.isPending}>
+              <StickyNote size={14} aria-hidden="true" style={{ marginRight: "6px" }} />
               Add Note
             </Button>
           </div>
@@ -3320,9 +3574,12 @@ export function WorkbenchPage() {
 
         <div style={{ display: "grid", gap: "12px", marginTop: "16px" }}>
           {jobWorkspaceQuery.isLoading ? (
-            <Card variant="soft" role="status" aria-live="polite" style={{ color: "var(--color-text-soft)" }}>
-              Loading activity…
-            </Card>
+            <div role="status" aria-live="polite" style={{ display: "grid", gap: "8px" }}>
+              <span style={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+                Loading activity…
+              </span>
+              <SkeletonBlock height="52px" />
+            </div>
           ) : null}
           {!jobWorkspaceQuery.isLoading && (jobWorkspace?.activity.length ?? 0) === 0 ? (
             <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>
@@ -3348,11 +3605,9 @@ export function WorkbenchPage() {
 
       <section style={{ ...cardStyle("#fff"), minWidth: 0 }}>
         <div style={sectionHeadingRow()}>
-          <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <h3 style={{ margin: 0 }}>Materials Needed</h3>
-            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
-              Keep the grab list current without mixing it into actuals.
-            </p>
+            <InfoHint text="A grab list for the field — kept separate from actual materials used." />
           </div>
           <Button
             variant="secondary"
@@ -3368,7 +3623,8 @@ export function WorkbenchPage() {
               )
             }
           >
-            Copy List
+            <Copy size={13} aria-hidden="true" style={{ marginRight: "5px" }} />
+            Copy
           </Button>
         </div>
 
@@ -3517,15 +3773,14 @@ export function WorkbenchPage() {
 
       <section ref={manualActualSectionRef} style={{ ...cardStyle("#fff"), minWidth: 0 }}>
         <div style={sectionHeadingRow()}>
-          <div style={{ minWidth: 0 }}>
-            <h3 style={{ margin: 0 }}>Manual Actual Cost Lines</h3>
-            <p style={{ margin: "4px 0 0", color: "var(--color-text-soft)" }}>
-              Direct costs entered here stay separate from materials and labour imports, but they still roll into job cost totals.
-            </p>
+          <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+            <h3 style={{ margin: 0 }}>Manual Actual Costs</h3>
+            <InfoHint text="Direct costs entered here stay separate from materials and labour imports, but still roll into job cost totals." />
           </div>
           {!showManualActualComposer ? (
-            <Button variant="secondary" onClick={() => setShowManualActualComposer(true)}>
-              Add Manual Actual Line
+            <Button variant="secondary" size="sm" onClick={() => setShowManualActualComposer(true)}>
+              <Plus size={14} aria-hidden="true" style={{ marginRight: "6px" }} />
+              Add line
             </Button>
           ) : null}
         </div>
@@ -3694,7 +3949,7 @@ export function WorkbenchPage() {
 
           {(jobWorkspace?.manualActualCostLines ?? []).length === 0 ? (
             <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>
-              No manual actual cost lines logged yet. Use the Add Manual Actual Line button in this section to start one here.
+              No manual cost lines yet.
             </Card>
           ) : (
             <div style={{ display: "grid", gap: "10px" }}>
@@ -3724,7 +3979,10 @@ export function WorkbenchPage() {
       </section>
 
       <section style={cardStyle("#fff")}>
-        <h3 style={{ margin: 0 }}>Timer Info</h3>
+        <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+          <Clock size={16} aria-hidden="true" style={{ color: "var(--color-text-soft)" }} />
+          Timer
+        </h3>
 
         <div style={{ display: "grid", gap: "16px", marginTop: "12px" }}>
           <TimeTrackerPanel
@@ -3812,16 +4070,18 @@ export function WorkbenchPage() {
           placement="bottom"
           title="Add Person"
         >
-            <p style={{ margin: 0, color: "var(--color-text-soft)" }}>
-              Assign more people to this job.
-            </p>
-
-            <input
-              value={assignmentSearch}
-              onChange={(event) => setAssignmentSearch(event.target.value)}
-              placeholder="Search by name"
-              style={{ fontSize: "16px" }}
-            />
+            <label style={{ position: "relative", display: "flex", alignItems: "center" }}>
+              <span style={{ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+                Search by name
+              </span>
+              <Search size={16} aria-hidden="true" style={{ position: "absolute", left: "12px", color: "var(--color-text-soft)" }} />
+              <input
+                value={assignmentSearch}
+                onChange={(event) => setAssignmentSearch(event.target.value)}
+                placeholder="Search by name"
+                style={{ fontSize: "16px", width: "100%", paddingLeft: "36px" }}
+              />
+            </label>
 
             <div style={{ display: "grid", gap: "8px" }}>
               {filteredAssignableUsers.length === 0 ? (
@@ -4061,6 +4321,15 @@ export function WorkbenchPage() {
 
   return (
     <main style={pageStyle()}>
+      <style>{`
+        @keyframes workbench-skeleton-pulse {
+          0% { background-position: 100% 50%; }
+          100% { background-position: 0 50%; }
+        }
+        @keyframes workbench-spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
       {selectedJob ? (
         <input
           ref={attachmentInputRef}
