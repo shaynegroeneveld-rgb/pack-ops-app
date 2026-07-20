@@ -34,6 +34,14 @@ export function Modal({ open, onClose, title, children, footer, placement = "cen
   const generatedTitleId = useId();
   const titleId = title ? generatedTitleId : undefined;
 
+  // Callers almost always pass an inline `onClose` (a new function identity
+  // every render), so this must not sit in the effect below's dependency
+  // array — otherwise every keystroke-triggered re-render while the modal is
+  // open would re-run the effect and yank focus back to the panel container,
+  // making it impossible to type into any field inside the modal.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open) {
       return;
@@ -44,7 +52,7 @@ export function Modal({ open, onClose, title, children, footer, placement = "cen
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -77,7 +85,7 @@ export function Modal({ open, onClose, title, children, footer, placement = "cen
       document.removeEventListener("keydown", handleKeyDown);
       previouslyFocusedRef.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) {
     return null;
