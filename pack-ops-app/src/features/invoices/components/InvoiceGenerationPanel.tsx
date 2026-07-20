@@ -506,10 +506,11 @@ export function InvoiceGenerationPanel({
               <label style={{ display: "grid", gap: "6px" }}>
                 <span style={{ color: "#5b6475", fontSize: "13px" }}>Material Markup %</span>
                 <input
+                  key={`material-markup-${actualInvoiceControls.materialMarkupPercent}`}
                   type="number"
                   inputMode="decimal"
-                  value={actualInvoiceControls.materialMarkupPercent}
-                  onChange={(event) =>
+                  defaultValue={actualInvoiceControls.materialMarkupPercent}
+                  onBlur={(event) =>
                     onActualInvoiceControlsChange({
                       ...actualInvoiceControls,
                       materialMarkupPercent: Number(event.target.value || 0),
@@ -521,10 +522,11 @@ export function InvoiceGenerationPanel({
               <label style={{ display: "grid", gap: "6px" }}>
                 <span style={{ color: "#5b6475", fontSize: "13px" }}>Labour Sell Rate</span>
                 <input
+                  key={`labor-sell-rate-${actualInvoiceControls.laborSellRate}`}
                   type="number"
                   inputMode="decimal"
-                  value={actualInvoiceControls.laborSellRate}
-                  onChange={(event) =>
+                  defaultValue={actualInvoiceControls.laborSellRate}
+                  onBlur={(event) =>
                     onActualInvoiceControlsChange({
                       ...actualInvoiceControls,
                       laborSellRate: Number(event.target.value || 0),
@@ -536,11 +538,12 @@ export function InvoiceGenerationPanel({
               <label style={{ display: "grid", gap: "6px" }}>
                 <span style={{ color: "#5b6475", fontSize: "13px" }}>Tax Rate</span>
                 <input
+                  key={`tax-rate-${actualInvoiceControls.taxRate}`}
                   type="number"
                   inputMode="decimal"
                   step="0.01"
-                  value={actualInvoiceControls.taxRate}
-                  onChange={(event) =>
+                  defaultValue={actualInvoiceControls.taxRate}
+                  onBlur={(event) =>
                     onActualInvoiceControlsChange({
                       ...actualInvoiceControls,
                       taxRate: Number(event.target.value || 0),
@@ -663,7 +666,16 @@ export function InvoiceGenerationPanel({
                       </label>
                       <label style={{ display: "grid", gap: "6px" }}>
                         <span style={{ color: "#5b6475", fontSize: "13px" }}>Qty</span>
-                        <input type="number" inputMode="decimal" step="0.01" min="0" value={line.quantity} onChange={(event) => onDraftLineChange(line.id, { quantity: Number(event.target.value || 0) })} style={{ fontSize: "16px" }} />
+                        <input
+                          key={`qty-${line.id}-${line.quantity}`}
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          min="0"
+                          defaultValue={line.quantity}
+                          onBlur={(event) => onDraftLineChange(line.id, { quantity: Number(event.target.value || 0) })}
+                          style={{ fontSize: "16px" }}
+                        />
                       </label>
                       <label style={{ display: "grid", gap: "6px" }}>
                         <span style={{ color: "#5b6475", fontSize: "13px" }}>Unit</span>
@@ -676,21 +688,62 @@ export function InvoiceGenerationPanel({
                         <>
                           <label style={{ display: "grid", gap: "6px" }}>
                             <span style={{ color: "#5b6475", fontSize: "13px" }}>Unit Cost</span>
-                            <input type="number" inputMode="decimal" step="0.01" min="0" value={line.unitCost ?? 0} onChange={(event) => onDraftLineChange(line.id, { unitCost: Number(event.target.value || 0) })} style={{ fontSize: "16px" }} />
+                            <input
+                              key={`unit-cost-${line.id}-${line.unitCost ?? 0}`}
+                              type="number"
+                              inputMode="decimal"
+                              step="0.01"
+                              min="0"
+                              defaultValue={line.unitCost ?? 0}
+                              onBlur={(event) => onDraftLineChange(line.id, { unitCost: Number(event.target.value || 0) })}
+                              style={{ fontSize: "16px" }}
+                            />
                           </label>
                           <label style={{ display: "grid", gap: "6px" }}>
                             <span style={{ color: "#5b6475", fontSize: "13px" }}>Markup %</span>
-                            <input type="number" inputMode="decimal" step="0.1" min="0" value={line.markupPercent ?? 0} onChange={(event) => onDraftLineChange(line.id, { markupPercent: Number(event.target.value || 0) })} style={{ fontSize: "16px" }} />
+                            <input
+                              key={`markup-${line.id}-${line.markupPercent ?? 0}`}
+                              type="number"
+                              inputMode="decimal"
+                              step="0.1"
+                              min="0"
+                              defaultValue={line.markupPercent ?? 0}
+                              onBlur={(event) => onDraftLineChange(line.id, { markupPercent: Number(event.target.value || 0) })}
+                              style={{ fontSize: "16px" }}
+                            />
                           </label>
                         </>
                       ) : null}
                       <label style={{ display: "grid", gap: "6px" }}>
                         <span style={{ color: "#5b6475", fontSize: "13px" }}>Sell Price</span>
-                        <input type="number" inputMode="decimal" step="0.01" min="0" value={line.unitPrice} onChange={(event) => onDraftLineChange(line.id, { unitPrice: Number(event.target.value || 0), markupPercent: showCostControls ? null : (line.markupPercent ?? null) })} style={{ fontSize: "16px" }} />
+                        <input
+                          key={`sell-price-${line.id}-${line.unitPrice}`}
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          min="0"
+                          defaultValue={line.unitPrice}
+                          onBlur={(event) =>
+                            onDraftLineChange(line.id, {
+                              unitPrice: Number(event.target.value || 0),
+                              markupPercent: showCostControls ? null : (line.markupPercent ?? null),
+                            })
+                          }
+                          style={{ fontSize: "16px" }}
+                        />
                       </label>
                       <label style={{ display: "grid", gap: "6px" }}>
                         <span style={{ color: "#5b6475", fontSize: "13px" }}>Line Total</span>
-                        <input type="number" inputMode="decimal" step="0.01" min="0" value={line.subtotal} onChange={(event) => onDraftLineTotalChange(line.id, Number(event.target.value || 0))} style={{ fontSize: "16px" }} />
+                        <input
+                          key={`line-total-${line.id}-${line.subtotal}`}
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          min="0"
+                          defaultValue={line.subtotal}
+                          onBlur={(event) => onDraftLineTotalChange(line.id, Number(event.target.value || 0))}
+                          style={{ fontSize: "16px" }}
+                        />
                       </label>
                     </div>
 
