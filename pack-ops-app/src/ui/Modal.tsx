@@ -23,12 +23,36 @@ export interface ModalProps {
    * Field Mode so it doesn't silently fall back to the office palette.
    */
   theme?: ModalTheme | undefined;
+  /**
+   * Set false for content-heavy forms where an accidental click just outside
+   * the panel (e.g. while scrolling) shouldn't discard in-progress input.
+   * Escape and the explicit close button still always work. Defaults to true
+   * to preserve existing behavior for every other modal.
+   */
+  dismissOnBackdropClick?: boolean;
+  /**
+   * Overrides the CSS module's default panel width (560px centered / 760px
+   * bottom sheet) for modals whose content — e.g. a multi-column line-item
+   * table — needs more horizontal room than that to avoid its own internal
+   * horizontal scrollbar.
+   */
+  maxWidth?: string;
 }
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function Modal({ open, onClose, title, children, footer, placement = "center", theme }: ModalProps) {
+export function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  placement = "center",
+  theme,
+  dismissOnBackdropClick = true,
+  maxWidth,
+}: ModalProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const generatedTitleId = useId();
@@ -95,12 +119,13 @@ export function Modal({ open, onClose, title, children, footer, placement = "cen
     <div
       className={styles.backdrop}
       role="presentation"
-      onClick={onClose}
+      onClick={dismissOnBackdropClick ? onClose : undefined}
       data-theme={theme === "field" ? "field" : undefined}
     >
       <div
         ref={panelRef}
         className={[styles.panel, placement === "bottom" ? styles.panelBottom : styles.panelCenter].join(" ")}
+        style={maxWidth ? { width: `min(${maxWidth}, 100%)` } : undefined}
         role="dialog"
         aria-modal="true"
         aria-label={title ? undefined : "Dialog"}

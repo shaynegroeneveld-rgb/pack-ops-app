@@ -591,6 +591,8 @@ export function QuoteEditorPanel({
       open
       onClose={onClose}
       placement={isMobileLayout ? "bottom" : "center"}
+      dismissOnBackdropClick={false}
+      maxWidth="960px"
       title={currentDraft.quoteId ? "Edit Quote" : "New Quote"}
       footer={
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
