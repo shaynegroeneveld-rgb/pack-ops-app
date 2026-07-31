@@ -307,6 +307,33 @@ function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function actualPartNamesStorageKey(jobId: string): string {
+  return `pack-ops:actual-parts:${jobId}`;
+}
+
+// "Parts" (Service, Rough-in, Finish, etc.) aren't their own database entity —
+// they're just the sectionName free-text field shared across job materials,
+// labour entries, and manual cost lines. A newly added part with nothing
+// assigned to it yet has nowhere durable to live, so it's kept here instead;
+// once something is actually assigned to it, the part also persists via that
+// row's own sectionName and this cache becomes redundant for it.
+function loadStoredActualPartNames(jobId: string | null): string[] {
+  if (!jobId || typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(actualPartNamesStorageKey(jobId));
+    if (!raw) {
+      return [];
+    }
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 function deriveMarginPercent(unitCost: number, unitSell: number): number | null {
   if (unitSell <= 0) {
     return null;
@@ -843,6 +870,7 @@ interface ActualMaterialEditorCardProps {
   isSaving: boolean;
   isDeleting: boolean;
   isDuplicating: boolean;
+  actualPartOptions: string[];
   onSave: (input: {
     jobMaterialId: string;
     catalogItemId: string;
@@ -864,6 +892,7 @@ interface ManualActualCostEditorCardProps {
   item: JobManualActualCostLine;
   isSaving: boolean;
   isDeleting: boolean;
+  actualPartOptions: string[];
   onSave: (input: {
     id: string;
     category: JobManualActualCategory;
@@ -882,6 +911,7 @@ function ActualMaterialEditorCard({
   isSaving,
   isDeleting,
   isDuplicating,
+  actualPartOptions,
   onSave,
   onDelete,
   onDuplicate,
@@ -891,7 +921,6 @@ function ActualMaterialEditorCard({
   const [unit, setUnit] = useState(item.unitSnapshot ?? item.materialUnit);
   const [unitCost, setUnitCost] = useState(String(item.unitCost ?? item.currentCatalogCost ?? 0));
   const [note, setNote] = useState(item.note ?? "");
-  const [sectionName, setSectionName] = useState(item.sectionName ?? "");
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
@@ -900,7 +929,6 @@ function ActualMaterialEditorCard({
     setUnit(item.unitSnapshot ?? item.materialUnit);
     setUnitCost(String(item.unitCost ?? item.currentCatalogCost ?? 0));
     setNote(item.note ?? "");
-    setSectionName(item.sectionName ?? "");
     setIsEditing(false);
   }, [
     item.currentCatalogCost,
@@ -910,7 +938,6 @@ function ActualMaterialEditorCard({
     item.materialUnit,
     item.note,
     item.quantity,
-    item.sectionName,
     item.unitCost,
     item.unitSnapshot,
   ]);
@@ -919,16 +946,45 @@ function ActualMaterialEditorCard({
   const unitCostNumber = Number(unitCost) || 0;
   const extendedCost = roundMoney(quantityNumber * unitCostNumber);
 
+  function handlePartChange(nextPart: string) {
+    onSave({
+      jobMaterialId: String(item.id),
+      catalogItemId: String(item.catalogItemId),
+      quantity: item.quantity,
+      note: item.note,
+      displayName: item.displayName,
+      skuSnapshot: item.skuSnapshot ?? item.materialSku,
+      unitSnapshot: item.unitSnapshot ?? item.materialUnit,
+      unitCost: item.unitCost,
+      unitSell: null,
+      markupPercent: null,
+      sectionName: nextPart === "General" ? null : nextPart,
+    });
+  }
+
   return (
     <div style={{ ...cardStyle("#fafcff"), padding: "14px", display: "grid", gap: "10px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap" }}>
-        <div style={{ display: "grid", gap: "4px" }}>
+        <div style={{ display: "grid", gap: "6px" }}>
           <strong>{displayName || item.materialName}</strong>
           <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
             {item.materialSku ? `${item.materialSku} · ` : ""}
-            {item.sectionName ? `${item.sectionName} · ` : ""}
             {item.sourceAssemblyName ? `From ${item.sourceAssemblyName}` : "Manual actual"}
           </div>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px" }}>
+            <span style={{ color: "var(--color-text-soft)" }}>Part</span>
+            <select
+              value={item.sectionName?.trim() || "General"}
+              onChange={(event) => handlePartChange(event.target.value)}
+              disabled={isSaving}
+            >
+              {actualPartOptions.map((partName) => (
+                <option key={partName} value={partName}>
+                  {partName}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <Button type="button" variant="secondary" size="sm" onClick={() => setIsEditing((current) => !current)} disabled={isSaving}>
@@ -985,7 +1041,6 @@ function ActualMaterialEditorCard({
           </div>
 
           <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Note / location / install detail" />
-          <input value={sectionName} onChange={(event) => setSectionName(event.target.value)} placeholder="Part: General, Service, Rough-in..." />
 
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             <Button
@@ -1003,7 +1058,7 @@ function ActualMaterialEditorCard({
                   unitCost: unitCost.trim() ? unitCostNumber : null,
                   unitSell: null,
                   markupPercent: null,
-                  sectionName: sectionName.trim() || null,
+                  sectionName: item.sectionName ?? null,
                 });
                 setIsEditing(false);
               }}
@@ -1021,7 +1076,6 @@ function ActualMaterialEditorCard({
                 setUnit(item.unitSnapshot ?? item.materialUnit);
                 setUnitCost(String(item.unitCost ?? item.currentCatalogCost ?? 0));
                 setNote(item.note ?? "");
-                setSectionName(item.sectionName ?? "");
                 setIsEditing(false);
               }}
               disabled={isSaving}
@@ -1039,6 +1093,7 @@ function ManualActualCostEditorCard({
   item,
   isSaving,
   isDeleting,
+  actualPartOptions,
   onSave,
   onDelete,
 }: ManualActualCostEditorCardProps) {
@@ -1048,7 +1103,6 @@ function ManualActualCostEditorCard({
   const [unitCost, setUnitCost] = useState(String(item.unitCost));
   const [totalCost, setTotalCost] = useState(String(item.totalCost));
   const [note, setNote] = useState(item.note ?? "");
-  const [sectionName, setSectionName] = useState(item.sectionName ?? "");
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
@@ -1058,7 +1112,6 @@ function ManualActualCostEditorCard({
     setUnitCost(String(item.unitCost));
     setTotalCost(String(item.totalCost));
     setNote(item.note ?? "");
-    setSectionName(item.sectionName ?? "");
     setIsEditing(false);
   }, [item]);
 
@@ -1066,15 +1119,41 @@ function ManualActualCostEditorCard({
   const unitCostNumber = Number(unitCost) || 0;
   const totalCostNumber = Number(totalCost) || 0;
 
+  function handlePartChange(nextPart: string) {
+    onSave({
+      id: String(item.id),
+      category: item.category,
+      description: item.description,
+      quantity: item.quantity,
+      unitCost: item.unitCost,
+      totalCost: item.totalCost,
+      note: item.note,
+      sectionName: nextPart === "General" ? null : nextPart,
+    });
+  }
+
   return (
     <div style={{ ...cardStyle("#fafcff"), padding: "14px", display: "grid", gap: "10px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap" }}>
-        <div style={{ display: "grid", gap: "4px" }}>
+        <div style={{ display: "grid", gap: "6px" }}>
           <strong>{description || "Manual actual cost"}</strong>
           <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
             {formatManualActualCategoryLabel(category)}
-            {sectionName.trim() ? ` · ${sectionName.trim()}` : ""}
           </div>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px" }}>
+            <span style={{ color: "var(--color-text-soft)" }}>Part</span>
+            <select
+              value={item.sectionName?.trim() || "General"}
+              onChange={(event) => handlePartChange(event.target.value)}
+              disabled={isSaving}
+            >
+              {actualPartOptions.map((partName) => (
+                <option key={partName} value={partName}>
+                  {partName}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <Button type="button" variant="secondary" size="sm" onClick={() => setIsEditing((current) => !current)} disabled={isSaving}>
@@ -1159,7 +1238,6 @@ function ManualActualCostEditorCard({
               inputMode="decimal"
               placeholder="Total cost"
             />
-            <input value={sectionName} onChange={(event) => setSectionName(event.target.value)} placeholder="Part / section" />
           </div>
 
           <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Optional note" />
@@ -1177,7 +1255,7 @@ function ManualActualCostEditorCard({
                   unitCost: unitCostNumber,
                   totalCost: totalCostNumber,
                   note: note || null,
-                  sectionName: sectionName.trim() || null,
+                  sectionName: item.sectionName ?? null,
                 });
                 setIsEditing(false);
               }}
@@ -1196,7 +1274,6 @@ function ManualActualCostEditorCard({
                 setUnitCost(String(item.unitCost));
                 setTotalCost(String(item.totalCost));
                 setNote(item.note ?? "");
-                setSectionName(item.sectionName ?? "");
                 setIsEditing(false);
               }}
               disabled={isSaving}
@@ -1835,7 +1912,7 @@ export function WorkbenchPage() {
     });
     setNeededCopyFeedback("");
     setUsedCopyFeedback("");
-    setActualPartNames([]);
+    setActualPartNames(loadStoredActualPartNames(selectedJobId));
     setNewActualPartName("");
     setJobScreen("main");
     setShowAssignPeople(false);
@@ -1850,6 +1927,13 @@ export function WorkbenchPage() {
     setInvoiceSource("quote");
     setAssignmentSearch("");
   }, [currentUserId, selectedJobId]);
+
+  useEffect(() => {
+    if (!selectedJobId || typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(actualPartNamesStorageKey(selectedJobId), JSON.stringify(actualPartNames));
+  }, [actualPartNames, selectedJobId]);
 
   useEffect(() => {
     const defaultWorkerId = actualsWorkerOptions[0]?.id ?? String(currentUser.user.id);
@@ -3097,6 +3181,7 @@ export function WorkbenchPage() {
                         isSaving={updateJobMaterial.isPending}
                         isDeleting={deleteJobMaterial.isPending}
                         isDuplicating={duplicateJobMaterial.isPending}
+                        actualPartOptions={actualPartOptions}
                         onSave={(input) => updateJobMaterial.mutate(input)}
                         onDelete={() => void handleRemoveJobMaterial(item.id, item.displayName ?? item.materialName)}
                         onDuplicate={() => void handleDuplicateJobMaterial(item.id)}
@@ -3213,6 +3298,7 @@ export function WorkbenchPage() {
                           isApproving={approveTimeEntry.isPending}
                           isSaving={updateTimeEntry.isPending}
                           isDeleting={deleteTimeEntry.isPending}
+                          actualPartOptions={actualPartOptions}
                           onApprove={() => approveTimeEntry.mutate(entry)}
                           onSave={async (input) => {
                             await updateTimeEntry.mutateAsync({
@@ -3966,6 +4052,7 @@ export function WorkbenchPage() {
                         item={item}
                         isSaving={updateManualActualCostLine.isPending}
                         isDeleting={deleteManualActualCostLine.isPending}
+                        actualPartOptions={actualPartOptions}
                         onSave={(input) => updateManualActualCostLine.mutate(input)}
                         onDelete={() => void handleRemoveManualActualCostLine(item)}
                       />
@@ -4047,6 +4134,7 @@ export function WorkbenchPage() {
                     isApproving={approveTimeEntry.isPending}
                     isSaving={updateTimeEntry.isPending}
                     isDeleting={deleteTimeEntry.isPending}
+                    actualPartOptions={actualPartOptions}
                     onApprove={() => approveTimeEntry.mutate(entry)}
                     onSave={async (input) => {
                       await updateTimeEntry.mutateAsync({

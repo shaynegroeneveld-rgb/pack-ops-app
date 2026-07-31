@@ -13,6 +13,7 @@ interface EditableTimeEntryItemProps {
   isApproving: boolean;
   isSaving: boolean;
   isDeleting: boolean;
+  actualPartOptions: string[];
   onApprove: () => void;
   onSave: (input: {
     workDate: string;
@@ -36,6 +37,7 @@ export function EditableTimeEntryItem({
   isApproving,
   isSaving,
   isDeleting,
+  actualPartOptions,
   onApprove,
   onSave,
   onDelete,
@@ -47,7 +49,6 @@ export function EditableTimeEntryItem({
   const [hours, setHours] = useState(formatTimeEntryHoursInput(entry.hours));
   const [description, setDescription] = useState(entry.description ?? "");
   const [hourlyRate, setHourlyRate] = useState(entry.hourlyRate != null ? String(entry.hourlyRate) : "");
-  const [sectionName, setSectionName] = useState(entry.sectionName ?? "");
   const parsedHours = parseTimeEntryHoursInput(hours);
 
   async function handleSave() {
@@ -62,9 +63,21 @@ export function EditableTimeEntryItem({
       hours: parsedHours,
       description: description.trim() || null,
       hourlyRate: hourlyRate.trim() ? Number(hourlyRate) : null,
-      sectionName: sectionName.trim() || null,
+      sectionName: entry.sectionName ?? null,
     });
     setIsEditing(false);
+  }
+
+  async function handlePartChange(nextPart: string) {
+    await onSave({
+      workDate: entry.workDate,
+      startTime: entry.startTime,
+      endTime: entry.endTime,
+      hours: entry.hours,
+      description: entry.description,
+      hourlyRate: entry.hourlyRate,
+      sectionName: nextPart === "General" ? null : nextPart,
+    });
   }
 
   useEffect(() => {
@@ -74,7 +87,6 @@ export function EditableTimeEntryItem({
     setHours(formatTimeEntryHoursInput(entry.hours));
     setDescription(entry.description ?? "");
     setHourlyRate(entry.hourlyRate != null ? String(entry.hourlyRate) : "");
-    setSectionName(entry.sectionName ?? "");
     setIsEditing(false);
   }, [entry.description, entry.endTime, entry.hourlyRate, entry.hours, entry.id, entry.sectionName, entry.startTime, entry.updatedAt, entry.workDate]);
 
@@ -88,13 +100,30 @@ export function EditableTimeEntryItem({
             {entry.startTime && entry.endTime ? ` · ${entry.startTime}-${entry.endTime}` : ""}
             {` · ${entry.hours}h · ${entry.status.replaceAll("_", " ")}`}
             {entry.hourlyRate !== null ? ` · $${entry.hourlyRate.toFixed(2)}/h` : ""}
-            {entry.sectionName ? ` · ${entry.sectionName}` : ""}
             {entry.description ? ` · ${entry.description}` : ""}
             </span>
             <span style={{ color: "#5b6475", fontSize: "13px" }}>
               Worked by {workedByLabel} · Entered by {enteredByLabel}
             </span>
           </span>
+          {canEdit ? (
+            <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px" }}>
+              <span style={{ color: "#5b6475" }}>Part</span>
+              <select
+                value={entry.sectionName?.trim() || "General"}
+                onChange={(event) => void handlePartChange(event.target.value)}
+                disabled={isSaving}
+              >
+                {actualPartOptions.map((partName) => (
+                  <option key={partName} value={partName}>
+                    {partName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : entry.sectionName ? (
+            <span style={{ color: "#5b6475", fontSize: "13px" }}>{entry.sectionName}</span>
+          ) : null}
           {entry.status === "pending" && canApprove ? (
             <button style={{ marginLeft: "4px" }} onClick={onApprove} disabled={isApproving}>
               {isApproving ? "Approving..." : "Approve"}
@@ -171,10 +200,6 @@ export function EditableTimeEntryItem({
             <span style={{ fontSize: "13px", color: "#5b6475" }}>Note</span>
             <input value={description} onChange={(event) => setDescription(event.target.value)} />
           </label>
-          <label style={{ display: "grid", gap: "4px" }}>
-            <span style={{ fontSize: "13px", color: "#5b6475" }}>Part</span>
-            <input value={sectionName} onChange={(event) => setSectionName(event.target.value)} placeholder="General, Service, Rough-in..." />
-          </label>
           <div style={{ color: "#5b6475", fontSize: "13px" }}>
             Worked by {workedByLabel} · Entered by {enteredByLabel}
           </div>
@@ -198,7 +223,6 @@ export function EditableTimeEntryItem({
                 setHours(formatTimeEntryHoursInput(entry.hours));
                 setDescription(entry.description ?? "");
                 setHourlyRate(entry.hourlyRate != null ? String(entry.hourlyRate) : "");
-                setSectionName(entry.sectionName ?? "");
                 setIsEditing(false);
               }}
               disabled={isSaving}
