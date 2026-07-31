@@ -35,6 +35,8 @@ import { FieldMaterialsUsedPanel } from "./FieldMaterialsUsedPanel";
 
 type JobAccordionKey = "info" | "timer" | "notes" | "attachments" | "materials";
 
+const ADD_NEW_TIME_PART_VALUE = "__add_new_part__";
+
 interface FieldJobPageProps {
   jobId: string;
 }
@@ -57,6 +59,8 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
   });
   const [clockNowMs, setClockNowMs] = useState(() => Date.now());
   const [manualHoursInput, setManualHoursInput] = useState("");
+  const [isAddingTimePart, setIsAddingTimePart] = useState(false);
+  const [newTimePartName, setNewTimePartName] = useState("");
   const noteInputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -86,6 +90,26 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
     selectedFieldDraft && (!isTimeEntryDraftRunning(selectedFieldDraft) || selectedFieldDraft.source === "manual")
       ? selectedFieldDraft
       : null;
+
+  function handleTimePartSelectChange(value: string) {
+    if (value === ADD_NEW_TIME_PART_VALUE) {
+      setIsAddingTimePart(true);
+      setNewTimePartName("");
+      return;
+    }
+    workbench.updateTimeEntryDraft({ sectionName: value === "General" ? null : value });
+  }
+
+  function handleConfirmNewTimePart() {
+    const normalized = workbench.addActualPart(newTimePartName);
+    if (!normalized) {
+      return;
+    }
+    workbench.updateTimeEntryDraft({ sectionName: normalized });
+    setIsAddingTimePart(false);
+    setNewTimePartName("");
+  }
+
   const crewNames = selectedJobCard
     ? selectedJobCard.assignments.map((assignment) => userNamesById.get(assignment.userId) ?? "Crew")
     : [];
@@ -457,6 +481,54 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
                       </option>
                     ))}
                   </select>
+                </label>
+                <label style={{ display: "grid", gap: "6px" }}>
+                  <span style={infoLabelStyle()}>Part</span>
+                  {isAddingTimePart ? (
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <input
+                        autoFocus
+                        value={newTimePartName}
+                        onChange={(event) => setNewTimePartName(event.target.value)}
+                        placeholder="Service, Rough-in, Finish..."
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            handleConfirmNewTimePart();
+                          }
+                        }}
+                        style={{ ...inputStyle(), flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        style={actionButtonStyle("secondary")}
+                        onClick={handleConfirmNewTimePart}
+                        disabled={!newTimePartName.trim()}
+                      >
+                        Add
+                      </button>
+                      <button
+                        type="button"
+                        style={actionButtonStyle("secondary")}
+                        onClick={() => setIsAddingTimePart(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <select
+                      value={manualOrStoppedDraft.sectionName?.trim() || "General"}
+                      onChange={(event) => handleTimePartSelectChange(event.target.value)}
+                      style={inputStyle()}
+                    >
+                      {workbench.actualPartOptions.map((partName) => (
+                        <option key={partName} value={partName}>
+                          {partName}
+                        </option>
+                      ))}
+                      <option value={ADD_NEW_TIME_PART_VALUE}>+ Add new part...</option>
+                    </select>
+                  )}
                 </label>
                 <label style={{ display: "grid", gap: "6px" }}>
                   <span style={infoLabelStyle()}>Work Date</span>

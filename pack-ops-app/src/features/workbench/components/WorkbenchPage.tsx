@@ -307,33 +307,6 @@ function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function actualPartNamesStorageKey(jobId: string): string {
-  return `pack-ops:actual-parts:${jobId}`;
-}
-
-// "Parts" (Service, Rough-in, Finish, etc.) aren't their own database entity —
-// they're just the sectionName free-text field shared across job materials,
-// labour entries, and manual cost lines. A newly added part with nothing
-// assigned to it yet has nowhere durable to live, so it's kept here instead;
-// once something is actually assigned to it, the part also persists via that
-// row's own sectionName and this cache becomes redundant for it.
-function loadStoredActualPartNames(jobId: string | null): string[] {
-  if (!jobId || typeof window === "undefined") {
-    return [];
-  }
-
-  try {
-    const raw = window.localStorage.getItem(actualPartNamesStorageKey(jobId));
-    if (!raw) {
-      return [];
-    }
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
 function deriveMarginPercent(unitCost: number, unitSell: number): number | null {
   if (unitSell <= 0) {
     return null;
@@ -1314,7 +1287,6 @@ export function WorkbenchPage() {
   const [editJobDraft, setEditJobDraft] = useState<EditJobDraft | null>(null);
   const [localFeedback, setLocalFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [assignmentSearch, setAssignmentSearch] = useState("");
-  const [actualPartNames, setActualPartNames] = useState<string[]>([]);
   const [newActualPartName, setNewActualPartName] = useState("");
   const [activityNoteDraft, setActivityNoteDraft] = useState("");
   const [neededMaterialDraft, setNeededMaterialDraft] = useState<JobMaterialDraft>(createEmptyJobMaterialDraft);
@@ -1371,6 +1343,8 @@ export function WorkbenchPage() {
     queueQuery,
     contactsQuery,
     assignableUsersQuery,
+    actualPartOptions,
+    addActualPart: addActualPartToSlice,
     createJob,
     createQuickContact,
     assignCurrentUser,
@@ -1560,38 +1534,6 @@ export function WorkbenchPage() {
   );
   const visibleInvoicePreview = buildInvoicePreviewWithOptions(draftInvoicePreview, invoicePreviewOptions);
   const invoiceDraftValidation = useMemo(() => validateInvoiceDraftLines(invoiceDraftLines), [invoiceDraftLines]);
-  const actualPartOptions = useMemo(() => {
-    const ordered = new Set<string>();
-    for (const partName of actualPartNames) {
-      if (partName.trim()) {
-        ordered.add(partName.trim());
-      }
-    }
-    for (const material of jobWorkspace?.usedMaterials ?? []) {
-      if (material.sectionName?.trim()) {
-        ordered.add(material.sectionName.trim());
-      }
-    }
-    for (const entry of jobWorkspace?.timeEntries ?? []) {
-      if (entry.sectionName?.trim()) {
-        ordered.add(entry.sectionName.trim());
-      }
-    }
-    for (const line of jobWorkspace?.manualActualCostLines ?? []) {
-      if (line.sectionName?.trim()) {
-        ordered.add(line.sectionName.trim());
-      }
-    }
-    if (
-      ordered.size === 0 ||
-      (jobWorkspace?.usedMaterials ?? []).some((item) => !item.sectionName?.trim()) ||
-      (jobWorkspace?.timeEntries ?? []).some((entry) => !entry.sectionName?.trim()) ||
-      (jobWorkspace?.manualActualCostLines ?? []).some((line) => !line.sectionName?.trim())
-    ) {
-      return ["General", ...Array.from(ordered)];
-    }
-    return Array.from(ordered);
-  }, [actualPartNames, jobWorkspace?.manualActualCostLines, jobWorkspace?.timeEntries, jobWorkspace?.usedMaterials]);
   const usedMaterialsByPart = useMemo(
     () =>
       actualPartOptions.map((partName) => ({
@@ -1912,7 +1854,6 @@ export function WorkbenchPage() {
     });
     setNeededCopyFeedback("");
     setUsedCopyFeedback("");
-    setActualPartNames(loadStoredActualPartNames(selectedJobId));
     setNewActualPartName("");
     setJobScreen("main");
     setShowAssignPeople(false);
@@ -1927,13 +1868,6 @@ export function WorkbenchPage() {
     setInvoiceSource("quote");
     setAssignmentSearch("");
   }, [currentUserId, selectedJobId]);
-
-  useEffect(() => {
-    if (!selectedJobId || typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(actualPartNamesStorageKey(selectedJobId), JSON.stringify(actualPartNames));
-  }, [actualPartNames, selectedJobId]);
 
   useEffect(() => {
     const defaultWorkerId = actualsWorkerOptions[0]?.id ?? String(currentUser.user.id);
@@ -2008,11 +1942,10 @@ export function WorkbenchPage() {
   }
 
   function addActualPart() {
-    const normalized = newActualPartName.trim();
+    const normalized = addActualPartToSlice(newActualPartName);
     if (!normalized) {
       return;
     }
-    setActualPartNames((current) => (current.includes(normalized) ? current : [...current, normalized]));
     setUsedMaterialDraft((current) => ({ ...current, sectionName: current.sectionName || normalized }));
     setAssemblyActualDraft((current) => ({ ...current, sectionName: current.sectionName || normalized }));
     setActualLaborDraft((current) => ({ ...current, sectionName: current.sectionName || normalized }));
@@ -4099,6 +4032,8 @@ export function WorkbenchPage() {
             activeRunningTimerDraft={activeRunningTimerDraft}
             isSaving={isSavingTimeEntryDraft}
             runningJobLabel={runningTimerJob ? `${runningTimerJob.job.number} · ${runningTimerJob.job.title}` : null}
+            actualPartOptions={actualPartOptions}
+            onAddPart={addActualPartToSlice}
             onStart={startTimer}
             onStartManual={startManualEntry}
             onUpdateDraft={

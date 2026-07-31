@@ -27,16 +27,20 @@ export interface TimeTrackerPanelProps {
   activeRunningTimerDraft: TimeEntryDraft | null;
   isSaving: boolean;
   runningJobLabel: string | null;
+  actualPartOptions: string[];
+  onAddPart: (name: string) => string | null;
   onStart: (jobId: string) => void | Promise<void>;
   onStartManual: (jobId: string) => void | Promise<void>;
   onUpdateDraft: (
-    patch: Partial<Pick<TimeEntryDraft, "jobId" | "userId" | "startedAt" | "endedAt" | "description">>,
+    patch: Partial<Pick<TimeEntryDraft, "jobId" | "userId" | "startedAt" | "endedAt" | "description" | "sectionName">>,
   ) => void;
   onStop: () => void | Promise<void>;
   onSave: () => Promise<void>;
   onDiscard: () => void | Promise<void>;
   onGoToRunningJob: () => void;
 }
+
+const ADD_NEW_PART_VALUE = "__add_new_part__";
 
 function toDateTimeLocalValue(value: string): string {
   const date = new Date(value);
@@ -57,6 +61,8 @@ export function TimeTrackerPanel({
   activeRunningTimerDraft,
   isSaving,
   runningJobLabel,
+  actualPartOptions,
+  onAddPart,
   onStart,
   onStartManual,
   onUpdateDraft,
@@ -67,6 +73,8 @@ export function TimeTrackerPanel({
 }: TimeTrackerPanelProps) {
   const [now, setNow] = useState(() => Date.now());
   const [manualHoursInput, setManualHoursInput] = useState("");
+  const [isAddingPart, setIsAddingPart] = useState(false);
+  const [newPartName, setNewPartName] = useState("");
   const runningDraft = activeRunningTimerDraft ?? (draft?.activeTimerId ? draft : null);
   const isRunning = draft ? isTimeEntryDraftRunning(draft) : false;
   const hasRunningTimerElsewhere = Boolean(runningDraft && runningDraft.jobId !== selectedJobId);
@@ -120,6 +128,25 @@ export function TimeTrackerPanel({
 
   const manualHoursInvalid =
     draft?.source === "manual" && manualHoursInput.trim().length > 0 && parseTimeEntryHoursInput(manualHoursInput) === null;
+
+  function handlePartSelectChange(value: string) {
+    if (value === ADD_NEW_PART_VALUE) {
+      setIsAddingPart(true);
+      setNewPartName("");
+      return;
+    }
+    onUpdateDraft({ sectionName: value === "General" ? null : value });
+  }
+
+  function handleConfirmNewPart() {
+    const normalized = onAddPart(newPartName);
+    if (!normalized) {
+      return;
+    }
+    onUpdateDraft({ sectionName: normalized });
+    setIsAddingPart(false);
+    setNewPartName("");
+  }
 
   return (
     <div
@@ -266,6 +293,44 @@ export function TimeTrackerPanel({
                   </option>
                 ))}
               </select>
+            </label>
+
+            <label style={{ display: "grid", gap: "6px" }}>
+              <span style={{ fontSize: "13px", color: "#5b6475" }}>Part</span>
+              {isAddingPart ? (
+                <div style={{ display: "flex", gap: "6px" }}>
+                  <input
+                    autoFocus
+                    value={newPartName}
+                    onChange={(event) => setNewPartName(event.target.value)}
+                    placeholder="Service, Rough-in, Finish..."
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handleConfirmNewPart();
+                      }
+                    }}
+                  />
+                  <button type="button" onClick={handleConfirmNewPart} disabled={!newPartName.trim()}>
+                    Add
+                  </button>
+                  <button type="button" onClick={() => setIsAddingPart(false)}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <select
+                  value={draft.sectionName?.trim() || "General"}
+                  onChange={(event) => handlePartSelectChange(event.target.value)}
+                >
+                  {actualPartOptions.map((partName) => (
+                    <option key={partName} value={partName}>
+                      {partName}
+                    </option>
+                  ))}
+                  <option value={ADD_NEW_PART_VALUE}>+ Add new part...</option>
+                </select>
+              )}
             </label>
 
             {draft.source === "manual" ? (

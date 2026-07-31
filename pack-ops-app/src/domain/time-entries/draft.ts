@@ -9,6 +9,7 @@ export interface TimeEntryDraft {
   endedAt: string | null;
   description: string;
   source: "timer" | "manual";
+  sectionName: string | null;
 }
 
 export function createRunningTimeEntryDraft(
@@ -25,6 +26,7 @@ export function createRunningTimeEntryDraft(
     endedAt: null,
     description,
     source: "timer",
+    sectionName: null,
   };
 }
 
@@ -42,6 +44,7 @@ export function createManualTimeEntryDraft(
     endedAt: now.toISOString(),
     description,
     source: "manual",
+    sectionName: null,
   };
 }
 
@@ -69,6 +72,7 @@ export function createDraftFromActiveTimer(timer: ActiveTimer): TimeEntryDraft {
     endedAt: null,
     description: timer.description ?? "On-site work",
     source: "timer",
+    sectionName: null,
   };
 }
 

@@ -1727,7 +1727,17 @@ export class WorkbenchService {
       throw new Error("You cannot log time on this job.");
     }
 
-    return this.createTimeEntry(job.id, hours, draft.description.trim(), String(draft.userId), workDate);
+    return this.createTimeEntry(
+      job.id,
+      hours,
+      draft.description.trim(),
+      String(draft.userId),
+      workDate,
+      null,
+      null,
+      null,
+      draft.sectionName,
+    );
   }
 
   async createActionItemForJob(input: {

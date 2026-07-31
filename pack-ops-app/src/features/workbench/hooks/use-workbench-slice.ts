@@ -19,6 +19,27 @@ function getFriendlyErrorMessage(error: unknown, fallback: string): string {
   return getSyncErrorMessage(error, fallback);
 }
 
+function actualPartNamesStorageKey(jobId: string): string {
+  return `pack-ops:actual-parts:${jobId}`;
+}
+
+function loadStoredActualPartNames(jobId: string | null): string[] {
+  if (!jobId || typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(actualPartNamesStorageKey(jobId));
+    if (!raw) {
+      return [];
+    }
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 function getRunningTimerPersistKey(draft: TimeEntryDraft | null): string | null {
   if (!draft || draft.endedAt !== null || !draft.activeTimerId) {
     return null;
@@ -115,6 +136,77 @@ export function useWorkbenchSlice(
       return service.getJobWorkspace(selectedJob);
     },
   });
+
+  // "Parts" (Service, Rough-in, Finish, etc.) aren't their own database
+  // entity — they're just the sectionName free-text field shared across job
+  // materials, labour entries, and manual cost lines. A newly added part with
+  // nothing assigned to it yet has nowhere durable to live, so it's cached
+  // here per job; once something is actually assigned to it, the part also
+  // persists via that row's own sectionName and this cache becomes redundant
+  // for it. Shared here (rather than duplicated in Workbench and Field Mode)
+  // so both surfaces see and can add to the same part list for a job.
+  const selectedJobIdForParts = options?.selectedJobId ?? null;
+  const [pendingActualPartNames, setPendingActualPartNames] = useState<string[]>(() =>
+    loadStoredActualPartNames(selectedJobIdForParts),
+  );
+
+  useEffect(() => {
+    setPendingActualPartNames(loadStoredActualPartNames(selectedJobIdForParts));
+  }, [selectedJobIdForParts]);
+
+  useEffect(() => {
+    if (!selectedJobIdForParts || typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(actualPartNamesStorageKey(selectedJobIdForParts), JSON.stringify(pendingActualPartNames));
+  }, [pendingActualPartNames, selectedJobIdForParts]);
+
+  const actualPartOptions = useMemo(() => {
+    const ordered = new Set<string>();
+    for (const partName of pendingActualPartNames) {
+      if (partName.trim()) {
+        ordered.add(partName.trim());
+      }
+    }
+    for (const material of jobWorkspaceQuery.data?.usedMaterials ?? []) {
+      if (material.sectionName?.trim()) {
+        ordered.add(material.sectionName.trim());
+      }
+    }
+    for (const entry of jobWorkspaceQuery.data?.timeEntries ?? []) {
+      if (entry.sectionName?.trim()) {
+        ordered.add(entry.sectionName.trim());
+      }
+    }
+    for (const line of jobWorkspaceQuery.data?.manualActualCostLines ?? []) {
+      if (line.sectionName?.trim()) {
+        ordered.add(line.sectionName.trim());
+      }
+    }
+    if (
+      ordered.size === 0 ||
+      (jobWorkspaceQuery.data?.usedMaterials ?? []).some((item: any) => !item.sectionName?.trim()) ||
+      (jobWorkspaceQuery.data?.timeEntries ?? []).some((entry: any) => !entry.sectionName?.trim()) ||
+      (jobWorkspaceQuery.data?.manualActualCostLines ?? []).some((line: any) => !line.sectionName?.trim())
+    ) {
+      return ["General", ...Array.from(ordered)];
+    }
+    return Array.from(ordered);
+  }, [
+    pendingActualPartNames,
+    jobWorkspaceQuery.data?.usedMaterials,
+    jobWorkspaceQuery.data?.timeEntries,
+    jobWorkspaceQuery.data?.manualActualCostLines,
+  ]);
+
+  function addActualPart(rawName: string): string | null {
+    const normalized = rawName.trim();
+    if (!normalized) {
+      return null;
+    }
+    setPendingActualPartNames((current) => (current.includes(normalized) ? current : [...current, normalized]));
+    return normalized;
+  }
 
   const activeWorkspaceKey = [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id, options?.selectedJobId ?? null];
 
@@ -892,7 +984,7 @@ export function useWorkbenchSlice(
   }
 
   function updateTimeEntryDraft(
-    patch: Partial<Pick<TimeEntryDraft, "jobId" | "userId" | "startedAt" | "endedAt" | "description">>,
+    patch: Partial<Pick<TimeEntryDraft, "jobId" | "userId" | "startedAt" | "endedAt" | "description" | "sectionName">>,
   ) {
     setTimeEntryDraft((currentDraft) => {
       if (!currentDraft) {
@@ -915,7 +1007,7 @@ export function useWorkbenchSlice(
   }
 
   function updateActiveRunningTimerDraft(
-    patch: Partial<Pick<TimeEntryDraft, "jobId" | "userId" | "startedAt" | "endedAt" | "description">>,
+    patch: Partial<Pick<TimeEntryDraft, "jobId" | "userId" | "startedAt" | "endedAt" | "description" | "sectionName">>,
   ) {
     setActiveRunningTimerDraft((currentDraft) => {
       if (!currentDraft) {
@@ -985,6 +1077,8 @@ export function useWorkbenchSlice(
     jobsQuery,
     queueQuery,
     activeTimersQuery,
+    actualPartOptions,
+    addActualPart,
     createJob,
     assignCurrentUser,
     assignJob,
