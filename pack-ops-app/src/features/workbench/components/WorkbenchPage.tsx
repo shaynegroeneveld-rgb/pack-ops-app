@@ -72,6 +72,8 @@ import { useWorkbenchSlice } from "@/features/workbench/hooks/use-workbench-slic
 import { Button, Card, Modal, useConfirm } from "@/ui";
 
 type JobScreen = "main" | "attachments" | "actuals";
+const ADD_NEW_JOB_TYPE_VALUE = "__add_new_job_type__";
+
 type EditJobDraft = {
   title: string;
   fieldName: string;
@@ -80,6 +82,7 @@ type EditJobDraft = {
   estimatedHours: string;
   status: JobStatus;
   waitingReason: string;
+  jobTypeId: string;
 };
 type InvoicePreviewOptions = {
   showMaterials: boolean;
@@ -1285,6 +1288,8 @@ export function WorkbenchPage() {
   const [invoiceDraftLines, setInvoiceDraftLines] = useState<EditableInvoiceDraftLine[]>([]);
   const [selectedSavedInvoice, setSelectedSavedInvoice] = useState<SavedInvoiceSummary | null>(null);
   const [editJobDraft, setEditJobDraft] = useState<EditJobDraft | null>(null);
+  const [isAddingEditJobType, setIsAddingEditJobType] = useState(false);
+  const [newEditJobTypeName, setNewEditJobTypeName] = useState("");
   const [localFeedback, setLocalFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [assignmentSearch, setAssignmentSearch] = useState("");
   const [newActualPartName, setNewActualPartName] = useState("");
@@ -1346,6 +1351,7 @@ export function WorkbenchPage() {
     actualPartOptions,
     addActualPart: addActualPartToSlice,
     createJob,
+    createJobType,
     createQuickContact,
     assignCurrentUser,
     assignJob,
@@ -2231,6 +2237,7 @@ export function WorkbenchPage() {
           : String(selectedJob.job.estimatedHours),
       status: selectedJob.job.status,
       waitingReason: selectedJob.job.waitingReason ?? "other",
+      jobTypeId: selectedJob.job.jobTypeId ?? "",
     });
     setShowEditJob(true);
   }
@@ -2255,6 +2262,7 @@ export function WorkbenchPage() {
       description: editJobDraft.description.trim(),
       contactId: editJobDraft.contactId,
       estimatedHours,
+      jobTypeId: editJobDraft.jobTypeId || null,
     });
 
     if (
@@ -2269,6 +2277,26 @@ export function WorkbenchPage() {
     }
 
     setShowEditJob(false);
+  }
+
+  function handleEditJobTypeSelectChange(value: string) {
+    if (value === ADD_NEW_JOB_TYPE_VALUE) {
+      setIsAddingEditJobType(true);
+      setNewEditJobTypeName("");
+      return;
+    }
+    setEditJobDraft((current) => (current ? { ...current, jobTypeId: value } : current));
+  }
+
+  async function handleConfirmNewEditJobType() {
+    const normalized = newEditJobTypeName.trim();
+    if (!normalized) {
+      return;
+    }
+    const createdJobType = await createJobType.mutateAsync({ name: normalized });
+    setEditJobDraft((current) => (current ? { ...current, jobTypeId: createdJobType.id } : current));
+    setIsAddingEditJobType(false);
+    setNewEditJobTypeName("");
   }
 
   const jobsListScreen = (
@@ -3372,6 +3400,23 @@ export function WorkbenchPage() {
           </div>
         </div>
 
+        {(() => {
+          const jobType = (jobWorkspace?.jobTypeOptions ?? []).find((option) => option.id === selectedJob.job.jobTypeId);
+          return jobType?.notes ? (
+            <div
+              style={{
+                border: "1px solid #d9dfeb",
+                borderRadius: "12px",
+                padding: "12px 14px",
+                background: "#fffbea",
+              }}
+            >
+              <strong style={{ display: "block", marginBottom: "4px" }}>{jobType.name} notes</strong>
+              <div style={{ color: "var(--color-text-soft)", whiteSpace: "pre-wrap" }}>{jobType.notes}</div>
+            </div>
+          ) : null;
+        })()}
+
         {canUpdateJobStatus ? (
           <div
             style={{
@@ -4201,6 +4246,47 @@ export function WorkbenchPage() {
                     </option>
                   ))}
                 </select>
+              </label>
+
+              <label style={{ display: "grid", gap: "6px" }}>
+                <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Job Type</span>
+                {isAddingEditJobType ? (
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <input
+                      autoFocus
+                      value={newEditJobTypeName}
+                      onChange={(event) => setNewEditJobTypeName(event.target.value)}
+                      placeholder="Genny Install, Panel Upgrade..."
+                      style={{ fontSize: "16px" }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void handleConfirmNewEditJobType();
+                        }
+                      }}
+                    />
+                    <Button variant="secondary" onClick={() => void handleConfirmNewEditJobType()} disabled={!newEditJobTypeName.trim()}>
+                      Add
+                    </Button>
+                    <Button variant="secondary" onClick={() => setIsAddingEditJobType(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <select
+                    value={editJobDraft.jobTypeId}
+                    onChange={(event) => handleEditJobTypeSelectChange(event.target.value)}
+                    style={{ minHeight: "44px", borderRadius: "12px", padding: "10px 12px", fontSize: "16px" }}
+                  >
+                    <option value="">None</option>
+                    {(jobWorkspace?.jobTypeOptions ?? []).map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}
+                      </option>
+                    ))}
+                    <option value={ADD_NEW_JOB_TYPE_VALUE}>+ Add new job type...</option>
+                  </select>
+                )}
               </label>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>

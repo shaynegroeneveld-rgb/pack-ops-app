@@ -6,6 +6,7 @@ import {
 } from "@/data/repositories/assemblies.repository.impl";
 import { CatalogItemsRepositoryImpl } from "@/data/repositories/catalog-items.repository.impl";
 import type { RepositoryContext } from "@/data/repositories/contracts";
+import { JobTypesRepositoryImpl } from "@/data/repositories/job-types.repository.impl";
 import type { Database } from "@/data/supabase/types";
 import type {
   Assembly,
@@ -30,6 +31,7 @@ import type {
   UpdateAssemblyInput,
   UpdateCatalogItemInput,
 } from "@/domain/materials/types";
+import type { CreateJobTypeInput, JobType, UpdateJobTypeInput } from "@/domain/job-types/types";
 import type { User } from "@/domain/users/types";
 import { normalizePersistenceError } from "@/services/shared/persistence-errors";
 
@@ -284,6 +286,7 @@ export class MaterialsService {
   readonly catalogItems;
   readonly assemblies;
   readonly assemblyItems;
+  readonly jobTypes;
 
   constructor(
     private readonly context: RepositoryContext,
@@ -293,6 +296,7 @@ export class MaterialsService {
     this.catalogItems = new CatalogItemsRepositoryImpl(context, client);
     this.assemblies = new AssembliesRepositoryImpl(context, client);
     this.assemblyItems = new AssemblyItemsRepositoryImpl(context, client);
+    this.jobTypes = new JobTypesRepositoryImpl(context, client);
   }
 
   private assertCanManage() {
@@ -368,6 +372,51 @@ export class MaterialsService {
         operation: "archive",
         table: "catalog_items",
         migrationHint: "0028_business_entity_soft_delete_rpcs.sql",
+      });
+    }
+  }
+
+  async listJobTypes(options?: { includeInactive?: boolean }): Promise<JobType[]> {
+    this.assertCanManage();
+    return this.jobTypes.list(
+      options?.includeInactive !== undefined
+        ? { filter: { includeInactive: options.includeInactive } }
+        : { filter: { includeInactive: true } },
+    );
+  }
+
+  async createJobType(input: CreateJobTypeInput): Promise<JobType> {
+    this.assertCanManage();
+    try {
+      return await this.jobTypes.create({
+        name: requireName(input.name, "Job type name"),
+        notes: input.notes?.trim() || null,
+        isActive: input.isActive ?? true,
+      });
+    } catch (error) {
+      throw normalizePersistenceError(error, {
+        entityLabel: "Job type",
+        operation: "save",
+        table: "job_types",
+        migrationHint: "0062_job_types.sql",
+      });
+    }
+  }
+
+  async updateJobType(jobTypeId: JobType["id"], input: UpdateJobTypeInput): Promise<JobType> {
+    this.assertCanManage();
+    try {
+      return await this.jobTypes.update(jobTypeId, {
+        ...(input.name !== undefined ? { name: requireName(input.name, "Job type name") } : {}),
+        ...(input.notes !== undefined ? { notes: input.notes?.trim() || null } : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      });
+    } catch (error) {
+      throw normalizePersistenceError(error, {
+        entityLabel: "Job type",
+        operation: "save",
+        table: "job_types",
+        migrationHint: "0062_job_types.sql",
       });
     }
   }

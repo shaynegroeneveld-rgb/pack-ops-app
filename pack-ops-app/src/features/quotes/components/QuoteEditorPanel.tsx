@@ -2,12 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { AssemblyView, CatalogItem } from "@/domain/materials/types";
 import type { Document } from "@/domain/documents/types";
+import type { CreateJobTypeInput, JobType } from "@/domain/job-types/types";
 import { MaterialSearchSelect } from "@/features/materials/components/MaterialSearchSelect";
 import { AssemblySearchSelect } from "@/features/quotes/components/AssemblySearchSelect";
 import { getQuoteStatusActions } from "@/domain/quotes/status";
 import type { QuoteLineItemInput, QuoteView } from "@/domain/quotes/types";
 import { createId } from "@/lib/create-id";
 import { Modal, useConfirm } from "@/ui";
+
+const ADD_NEW_JOB_TYPE_VALUE = "__add_new_job_type__";
 
 export interface QuoteEditorDraftLine extends QuoteLineItemInput {
   localId: string;
@@ -25,6 +28,7 @@ export interface QuoteEditorDraft {
   siteAddress: string;
   linkedLeadId: string;
   linkedLeadLabel: string | null;
+  jobTypeId: string;
   description: string;
   notes: string;
   laborCostRate: string;
@@ -41,6 +45,8 @@ interface QuoteEditorPanelProps {
   catalogItems: CatalogItem[];
   assemblies: AssemblyView[];
   leadOptions: Array<{ id: string; label: string }>;
+  jobTypeOptions: JobType[];
+  onAddJobType: (input: CreateJobTypeInput) => Promise<JobType>;
   isPending: boolean;
   attachments?: Document[];
   isAttachmentPending?: boolean;
@@ -146,6 +152,8 @@ export function QuoteEditorPanel({
   catalogItems,
   assemblies,
   leadOptions,
+  jobTypeOptions,
+  onAddJobType,
   isPending,
   attachments = [],
   isAttachmentPending = false,
@@ -168,6 +176,8 @@ export function QuoteEditorPanel({
   const [selectedAssemblyIds, setSelectedAssemblyIds] = useState<Record<string, string>>({});
   const [selectedAssemblyQuantities, setSelectedAssemblyQuantities] = useState<Record<string, string>>({});
   const [newSectionName, setNewSectionName] = useState("");
+  const [isAddingJobType, setIsAddingJobType] = useState(false);
+  const [newJobTypeName, setNewJobTypeName] = useState("");
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [expandedLineIds, setExpandedLineIds] = useState<Set<string>>(new Set());
   const [isMobileLayout, setIsMobileLayout] = useState(() =>
@@ -329,6 +339,28 @@ export function QuoteEditorPanel({
       : currentDraft.status === "accepted"
         ? "Accepted quotes stay editable until they are tied to an invoice."
         : null;
+
+  function handleJobTypeSelectChange(value: string) {
+    if (value === ADD_NEW_JOB_TYPE_VALUE) {
+      setIsAddingJobType(true);
+      setNewJobTypeName("");
+      return;
+    }
+    setDraft((current) => (current ? { ...current, jobTypeId: value } : current));
+  }
+
+  async function handleConfirmNewJobType() {
+    const normalized = newJobTypeName.trim();
+    if (!normalized) {
+      return;
+    }
+    const createdJobType = await onAddJobType({ name: normalized });
+    setDraft((current) => (current ? { ...current, jobTypeId: createdJobType.id } : current));
+    setIsAddingJobType(false);
+    setNewJobTypeName("");
+  }
+
+  const selectedJobType = jobTypeOptions.find((option) => option.id === currentDraft.jobTypeId) ?? null;
 
   const materialLines = currentDraft.lineItems.filter((line) => line.lineKind !== "labor");
   const laborLines = currentDraft.lineItems.filter((line) => line.lineKind === "labor");
@@ -825,6 +857,48 @@ export function QuoteEditorPanel({
             </select>
           </label>
           <label style={{ display: "grid", gap: "6px" }}>
+            <span>Job Type</span>
+            {isAddingJobType ? (
+              <div style={{ display: "flex", gap: "6px" }}>
+                <input
+                  autoFocus
+                  style={mobileSafeInputStyle}
+                  value={newJobTypeName}
+                  disabled={isPending}
+                  onChange={(event) => setNewJobTypeName(event.target.value)}
+                  placeholder="Genny Install, Panel Upgrade..."
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void handleConfirmNewJobType();
+                    }
+                  }}
+                />
+                <button type="button" onClick={() => void handleConfirmNewJobType()} disabled={isPending || !newJobTypeName.trim()}>
+                  Add
+                </button>
+                <button type="button" onClick={() => setIsAddingJobType(false)} disabled={isPending}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <select
+                style={mobileSafeInputStyle}
+                value={currentDraft.jobTypeId}
+                disabled={isPending || isLockedByInvoice}
+                onChange={(event) => handleJobTypeSelectChange(event.target.value)}
+              >
+                <option value="">None</option>
+                {jobTypeOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
+                  </option>
+                ))}
+                <option value={ADD_NEW_JOB_TYPE_VALUE}>+ Add new job type...</option>
+              </select>
+            )}
+          </label>
+          <label style={{ display: "grid", gap: "6px" }}>
             <span>Quote Title / Job Name</span>
             <input
               style={mobileSafeInputStyle}
@@ -896,6 +970,20 @@ export function QuoteEditorPanel({
             />
           </label>
         </div>
+
+        {selectedJobType?.notes ? (
+          <div
+            style={{
+              border: "1px solid #d9dfeb",
+              borderRadius: "12px",
+              padding: "12px 14px",
+              background: "#fffbea",
+            }}
+          >
+            <strong style={{ display: "block", marginBottom: "4px" }}>{selectedJobType.name} notes</strong>
+            <div style={{ color: "#5b6475", whiteSpace: "pre-wrap" }}>{selectedJobType.notes}</div>
+          </div>
+        ) : null}
 
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
           <button type="button" onClick={applyMarkupToMaterialLines} disabled={isPending || isLockedByInvoice}>

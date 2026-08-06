@@ -15,11 +15,13 @@ import type {
   SupplierInvoiceReviewPreview,
   SupplierInvoiceReviewResolution,
 } from "@/domain/materials/types";
+import type { JobType } from "@/domain/job-types/types";
 import type { AuthenticatedUser } from "@/domain/users/types";
 import { MaterialsService } from "@/services/materials/materials-service";
 
 const MATERIALS_QUERY_KEY = ["materials", "catalog"];
 const ASSEMBLIES_QUERY_KEY = ["materials", "assemblies"];
+const JOB_TYPES_QUERY_KEY = ["materials", "job-types"];
 
 export function useMaterialsSlice(authenticatedUser: AuthenticatedUser) {
   const queryClient = useQueryClient();
@@ -60,8 +62,15 @@ export function useMaterialsSlice(authenticatedUser: AuthenticatedUser) {
     enabled: canManage,
   });
 
+  const jobTypesQuery = useQuery({
+    queryKey: [...JOB_TYPES_QUERY_KEY, authenticatedUser.user.id],
+    queryFn: () => service.listJobTypes({ includeInactive: true }),
+    enabled: canManage,
+  });
+
   const catalogQueryKey = [...MATERIALS_QUERY_KEY, authenticatedUser.user.id];
   const assembliesQueryKey = [...ASSEMBLIES_QUERY_KEY, authenticatedUser.user.id];
+  const jobTypesQueryKey = [...JOB_TYPES_QUERY_KEY, authenticatedUser.user.id];
 
   const patchCatalogItems = (updater: (items: CatalogItem[]) => CatalogItem[]) => {
     queryClient.setQueryData(catalogQueryKey, (current: CatalogItem[] | undefined) =>
@@ -174,9 +183,25 @@ export function useMaterialsSlice(authenticatedUser: AuthenticatedUser) {
     onSuccess: invalidate,
   });
 
+  const createJobType = useMutation({
+    mutationFn: (input: Parameters<MaterialsService["createJobType"]>[0]) => service.createJobType(input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: jobTypesQueryKey });
+    },
+  });
+
+  const updateJobType = useMutation({
+    mutationFn: (input: { jobTypeId: JobType["id"] } & Parameters<MaterialsService["updateJobType"]>[1]) =>
+      service.updateJobType(input.jobTypeId, input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: jobTypesQueryKey });
+    },
+  });
+
   return {
     catalogQuery,
     assembliesQuery,
+    jobTypesQuery,
     createCatalogItem,
     updateCatalogItem,
     archiveCatalogItem,
@@ -195,5 +220,7 @@ export function useMaterialsSlice(authenticatedUser: AuthenticatedUser) {
     updateAssembly,
     duplicateAssembly,
     archiveAssembly,
+    createJobType,
+    updateJobType,
   };
 }

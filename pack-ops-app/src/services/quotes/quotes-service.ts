@@ -10,6 +10,7 @@ import type { RepositoryContext } from "@/data/repositories/contracts";
 import { DocumentsRepositoryImpl } from "@/data/repositories/documents.repository.impl";
 import { JobsRepositoryImpl } from "@/data/repositories/jobs.repository.impl";
 import { JobMaterialsRepositoryImpl } from "@/data/repositories/job-materials.repository.impl";
+import { JobTypesRepositoryImpl } from "@/data/repositories/job-types.repository.impl";
 import { LeadsRepositoryImpl } from "@/data/repositories/leads.repository.impl";
 import { QuoteLineItemsRepositoryImpl } from "@/data/repositories/quote-line-items.repository.impl";
 import { QuotesRepositoryImpl } from "@/data/repositories/quotes.repository.impl";
@@ -21,6 +22,7 @@ import { WorkbenchSyncGateway } from "@/data/sync/workbench-sync-gateway";
 import type { Database } from "@/data/supabase/types";
 import type { Contact } from "@/domain/contacts/types";
 import type { CatalogItemId } from "@/domain/ids";
+import type { CreateJobTypeInput, JobType } from "@/domain/job-types/types";
 import type { LeadRecord } from "@/domain/leads/types";
 import type { Job, JobEstimateMaterialSnapshot, JobEstimateSnapshot } from "@/domain/jobs/types";
 import type { Assembly, AssemblyView, CatalogItem } from "@/domain/materials/types";
@@ -236,11 +238,13 @@ export interface QuoteBuilderResources {
   defaultLaborSellRate: number;
   defaultTaxRate: number;
   leadOptions: Array<{ id: LeadRecord["id"]; label: string }>;
+  jobTypeOptions: JobType[];
 }
 
 export interface CreateQuoteInput {
   contactId: Quote["contactId"];
   leadId?: Quote["leadId"] | null;
+  jobTypeId?: Quote["jobTypeId"] | null;
   title: string;
   description?: string | null;
   notes?: string | null;
@@ -254,6 +258,7 @@ export interface CreateQuoteInput {
 
 export interface UpdateQuoteInput {
   leadId?: Quote["leadId"] | null;
+  jobTypeId?: Quote["jobTypeId"] | null;
   customerName?: string;
   companyName?: string | null;
   contactName?: string | null;
@@ -292,6 +297,7 @@ export interface CreateStandaloneQuoteInput {
   email?: string | null;
   siteAddress?: string | null;
   leadId?: Quote["leadId"] | null;
+  jobTypeId?: Quote["jobTypeId"] | null;
   title: string;
   description?: string | null;
   notes?: string | null;
@@ -314,6 +320,7 @@ export class QuotesService {
   readonly catalogItems;
   readonly assemblies;
   readonly assemblyItems;
+  readonly jobTypes;
   readonly sync;
 
   constructor(
@@ -332,6 +339,7 @@ export class QuotesService {
     this.catalogItems = new CatalogItemsRepositoryImpl(context, client);
     this.assemblies = new AssembliesRepositoryImpl(context, client);
     this.assemblyItems = new AssemblyItemsRepositoryImpl(context, client);
+    this.jobTypes = new JobTypesRepositoryImpl(context, client);
     this.sync = new SyncEngine({
       push: new PushSyncService(gateway),
       pull: new PullSyncService(gateway),
@@ -425,11 +433,12 @@ export class QuotesService {
 
   async getQuoteBuilderResources(): Promise<QuoteBuilderResources> {
     this.assertCanManageQuotes();
-    const [catalogItems, assemblies, leadOptions, orgResponse] = await Promise.all([
+    const [catalogItems, assemblies, leadOptions, orgResponse, jobTypeOptions] = await Promise.all([
       this.catalogItems.list({ filter: { includeInactive: false } }),
       this.buildAssemblyViews(),
       this.buildLeadOptions(),
       this.client.from("orgs").select("settings").eq("id", this.context.orgId).single(),
+      this.jobTypes.list({ filter: { includeInactive: true } }),
     ]);
     if (orgResponse.error) {
       throw orgResponse.error;
@@ -443,7 +452,16 @@ export class QuotesService {
       defaultLaborSellRate: settings.defaultLaborSellRate,
       defaultTaxRate: settings.defaultTaxRate,
       leadOptions,
+      jobTypeOptions,
     };
+  }
+
+  async createJobType(input: CreateJobTypeInput): Promise<JobType> {
+    if (this.currentUser.role !== "owner" && this.currentUser.role !== "office") {
+      throw new Error("You cannot create job types.");
+    }
+
+    return this.jobTypes.create(input);
   }
 
   private async getOrgBusinessSettings() {
@@ -778,6 +796,7 @@ export class QuotesService {
       quote = await this.quotes.create({
         contactId: input.contactId,
         leadId: input.leadId ?? null,
+        jobTypeId: input.jobTypeId ?? null,
         number,
         title: this.validateTitle(input.title),
         customerNotes: input.description?.trim() || null,
@@ -842,6 +861,7 @@ export class QuotesService {
     const createdQuote = await this.createQuote({
       contactId: contact.id,
       leadId: input.leadId ?? null,
+      jobTypeId: input.jobTypeId ?? null,
       title: input.title,
       ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
@@ -1195,6 +1215,7 @@ export class QuotesService {
     try {
       updated = await this.quotes.update(quoteId, {
         ...(input.leadId !== undefined ? { leadId: input.leadId } : {}),
+        ...(input.jobTypeId !== undefined ? { jobTypeId: input.jobTypeId } : {}),
         ...(input.title !== undefined ? { title: this.validateTitle(input.title) } : {}),
         ...(input.description !== undefined ? { customerNotes: input.description?.trim() || null } : {}),
         ...(input.notes !== undefined ? { internalNotes: input.notes?.trim() || null } : {}),
@@ -1434,6 +1455,7 @@ export class QuotesService {
         number,
         contactId: quote.contactId,
         quoteId: quote.id,
+        jobTypeId: quote.jobTypeId,
         title: quote.title,
         description: quote.customerNotes ?? null,
         internalNotes: quote.internalNotes ?? null,

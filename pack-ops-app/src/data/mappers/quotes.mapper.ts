@@ -12,6 +12,7 @@ export interface QuoteRow {
   lead_id: string | null;
   contact_id: string;
   parent_quote_id: string | null;
+  job_type_id: string | null;
   number: string;
   version: number;
   status: Quote["status"];
@@ -55,6 +56,7 @@ export const quotesMapper: RepositoryMapper<
       leadId: row.lead_id as Quote["leadId"],
       contactId: row.contact_id as Quote["contactId"],
       parentQuoteId: row.parent_quote_id as Quote["parentQuoteId"],
+      jobTypeId: row.job_type_id as Quote["jobTypeId"],
       number: row.number,
       version: row.version,
       status: row.status,
@@ -87,6 +89,7 @@ export const quotesMapper: RepositoryMapper<
     return {
       lead_id: input.leadId ?? null,
       contact_id: input.contactId,
+      job_type_id: input.jobTypeId ?? null,
       number: input.number,
       title: input.title,
       status: input.status ?? "draft",
@@ -112,6 +115,7 @@ export const quotesMapper: RepositoryMapper<
 
     return {
       ...(input.leadId !== undefined ? { lead_id: input.leadId } : {}),
+      ...(input.jobTypeId !== undefined ? { job_type_id: input.jobTypeId } : {}),
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
       ...(input.internalNotes !== undefined ? { internal_notes: input.internalNotes } : {}),

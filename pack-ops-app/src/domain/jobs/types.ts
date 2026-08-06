@@ -1,5 +1,6 @@
 import type { JobAssignmentRole, JobStatus, JobWaitingReason } from "@/domain/enums";
-import type { CatalogItemId, ContactId, JobAssignmentId, JobId, OrgId, QuoteId, UserId } from "@/domain/ids";
+import type { CatalogItemId, ContactId, JobAssignmentId, JobId, JobTypeId, OrgId, QuoteId, UserId } from "@/domain/ids";
+import type { JobType } from "@/domain/job-types/types";
 import type { AuditedEntity } from "@/domain/shared/base";
 import type { Document } from "@/domain/documents/types";
 import type { Note } from "@/domain/notes/types";
@@ -81,6 +82,7 @@ export interface Job extends AuditedEntity {
   orgId: OrgId;
   contactId: ContactId;
   quoteId: QuoteId | null;
+  jobTypeId: JobTypeId | null;
   number: string;
   status: JobStatus;
   waitingReason: JobWaitingReason | null;
@@ -245,6 +247,7 @@ export interface JobWorkspaceData {
     notes: string | null;
   }>;
   assemblyOptions: AssemblyView[];
+  jobTypeOptions: JobType[];
   estimatedMaterials: JobEstimateMaterialSnapshot[];
   usedMaterials: JobMaterialView[];
   neededMaterials: JobMaterialView[];

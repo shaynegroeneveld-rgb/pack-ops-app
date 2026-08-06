@@ -5,6 +5,7 @@ import { AssemblyEditorPanel, type AssemblyEditorDraft } from "@/features/materi
 import { CatalogCleanupPanel } from "@/features/materials/components/CatalogCleanupPanel";
 import { CatalogReconciliationPanel } from "@/features/materials/components/CatalogReconciliationPanel";
 import { ImportedMaterialsRollbackPanel } from "@/features/materials/components/ImportedMaterialsRollbackPanel";
+import { JobTypeEditorPanel, type JobTypeEditorDraft } from "@/features/materials/components/JobTypeEditorPanel";
 import { MaterialEditorPanel, type MaterialEditorDraft } from "@/features/materials/components/MaterialEditorPanel";
 import { SupplierInvoiceReviewPanel } from "@/features/materials/components/SupplierInvoiceReviewPanel";
 import { useMaterialsSlice } from "@/features/materials/hooks/use-materials-slice";
@@ -23,9 +24,10 @@ import type {
   SupplierInvoiceReviewResolution,
   UnpricedCatalogCleanupPreview,
 } from "@/domain/materials/types";
+import type { JobType } from "@/domain/job-types/types";
 import { Modal, useConfirm } from "@/ui";
 
-type MaterialsTab = "catalog" | "assemblies";
+type MaterialsTab = "catalog" | "assemblies" | "job-types";
 
 function createEmptyMaterialDraft(): MaterialEditorDraft {
   return {
@@ -78,6 +80,23 @@ function toAssemblyDraft(assembly: AssemblyView): AssemblyEditorDraft {
       note: item.note ?? "",
       sectionName: item.sectionName ?? "",
     })),
+  };
+}
+
+function createEmptyJobTypeDraft(): JobTypeEditorDraft {
+  return {
+    name: "",
+    notes: "",
+    isActive: true,
+  };
+}
+
+function toJobTypeDraft(jobType: JobType): JobTypeEditorDraft {
+  return {
+    jobTypeId: jobType.id,
+    name: jobType.name,
+    notes: jobType.notes ?? "",
+    isActive: jobType.isActive,
   };
 }
 
@@ -141,6 +160,7 @@ export function MaterialsPage() {
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [materialDraft, setMaterialDraft] = useState<MaterialEditorDraft | null>(null);
   const [assemblyDraft, setAssemblyDraft] = useState<AssemblyEditorDraft | null>(null);
+  const [jobTypeDraft, setJobTypeDraft] = useState<JobTypeEditorDraft | null>(null);
   const [catalogCleanupPairs, setCatalogCleanupPairs] = useState<CatalogCleanupPair[] | null>(null);
   const [importRollbackPreview, setImportRollbackPreview] = useState<MaterialImportRollbackPreview | null>(null);
   const [unpricedCleanupPreview, setUnpricedCleanupPreview] = useState<UnpricedCatalogCleanupPreview | null>(null);
@@ -154,6 +174,7 @@ export function MaterialsPage() {
   const {
     catalogQuery,
     assembliesQuery,
+    jobTypesQuery,
     createCatalogItem,
     updateCatalogItem,
     archiveCatalogItem,
@@ -172,11 +193,14 @@ export function MaterialsPage() {
     updateAssembly,
     duplicateAssembly,
     archiveAssembly,
+    createJobType,
+    updateJobType,
   } = useMaterialsSlice(currentUser);
 
   const canManage = currentUser.user.role === "owner" || currentUser.user.role === "office";
   const catalogItems = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
   const assemblies = useMemo(() => assembliesQuery.data ?? [], [assembliesQuery.data]);
+  const jobTypes = useMemo(() => jobTypesQuery.data ?? [], [jobTypesQuery.data]);
   const isPending =
     createCatalogItem.isPending ||
     updateCatalogItem.isPending ||
@@ -195,7 +219,9 @@ export function MaterialsPage() {
     inspectImportedMaterialRollback.isPending ||
     rollbackImportedMaterials.isPending ||
     inspectUnpricedCatalogCleanup.isPending ||
-    archiveUnpricedCatalogItems.isPending;
+    archiveUnpricedCatalogItems.isPending ||
+    createJobType.isPending ||
+    updateJobType.isPending;
 
   const filteredCatalogItems = useMemo(() => {
     if (!catalogSearch.trim()) {
@@ -237,6 +263,34 @@ export function MaterialsPage() {
       setFeedback({
         tone: "error",
         text: error instanceof Error ? error.message : "Material save failed.",
+      });
+    }
+  }
+
+  async function handleJobTypeSubmit(draft: JobTypeEditorDraft) {
+    try {
+      const payload = {
+        name: draft.name,
+        notes: draft.notes || null,
+        isActive: draft.isActive,
+      };
+
+      if (draft.jobTypeId) {
+        await updateJobType.mutateAsync({
+          jobTypeId: draft.jobTypeId,
+          ...payload,
+        });
+        setFeedback({ tone: "success", text: "Job type updated." });
+      } else {
+        await createJobType.mutateAsync(payload);
+        setFeedback({ tone: "success", text: "Job type created." });
+      }
+
+      setJobTypeDraft(null);
+    } catch (error) {
+      setFeedback({
+        tone: "error",
+        text: error instanceof Error ? error.message : "Job type save failed.",
       });
     }
   }
@@ -680,8 +734,10 @@ export function MaterialsPage() {
               </button>
               <button onClick={() => setMaterialDraft(createEmptyMaterialDraft())}>New Material</button>
             </div>
-          ) : (
+          ) : activeTab === "assemblies" ? (
             <button onClick={() => setAssemblyDraft(createEmptyAssemblyDraft())}>New Assembly</button>
+          ) : (
+            <button onClick={() => setJobTypeDraft(createEmptyJobTypeDraft())}>New Job Type</button>
           )
         ) : null}
       </header>
@@ -706,6 +762,7 @@ export function MaterialsPage() {
         {[
           { value: "catalog" as const, label: "Catalog" },
           { value: "assemblies" as const, label: "Assemblies" },
+          { value: "job-types" as const, label: "Job Types" },
         ].map((option) => {
           const isActive = activeTab === option.value;
           return (
@@ -815,7 +872,7 @@ export function MaterialsPage() {
             </article>
           ))}
         </section>
-      ) : (
+      ) : activeTab === "assemblies" ? (
         <section style={{ display: "grid", gap: "12px" }}>
           {assembliesQuery.isLoading ? <p>Loading assemblies...</p> : null}
           {!assembliesQuery.isLoading && assemblies.length === 0 ? (
@@ -893,6 +950,69 @@ export function MaterialsPage() {
             </article>
           ))}
         </section>
+      ) : (
+        <section style={{ display: "grid", gap: "12px" }}>
+          {jobTypesQuery.isLoading ? <p>Loading job types...</p> : null}
+          {!jobTypesQuery.isLoading && jobTypes.length === 0 ? (
+            <div
+              style={{
+                border: "1px dashed #d9dfeb",
+                borderRadius: "12px",
+                padding: "16px",
+                background: "#fafcff",
+                color: "#5b6475",
+              }}
+            >
+              <strong style={{ display: "block", color: "#172033", marginBottom: "6px" }}>
+                No job types are available yet.
+              </strong>
+              Add a job type for recurring work — Genny Install, Panel Upgrade — with the code rules, tools, and
+              gotchas field crews should know before they start.
+            </div>
+          ) : null}
+
+          {jobTypes.map((jobType) => (
+            <article
+              key={jobType.id}
+              style={{
+                border: "1px solid #d9dfeb",
+                borderRadius: "14px",
+                padding: "14px",
+                background: "#fff",
+                display: "grid",
+                gap: "8px",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+                <div style={{ fontWeight: 700 }}>{jobType.name}</div>
+                <span
+                  style={{
+                    borderRadius: "999px",
+                    padding: "6px 10px",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    background: jobType.isActive ? "#f2fbf4" : "#fff3f0",
+                    color: jobType.isActive ? "#1f6b37" : "#b54708",
+                  }}
+                >
+                  {jobType.isActive ? "Active" : "Inactive"}
+                </span>
+              </div>
+
+              {jobType.notes ? (
+                <div style={{ color: "#5b6475", whiteSpace: "pre-wrap" }}>{jobType.notes}</div>
+              ) : (
+                <div style={{ color: "#8a93a6", fontStyle: "italic" }}>No notes yet.</div>
+              )}
+
+              {canManage ? (
+                <div>
+                  <button onClick={() => setJobTypeDraft(toJobTypeDraft(jobType))}>Edit</button>
+                </div>
+              ) : null}
+            </article>
+          ))}
+        </section>
       )}
 
       <MaterialEditorPanel
@@ -910,6 +1030,13 @@ export function MaterialsPage() {
         onSubmit={handleAssemblySubmit}
         {...(assemblyDraft?.assemblyId ? { onArchive: handleArchiveAssembly } : {})}
         onClose={() => setAssemblyDraft(null)}
+      />
+
+      <JobTypeEditorPanel
+        initialDraft={jobTypeDraft}
+        isPending={isPending}
+        onSubmit={handleJobTypeSubmit}
+        onClose={() => setJobTypeDraft(null)}
       />
 
       <CatalogReconciliationPanel

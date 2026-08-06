@@ -123,6 +123,7 @@ export class JobsRepositoryImpl
       orgId: this.context.orgId as Job["orgId"],
       contactId: input.contactId,
       quoteId: input.quoteId ?? null,
+      jobTypeId: input.jobTypeId ?? null,
       number: input.number,
       status: "scheduled",
       waitingReason: null,

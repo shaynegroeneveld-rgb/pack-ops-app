@@ -71,6 +71,13 @@ export function useQuotesSlice(
     onSuccess: invalidate,
   });
 
+  const createJobType = useMutation({
+    mutationFn: (input: Parameters<QuotesService["createJobType"]>[0]) => service.createJobType(input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: [...QUOTE_BUILDER_QUERY_KEY, authenticatedUser.user.id] });
+    },
+  });
+
   const createQuote = useMutation({
     mutationFn: (input: Parameters<QuotesService["createStandaloneQuote"]>[0]) =>
       service.createStandaloneQuote(input),
@@ -130,6 +137,7 @@ export function useQuotesSlice(
     quotesQuery,
     builderResourcesQuery,
     createQuote,
+    createJobType,
     createAssemblyFromQuote,
     createQuoteFromLead,
     previewCustomerQuote,

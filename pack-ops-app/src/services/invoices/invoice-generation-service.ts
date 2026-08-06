@@ -660,9 +660,8 @@ export class InvoiceGenerationService {
       p_subtotal: preview.subtotal,
       p_tax_amount: preview.taxAmount,
       p_total: preview.total,
-      p_due_date: null,
-      p_customer_notes: preview.customerNotes ?? null,
-      p_internal_notes: preview.internalNotes ?? null,
+      ...(preview.customerNotes != null ? { p_customer_notes: preview.customerNotes } : {}),
+      ...(preview.internalNotes != null ? { p_internal_notes: preview.internalNotes } : {}),
       p_lines: preview.lines.map((line, index) => ({
         description: line.description,
         unit: line.unit,

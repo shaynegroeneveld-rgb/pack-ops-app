@@ -11,6 +11,7 @@ export interface CreateJobInput {
   number: string;
   contactId: Job["contactId"];
   quoteId?: Job["quoteId"];
+  jobTypeId?: Job["jobTypeId"];
   title: string;
   fieldName?: Job["fieldName"];
   addressLine1?: Job["addressLine1"];
@@ -27,6 +28,7 @@ export interface UpdateJobInput {
   status?: Job["status"];
   waitingReason?: Job["waitingReason"];
   contactId?: Job["contactId"];
+  jobTypeId?: Job["jobTypeId"];
   title?: string;
   fieldName?: Job["fieldName"];
   addressLine1?: Job["addressLine1"];

@@ -92,6 +92,7 @@ function toDraft(quote: QuoteView, fallbackMarkup: number): QuoteEditorDraft {
     siteAddress: quote.siteAddress ?? "",
     linkedLeadId: quote.leadId ?? "",
     linkedLeadLabel: quote.linkedLeadLabel,
+    jobTypeId: quote.jobTypeId ?? "",
     description: quote.customerNotes ?? "",
     notes: quote.internalNotes ?? "",
     laborCostRate: quote.laborCostRate.toString(),
@@ -135,6 +136,7 @@ function createEmptyDraft(
     siteAddress: "",
     linkedLeadId: "",
     linkedLeadLabel: null,
+    jobTypeId: "",
     description: "",
     notes: "",
     laborCostRate: String(defaultLaborCostRate),
@@ -167,6 +169,7 @@ export function QuotesPage() {
     quotesQuery,
     builderResourcesQuery,
     createQuote,
+    createJobType,
     createAssemblyFromQuote,
     updateQuote,
     acceptQuote,
@@ -190,6 +193,7 @@ export function QuotesPage() {
     defaultLaborSellRate: 95,
     defaultTaxRate: 0,
     leadOptions: [],
+    jobTypeOptions: [],
   };
   const canManage = currentUser.user.role === "owner" || currentUser.user.role === "office";
   const isPending =
@@ -223,6 +227,7 @@ export function QuotesPage() {
         email: draft.email || null,
         siteAddress: draft.siteAddress || null,
         leadId: draft.linkedLeadId ? (draft.linkedLeadId as QuoteView["leadId"]) : null,
+        jobTypeId: draft.jobTypeId ? (draft.jobTypeId as QuoteView["jobTypeId"]) : null,
         title: draft.title,
         description: draft.description || null,
         notes: draft.notes || null,
@@ -600,6 +605,8 @@ export function QuotesPage() {
         catalogItems={builderResources.catalogItems}
         assemblies={builderResources.assemblies}
         leadOptions={builderResources.leadOptions}
+        jobTypeOptions={builderResources.jobTypeOptions}
+        onAddJobType={(input) => createJobType.mutateAsync(input)}
         isPending={isPending}
         attachments={activeEditorQuote?.attachments ?? []}
         isAttachmentPending={uploadQuoteAttachment.isPending || deleteQuoteAttachment.isPending}

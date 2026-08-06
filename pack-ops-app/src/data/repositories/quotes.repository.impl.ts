@@ -74,6 +74,7 @@ export class QuotesRepositoryImpl implements QuotesRepository {
       updated_at: now,
       contact_id: input.contactId,
       lead_id: input.leadId ?? null,
+      job_type_id: input.jobTypeId ?? null,
       number: input.number,
       title: input.title,
       status: input.status ?? "draft",

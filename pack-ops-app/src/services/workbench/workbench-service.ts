@@ -12,6 +12,7 @@ import { DocumentsRepositoryImpl } from "@/data/repositories/documents.repositor
 import { JobAssignmentsRepositoryImpl } from "@/data/repositories/job-assignments.repository.impl";
 import { JobManualActualCostLinesRepositoryImpl } from "@/data/repositories/job-manual-actual-cost-lines.repository.impl";
 import { JobMaterialsRepositoryImpl } from "@/data/repositories/job-materials.repository.impl";
+import { JobTypesRepositoryImpl } from "@/data/repositories/job-types.repository.impl";
 import { JobsRepositoryImpl } from "@/data/repositories/jobs.repository.impl";
 import { NotesRepositoryImpl } from "@/data/repositories/notes.repository.impl";
 import { QuoteLineItemsRepositoryImpl } from "@/data/repositories/quote-line-items.repository.impl";
@@ -27,6 +28,7 @@ import { deriveJobWorkflowFlags } from "@/domain/jobs/derived";
 import { getAllowedNextJobStatuses } from "@/domain/jobs/status";
 import type { ActionItem } from "@/domain/action-items/types";
 import type { Job, JobActivityEntry, JobAssignment, JobManualActualCategory, JobManualActualCostLine, JobMaterialView, JobWorkspaceData } from "@/domain/jobs/types";
+import type { CreateJobTypeInput, JobType } from "@/domain/job-types/types";
 import type { AssemblyView } from "@/domain/materials/types";
 import {
   createDraftFromActiveTimer,
@@ -131,6 +133,7 @@ export class WorkbenchService {
   readonly jobs;
   readonly contacts;
   readonly catalogItems;
+  readonly jobTypes;
   readonly documents;
   readonly jobAssignments;
   readonly jobManualActualCostLines;
@@ -155,6 +158,7 @@ export class WorkbenchService {
     this.jobs = new JobsRepositoryImpl(context, client);
     this.contacts = new ContactsRepositoryImpl(context, client);
     this.catalogItems = new CatalogItemsRepositoryImpl(context, client);
+    this.jobTypes = new JobTypesRepositoryImpl(context, client);
     this.assemblies = new AssembliesRepositoryImpl(context, client);
     this.assemblyItems = new AssemblyItemsRepositoryImpl(context, client);
     this.documents = new DocumentsRepositoryImpl(context, client);
@@ -594,6 +598,7 @@ export class WorkbenchService {
     description: string;
     contactId: string;
     estimatedHours?: number | null;
+    jobTypeId?: string | null;
   }): Promise<Job> {
     if (!canCreateWorkbenchJob(this.currentUser)) {
       throw new Error("You cannot create jobs.");
@@ -642,6 +647,7 @@ export class WorkbenchService {
     const createdJob = await this.jobs.create({
       number: data,
       contactId: input.contactId as Job["contactId"],
+      jobTypeId: (input.jobTypeId ?? null) as Job["jobTypeId"],
       title: input.title,
       fieldName: input.fieldName?.trim() || null,
       addressLine1: input.addressLine1?.trim() || null,
@@ -666,6 +672,14 @@ export class WorkbenchService {
     return createdJob;
   }
 
+  async createJobType(input: CreateJobTypeInput): Promise<JobType> {
+    if (this.currentUser.role !== "owner" && this.currentUser.role !== "office") {
+      throw new Error("You cannot create job types.");
+    }
+
+    return this.jobTypes.create(input);
+  }
+
   async updateJobBasics(input: {
     jobId: string;
     title: string;
@@ -673,6 +687,7 @@ export class WorkbenchService {
     description: string;
     contactId: string;
     estimatedHours?: number | null;
+    jobTypeId?: string | null;
   }): Promise<Job> {
     console.info("[WorkbenchService] updateJobBasics input", {
       input,
@@ -701,6 +716,7 @@ export class WorkbenchService {
       description: input.description.trim() || null,
       contactId: input.contactId as Job["contactId"],
       estimatedHours,
+      ...(input.jobTypeId !== undefined ? { jobTypeId: input.jobTypeId as Job["jobTypeId"] } : {}),
     });
 
     console.info("[WorkbenchService] updateJobBasics local result", updatedJob);
@@ -712,7 +728,8 @@ export class WorkbenchService {
         (job.fieldName ?? null) === (updatedJob.fieldName ?? null) &&
         (job.description ?? null) === (updatedJob.description ?? null) &&
         job.contactId === updatedJob.contactId &&
-        (job.estimatedHours ?? null) === (updatedJob.estimatedHours ?? null),
+        (job.estimatedHours ?? null) === (updatedJob.estimatedHours ?? null) &&
+        (job.jobTypeId ?? null) === (updatedJob.jobTypeId ?? null),
       "Job update was queued locally, but the authoritative job record did not match after sync.",
     );
   }
@@ -795,7 +812,7 @@ export class WorkbenchService {
 
   async getJobWorkspace(job: Job): Promise<JobWorkspaceData> {
     const now = new Date().toISOString();
-    const [contact, notes, attachments, scheduleBlocks, linkedQuote, linkedQuoteLineItems, jobEvents, catalogItems, jobMaterials, manualActualCostLines, timeEntries, assignableUsers, assemblyOptions, orgResponse, invoicesResponse] = await Promise.all([
+    const [contact, notes, attachments, scheduleBlocks, linkedQuote, linkedQuoteLineItems, jobEvents, catalogItems, jobMaterials, manualActualCostLines, timeEntries, assignableUsers, assemblyOptions, orgResponse, invoicesResponse, jobTypeOptions] = await Promise.all([
       this.contacts.getById(job.contactId),
       this.notes.list({ entityType: "jobs", entityId: job.id }),
       this.documents.list({ entityType: "jobs", entityId: job.id }),
@@ -832,6 +849,7 @@ export class WorkbenchService {
         .eq("job_id", job.id)
         .is("deleted_at", null)
         .order("created_at", { ascending: false }),
+      this.jobTypes.list({ filter: { includeInactive: true } }),
     ]);
 
     if (linkedQuote.error) {
@@ -1071,6 +1089,7 @@ export class WorkbenchService {
       activity,
       materialCatalogOptions,
       assemblyOptions,
+      jobTypeOptions,
       estimatedMaterials,
       usedMaterials,
       neededMaterials,

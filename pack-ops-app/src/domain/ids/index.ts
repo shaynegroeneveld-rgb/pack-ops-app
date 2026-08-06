@@ -10,6 +10,7 @@ export type CatalogItemId = Brand<string, "CatalogItemId">;
 export type AssemblyId = Brand<string, "AssemblyId">;
 export type AssemblyItemId = Brand<string, "AssemblyItemId">;
 export type JobId = Brand<string, "JobId">;
+export type JobTypeId = Brand<string, "JobTypeId">;
 export type JobAssignmentId = Brand<string, "JobAssignmentId">;
 export type ScheduleBlockId = Brand<string, "ScheduleBlockId">;
 export type WorkerUnavailabilityId = Brand<string, "WorkerUnavailabilityId">;

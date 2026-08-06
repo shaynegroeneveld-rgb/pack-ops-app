@@ -82,6 +82,9 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
 
   const runningDraft = workbench.activeRunningTimerDraft;
   const elapsed = runningDraft?.startedAt ? formatElapsed(runningDraft.startedAt, clockNowMs) : null;
+  const selectedJobType = (jobWorkspace?.jobTypeOptions ?? []).find(
+    (option) => option.id === selectedJobCard?.job.jobTypeId,
+  );
   const selectedNeededMaterials = jobWorkspace?.neededMaterials ?? [];
   const selectedUsedMaterials = jobWorkspace?.usedMaterials ?? [];
   const selectedTimeEntries = jobWorkspace?.timeEntries ?? [];
@@ -348,6 +351,21 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
               {selectedJobCard.contactName ?? "No customer linked"}
             </span>
           </div>
+          {selectedJobType?.notes ? (
+            <div
+              style={{
+                borderRadius: "14px",
+                background: fieldColors.cardSoft,
+                border: `1px solid ${fieldColors.border}`,
+                padding: "12px 14px",
+              }}
+            >
+              <strong style={{ display: "block", color: fieldColors.goldBright, marginBottom: "4px" }}>
+                {selectedJobType.name} notes
+              </strong>
+              <span style={{ color: fieldColors.whiteSoft, whiteSpace: "pre-wrap" }}>{selectedJobType.notes}</span>
+            </div>
+          ) : null}
           {selectedNeededMaterials.length > 0 ? (
             <div
               style={{

@@ -1,6 +1,6 @@
 import type { QuoteStatus } from "@/domain/enums";
 import type { Document } from "@/domain/documents/types";
-import type { ContactId, JobId, LeadId, OrgId, QuoteId, QuoteLineItemId, UserId } from "@/domain/ids";
+import type { ContactId, JobId, JobTypeId, LeadId, OrgId, QuoteId, QuoteLineItemId, UserId } from "@/domain/ids";
 import type { AuditedEntity } from "@/domain/shared/base";
 
 export type QuoteLineSourceType = "manual" | "material" | "assembly";
@@ -12,6 +12,7 @@ export interface Quote extends AuditedEntity {
   leadId: LeadId | null;
   contactId: ContactId;
   parentQuoteId: QuoteId | null;
+  jobTypeId: JobTypeId | null;
   number: string;
   version: number;
   status: QuoteStatus;
@@ -53,6 +54,7 @@ export interface QuoteView extends Quote {
 export interface CreateQuoteRecordInput {
   leadId?: LeadId | null;
   contactId: ContactId;
+  jobTypeId?: JobTypeId | null;
   number: string;
   title: string;
   status?: QuoteStatus;
@@ -67,6 +69,7 @@ export interface CreateQuoteRecordInput {
 
 export interface UpdateQuoteRecordInput {
   leadId?: LeadId | null;
+  jobTypeId?: JobTypeId | null;
   title?: string;
   status?: QuoteStatus;
   internalNotes?: string | null;

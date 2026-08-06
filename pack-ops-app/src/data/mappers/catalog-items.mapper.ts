@@ -7,7 +7,7 @@ export interface CatalogItemRow {
   org_id: string;
   name: string;
   sku: string | null;
-  aliases: string[] | null;
+  aliases: string[];
   description: string | null;
   category: string | null;
   unit: string;

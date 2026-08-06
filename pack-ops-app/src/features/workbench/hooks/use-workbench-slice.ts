@@ -374,6 +374,7 @@ export function useWorkbenchSlice(
       description: string;
       contactId: string;
       estimatedHours?: number | null;
+      jobTypeId?: string | null;
     }) => {
       console.info("[useWorkbenchSlice] createJob input", input);
       return service.createJob(input);
@@ -392,6 +393,19 @@ export function useWorkbenchSlice(
       setFeedback({
         tone: "error",
         text: getFriendlyErrorMessage(error, "Could not create the job. Check the console for the full sync error."),
+      });
+    },
+  });
+
+  const createJobType = useMutation({
+    mutationFn: (input: Parameters<WorkbenchService["createJobType"]>[0]) => service.createJobType(input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: JOB_WORKSPACE_QUERY_KEY });
+    },
+    onError: (error) => {
+      setFeedback({
+        tone: "error",
+        text: getFriendlyErrorMessage(error, "Could not create the job type."),
       });
     },
   });
@@ -422,6 +436,7 @@ export function useWorkbenchSlice(
       description: string;
       contactId: string;
       estimatedHours?: number | null;
+      jobTypeId?: string | null;
     }) => {
       console.info("[useWorkbenchSlice] updateJob input", input);
       return service.updateJobBasics(input);
@@ -1080,6 +1095,7 @@ export function useWorkbenchSlice(
     actualPartOptions,
     addActualPart,
     createJob,
+    createJobType,
     assignCurrentUser,
     assignJob,
     removeJobAssignment,
