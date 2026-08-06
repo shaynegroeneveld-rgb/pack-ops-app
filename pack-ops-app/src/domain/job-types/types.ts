@@ -1,4 +1,4 @@
-import type { JobTypeId, OrgId, UserId } from "@/domain/ids";
+import type { AssemblyId, JobTypeId, OrgId, UserId } from "@/domain/ids";
 import type { AuditedEntity } from "@/domain/shared/base";
 
 export interface JobType extends AuditedEntity {
@@ -6,6 +6,7 @@ export interface JobType extends AuditedEntity {
   orgId: OrgId;
   name: string;
   notes: string | null;
+  defaultAssemblyId: AssemblyId | null;
   isActive: boolean;
   createdBy: UserId | null;
 }
@@ -13,11 +14,13 @@ export interface JobType extends AuditedEntity {
 export interface CreateJobTypeInput {
   name: string;
   notes?: string | null;
+  defaultAssemblyId?: AssemblyId | null;
   isActive?: boolean;
 }
 
 export interface UpdateJobTypeInput {
   name?: string;
   notes?: string | null;
+  defaultAssemblyId?: AssemblyId | null;
   isActive?: boolean;
 }

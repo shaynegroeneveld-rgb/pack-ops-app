@@ -87,6 +87,7 @@ function createEmptyJobTypeDraft(): JobTypeEditorDraft {
   return {
     name: "",
     notes: "",
+    defaultAssemblyId: "",
     isActive: true,
   };
 }
@@ -96,6 +97,7 @@ function toJobTypeDraft(jobType: JobType): JobTypeEditorDraft {
     jobTypeId: jobType.id,
     name: jobType.name,
     notes: jobType.notes ?? "",
+    defaultAssemblyId: jobType.defaultAssemblyId ?? "",
     isActive: jobType.isActive,
   };
 }
@@ -272,6 +274,7 @@ export function MaterialsPage() {
       const payload = {
         name: draft.name,
         notes: draft.notes || null,
+        defaultAssemblyId: (draft.defaultAssemblyId || null) as AssemblyView["id"] | null,
         isActive: draft.isActive,
       };
 
@@ -1034,6 +1037,7 @@ export function MaterialsPage() {
 
       <JobTypeEditorPanel
         initialDraft={jobTypeDraft}
+        assemblies={assemblies.filter((assembly) => assembly.isActive || assembly.id === jobTypeDraft?.defaultAssemblyId)}
         isPending={isPending}
         onSubmit={handleJobTypeSubmit}
         onClose={() => setJobTypeDraft(null)}

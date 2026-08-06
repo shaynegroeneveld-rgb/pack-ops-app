@@ -391,6 +391,7 @@ export class MaterialsService {
       return await this.jobTypes.create({
         name: requireName(input.name, "Job type name"),
         notes: input.notes?.trim() || null,
+        defaultAssemblyId: input.defaultAssemblyId ?? null,
         isActive: input.isActive ?? true,
       });
     } catch (error) {
@@ -409,6 +410,7 @@ export class MaterialsService {
       return await this.jobTypes.update(jobTypeId, {
         ...(input.name !== undefined ? { name: requireName(input.name, "Job type name") } : {}),
         ...(input.notes !== undefined ? { notes: input.notes?.trim() || null } : {}),
+        ...(input.defaultAssemblyId !== undefined ? { defaultAssemblyId: input.defaultAssemblyId } : {}),
         ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
       });
     } catch (error) {

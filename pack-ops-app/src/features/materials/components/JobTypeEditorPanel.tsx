@@ -1,23 +1,26 @@
 import { useEffect, useState } from "react";
 
 import type { JobType } from "@/domain/job-types/types";
+import type { AssemblyView } from "@/domain/materials/types";
 import { Modal } from "@/ui";
 
 export interface JobTypeEditorDraft {
   jobTypeId?: JobType["id"];
   name: string;
   notes: string;
+  defaultAssemblyId: string;
   isActive: boolean;
 }
 
 interface JobTypeEditorPanelProps {
   initialDraft: JobTypeEditorDraft | null;
+  assemblies: AssemblyView[];
   isPending: boolean;
   onSubmit: (draft: JobTypeEditorDraft) => Promise<void>;
   onClose: () => void;
 }
 
-export function JobTypeEditorPanel({ initialDraft, isPending, onSubmit, onClose }: JobTypeEditorPanelProps) {
+export function JobTypeEditorPanel({ initialDraft, assemblies, isPending, onSubmit, onClose }: JobTypeEditorPanelProps) {
   const [draft, setDraft] = useState<JobTypeEditorDraft | null>(initialDraft);
 
   useEffect(() => {
@@ -62,6 +65,27 @@ export function JobTypeEditorPanel({ initialDraft, isPending, onSubmit, onClose 
               placeholder="Needs the feed, two-wire start, and the battery charger..."
               onChange={(event) => setDraft((current) => (current ? { ...current, notes: event.target.value } : current))}
             />
+          </label>
+
+          <label style={{ display: "grid", gap: "6px" }}>
+            <span>Default Assembly</span>
+            <select
+              value={draft.defaultAssemblyId}
+              disabled={isPending}
+              onChange={(event) =>
+                setDraft((current) => (current ? { ...current, defaultAssemblyId: event.target.value } : current))
+              }
+            >
+              <option value="">None</option>
+              {assemblies.map((assembly) => (
+                <option key={assembly.id} value={assembly.id}>
+                  {assembly.name}
+                </option>
+              ))}
+            </select>
+            <span style={{ color: "#8a93a6", fontSize: "13px" }}>
+              Picking this job type on a quote will add this assembly&apos;s materials and labor automatically.
+            </span>
           </label>
 
           <label style={{ display: "flex", gap: "8px", alignItems: "center" }}>

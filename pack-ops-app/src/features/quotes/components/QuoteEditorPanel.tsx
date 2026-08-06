@@ -147,6 +147,61 @@ function applyMarkup(cost: number, markupPercent: number): number {
   return roundMoney(cost * (1 + markupPercent / 100));
 }
 
+function toStoredSectionNameValue(sectionName: string): string | null {
+  const normalized = sectionName.trim();
+  return normalized && normalized !== "General" ? normalized : null;
+}
+
+function buildAssemblyLines(
+  assembly: AssemblyView,
+  sectionName: string,
+  multiplier: number,
+  markupPercent: number,
+  laborCostRate: number,
+  laborSellRate: number,
+  startSortOrder: number,
+): QuoteEditorDraftLine[] {
+  const lines: QuoteEditorDraftLine[] = [];
+
+  for (const item of assembly.items) {
+    const unitCost = item.materialCostPrice ?? 0;
+    lines.push({
+      localId: createLocalId(),
+      catalogItemId: item.catalogItemId,
+      sortOrder: startSortOrder + lines.length,
+      description: item.materialName,
+      sku: item.materialSku,
+      note: assembly.name,
+      sectionName: item.sectionName ?? toStoredSectionNameValue(sectionName),
+      sourceType: "assembly",
+      lineKind: "item",
+      quantity: roundQuantity(item.quantity * multiplier),
+      unit: item.materialUnit || "each",
+      unitCost,
+      unitSell: applyMarkup(unitCost, markupPercent),
+    });
+  }
+
+  if (assembly.defaultLaborHours > 0) {
+    lines.push({
+      localId: createLocalId(),
+      sortOrder: startSortOrder + lines.length,
+      description: `${assembly.name} labor`,
+      sku: null,
+      note: assembly.description,
+      sectionName: toStoredSectionNameValue(sectionName),
+      sourceType: "assembly",
+      lineKind: "labor",
+      quantity: roundQuantity(assembly.defaultLaborHours * multiplier),
+      unit: "hr",
+      unitCost: laborCostRate,
+      unitSell: laborSellRate,
+    });
+  }
+
+  return lines;
+}
+
 export function QuoteEditorPanel({
   initialDraft,
   catalogItems,
@@ -346,7 +401,32 @@ export function QuoteEditorPanel({
       setNewJobTypeName("");
       return;
     }
-    setDraft((current) => (current ? { ...current, jobTypeId: value } : current));
+
+    const nextJobType = jobTypeOptions.find((option) => option.id === value) ?? null;
+    const defaultAssembly = nextJobType?.defaultAssemblyId
+      ? assemblies.find((assembly) => assembly.id === nextJobType.defaultAssemblyId) ?? null
+      : null;
+
+    setDraft((current) => {
+      if (!current) {
+        return current;
+      }
+      if (!defaultAssembly) {
+        return { ...current, jobTypeId: value };
+      }
+
+      const newLines = buildAssemblyLines(
+        defaultAssembly,
+        nextJobType?.name ?? "General",
+        1,
+        currentMarkup,
+        currentLaborCostRate,
+        currentLaborSellRate,
+        current.lineItems.length,
+      );
+
+      return { ...current, jobTypeId: value, lineItems: [...current.lineItems, ...newLines] };
+    });
   }
 
   async function handleConfirmNewJobType() {
@@ -541,44 +621,17 @@ export function QuoteEditorPanel({
         return current;
       }
 
-      const nextLines = [...current.lineItems];
-      for (const item of selectedAssembly.items) {
-        const unitCost = item.materialCostPrice ?? 0;
-        nextLines.push({
-          localId: createLocalId(),
-          catalogItemId: item.catalogItemId,
-          sortOrder: nextLines.length,
-          description: item.materialName,
-          sku: item.materialSku,
-          note: selectedAssembly.name,
-          sectionName: item.sectionName ?? toStoredSectionName(sectionName),
-          sourceType: "assembly",
-          lineKind: "item",
-          quantity: roundQuantity(item.quantity * multiplier),
-          unit: item.materialUnit || "each",
-          unitCost,
-          unitSell: applyMarkup(unitCost, currentMarkup),
-        });
-      }
+      const newLines = buildAssemblyLines(
+        selectedAssembly,
+        sectionName,
+        multiplier,
+        currentMarkup,
+        currentLaborCostRate,
+        currentLaborSellRate,
+        current.lineItems.length,
+      );
 
-      if (selectedAssembly.defaultLaborHours > 0) {
-        nextLines.push({
-          localId: createLocalId(),
-          sortOrder: nextLines.length,
-          description: `${selectedAssembly.name} labor`,
-          sku: null,
-          note: selectedAssembly.description,
-          sectionName: toStoredSectionName(sectionName),
-          sourceType: "assembly",
-          lineKind: "labor",
-          quantity: roundQuantity(selectedAssembly.defaultLaborHours * multiplier),
-          unit: "hr",
-          unitCost: currentLaborCostRate,
-          unitSell: currentLaborSellRate,
-        });
-      }
-
-      return { ...current, lineItems: nextLines };
+      return { ...current, lineItems: [...current.lineItems, ...newLines] };
     });
 
     setSelectedAssemblyIds((current) => ({ ...current, [sectionName]: "" }));

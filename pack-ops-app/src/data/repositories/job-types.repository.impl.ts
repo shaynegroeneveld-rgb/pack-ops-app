@@ -58,6 +58,7 @@ export class JobTypesRepositoryImpl implements JobTypesRepository {
       updated_at: now,
       name: input.name,
       notes: input.notes?.trim() || null,
+      default_assembly_id: input.defaultAssemblyId ?? null,
       is_active: input.isActive ?? true,
     };
 

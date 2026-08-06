@@ -2798,6 +2798,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          default_assembly_id: string | null
           deleted_at: string | null
           id: string
           is_active: boolean
@@ -2810,6 +2811,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          default_assembly_id?: string | null
           deleted_at?: string | null
           id?: string
           is_active?: boolean
@@ -2822,6 +2824,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          default_assembly_id?: string | null
           deleted_at?: string | null
           id?: string
           is_active?: boolean
@@ -2832,6 +2835,13 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_job_types_default_assembly"
+            columns: ["org_id", "default_assembly_id"]
+            isOneToOne: false
+            referencedRelation: "assemblies"
+            referencedColumns: ["org_id", "id"]
+          },
           {
             foreignKeyName: "job_types_created_by_fkey"
             columns: ["created_by"]
