@@ -13,6 +13,7 @@ import {
   subtitleStyle,
   titleStyle,
 } from "@/features/shared/ui/mobile-styles";
+import type { JobPerformanceReportRow } from "@/services/reports/job-performance-service";
 import { JobPerformanceService } from "@/services/reports/job-performance-service";
 
 function sectionHeadingRow() {
@@ -43,6 +44,107 @@ function formatDate(value: string | null): string {
   }
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
+}
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+interface JobPerformanceTotals {
+  jobsCounted: number;
+  jobsWithRevenue: number;
+  jobsAtLoss: number;
+  invoicedRevenue: number;
+  collectedRevenue: number;
+  outstandingRevenue: number;
+  actualTotalCost: number;
+  actualGrossProfit: number;
+  actualMarginPct: number | null;
+}
+
+function computeTotals(rows: JobPerformanceReportRow[]): JobPerformanceTotals {
+  let invoicedRevenue = 0;
+  let collectedRevenue = 0;
+  let actualTotalCost = 0;
+  let actualGrossProfit = 0;
+  let jobsWithRevenue = 0;
+  let jobsAtLoss = 0;
+
+  for (const row of rows) {
+    const money = row.performance?.coreMoney;
+    if (!money) {
+      continue;
+    }
+    if (money.invoicedRevenue !== null) {
+      invoicedRevenue += money.invoicedRevenue;
+      jobsWithRevenue += 1;
+    }
+    if (money.collectedRevenue !== null) {
+      collectedRevenue += money.collectedRevenue;
+    }
+    if (money.actualTotalCost !== null) {
+      actualTotalCost += money.actualTotalCost;
+    }
+    if (money.actualGrossProfit !== null) {
+      actualGrossProfit += money.actualGrossProfit;
+      if (money.actualGrossProfit < 0) {
+        jobsAtLoss += 1;
+      }
+    }
+  }
+
+  invoicedRevenue = roundMoney(invoicedRevenue);
+  collectedRevenue = roundMoney(collectedRevenue);
+  actualTotalCost = roundMoney(actualTotalCost);
+  actualGrossProfit = roundMoney(actualGrossProfit);
+
+  return {
+    jobsCounted: rows.length,
+    jobsWithRevenue,
+    jobsAtLoss,
+    invoicedRevenue,
+    collectedRevenue,
+    outstandingRevenue: roundMoney(invoicedRevenue - collectedRevenue),
+    actualTotalCost,
+    actualGrossProfit,
+    actualMarginPct: invoicedRevenue > 0 ? roundMoney((actualGrossProfit / invoicedRevenue) * 100) : null,
+  };
+}
+
+function renderTotals(totals: JobPerformanceTotals) {
+  return (
+    <section style={{ ...cardStyle(), display: "grid", gap: "12px", marginBottom: "16px" }}>
+      <div>
+        <h2 style={{ margin: 0, fontSize: "20px" }}>Totals</h2>
+        <p style={{ margin: "4px 0 0", color: brand.textSoft }}>
+          Based on the {totals.jobsCounted} job{totals.jobsCounted === 1 ? "" : "s"} currently shown below
+          {totals.jobsWithRevenue < totals.jobsCounted ? ` (${totals.jobsWithRevenue} with invoiced revenue)` : ""}.
+        </p>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px" }}>
+        {metricCard("Invoiced Revenue", formatMoney(totals.invoicedRevenue))}
+        {metricCard("Actual Total Cost", formatMoney(totals.actualTotalCost))}
+        {metricCard(
+          "Actual Gross Profit",
+          formatMoney(totals.actualGrossProfit),
+          `Blended margin ${formatPercent(totals.actualMarginPct)}`,
+          totals.actualGrossProfit < 0 ? "bad" : "good",
+        )}
+        {metricCard(
+          "Outstanding",
+          formatMoney(totals.outstandingRevenue),
+          `${formatMoney(totals.collectedRevenue)} collected`,
+          totals.outstandingRevenue > 0 ? "watch" : "default",
+        )}
+        {metricCard(
+          "Jobs At A Loss",
+          String(totals.jobsAtLoss),
+          totals.jobsAtLoss > 0 ? "Actual gross profit is negative" : "None currently",
+          totals.jobsAtLoss > 0 ? "bad" : "good",
+        )}
+      </div>
+    </section>
+  );
 }
 
 function statusLabel(status: Job["status"]): string {
@@ -244,6 +346,7 @@ export function JobPerformancePage() {
     archiveScope: "active",
     status: "",
   });
+  const [searchQuery, setSearchQuery] = useState("");
 
   if (!currentUser) {
     return null;
@@ -272,6 +375,21 @@ export function JobPerformancePage() {
   });
 
   const report = reportQuery.data;
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredRows = useMemo(() => {
+    if (!report) {
+      return [];
+    }
+    if (!normalizedSearch) {
+      return report.rows;
+    }
+    return report.rows.filter(
+      (row) =>
+        row.jobNumber.toLowerCase().includes(normalizedSearch) ||
+        row.title.toLowerCase().includes(normalizedSearch),
+    );
+  }, [report, normalizedSearch]);
+  const totals = useMemo(() => computeTotals(filteredRows), [filteredRows]);
 
   return (
     <section style={pageStyle()}>
@@ -292,7 +410,10 @@ export function JobPerformancePage() {
           </div>
           <button
             type="button"
-            onClick={() => setFilters({ archiveScope: "active", status: "" })}
+            onClick={() => {
+              setFilters({ archiveScope: "active", status: "" });
+              setSearchQuery("");
+            }}
             style={secondaryButtonStyle()}
           >
             Clear Filters
@@ -300,6 +421,15 @@ export function JobPerformancePage() {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
+          <label style={{ display: "grid", gap: "6px" }}>
+            <span style={{ fontSize: "13px", color: brand.textSoft }}>Search</span>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Job number or title..."
+            />
+          </label>
           <label style={{ display: "grid", gap: "6px" }}>
             <span style={{ fontSize: "13px", color: brand.textSoft }}>Jobs</span>
             <select
@@ -340,17 +470,21 @@ export function JobPerformancePage() {
       </section>
 
       {report ? (
-        <section style={{ display: "grid", gap: "12px" }}>
-          <div style={{ color: brand.textSoft, fontSize: "14px" }}>
-            {report.rows.length} job{report.rows.length === 1 ? "" : "s"} shown
-          </div>
+        <>
+          {renderTotals(totals)}
 
-          {report.rows.length === 0 ? (
+          <section style={{ display: "grid", gap: "12px" }}>
+            <div style={{ color: brand.textSoft, fontSize: "14px" }}>
+              {filteredRows.length} job{filteredRows.length === 1 ? "" : "s"} shown
+              {normalizedSearch && filteredRows.length !== report.rows.length ? ` (of ${report.rows.length})` : ""}
+            </div>
+
+          {filteredRows.length === 0 ? (
             <section style={cardStyle()}>
               No jobs match the current filters.
             </section>
           ) : (
-            report.rows.map((row) => (
+            filteredRows.map((row) => (
               <article key={row.jobId} style={{ ...cardStyle(), display: "grid", gap: "14px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start", flexWrap: "wrap" }}>
                   <div style={{ display: "grid", gap: "4px" }}>
@@ -373,7 +507,8 @@ export function JobPerformancePage() {
               </article>
             ))
           )}
-        </section>
+          </section>
+        </>
       ) : reportQuery.isLoading ? (
         <section style={cardStyle()}>
           Loading job performance…
