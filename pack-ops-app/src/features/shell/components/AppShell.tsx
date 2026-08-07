@@ -24,7 +24,9 @@ import { LeadsPage } from "@/features/leads/components/LeadsPage";
 import { MaterialsPage } from "@/features/materials/components/MaterialsPage";
 import { PayrollAssistPage } from "@/features/payroll/components/PayrollAssistPage";
 import { QuotesPage } from "@/features/quotes/components/QuotesPage";
+import { BaselinePage } from "@/features/reports/components/BaselinePage";
 import { JobPerformancePage } from "@/features/reports/components/JobPerformancePage";
+import { ScorecardPage } from "@/features/reports/components/ScorecardPage";
 import { SchedulingPage } from "@/features/scheduling/components/SchedulingPage";
 import { SettingsPage } from "@/features/settings/components/SettingsPage";
 import {
@@ -38,11 +40,13 @@ import { WorkbenchService, type WorkbenchFailedSyncItem } from "@/services/workb
 import { Modal, useConfirm, useToast } from "@/ui";
 
 const NAV_ITEMS = [
+  { label: "Scorecard", route: APP_ROUTES.scorecard },
   { label: "Leads", route: APP_ROUTES.leads },
   { label: "Quotes", route: APP_ROUTES.quotes },
   { label: "Takeoff", route: APP_ROUTES.electricalTakeoff },
   { label: "Materials", route: APP_ROUTES.materials },
   { label: "Job Performance", route: APP_ROUTES.jobPerformance },
+  { label: "Baseline", route: APP_ROUTES.financialBaseline },
   { label: "Time", route: APP_ROUTES.time },
   { label: "Field", route: APP_ROUTES.field },
   { label: "Workbench", route: APP_ROUTES.workbench },
@@ -670,6 +674,10 @@ export function AppShell() {
         <QuotesPage />
       ) : activeRoute === APP_ROUTES.jobPerformance ? (
         <JobPerformancePage />
+      ) : activeRoute === APP_ROUTES.scorecard ? (
+        <ScorecardPage />
+      ) : activeRoute === APP_ROUTES.financialBaseline ? (
+        <BaselinePage />
       ) : activeRoute === APP_ROUTES.time ? (
         <TimePage />
         ) : activeRoute === APP_ROUTES.field ? (

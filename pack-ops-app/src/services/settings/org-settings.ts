@@ -19,6 +19,10 @@ export interface OrgBusinessSettings {
   defaultLaborCostRate: number;
   defaultLaborSellRate: number;
   defaultMaterialMarkup: number;
+  cashBankBalance: number;
+  cashTaxReserve: number;
+  cashOperatingReserveMonths: number;
+  cashAsOfDate: string;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -62,6 +66,10 @@ export function readOrgBusinessSettings(value: unknown): OrgBusinessSettings {
     defaultLaborCostRate: asNumber(settings?.defaultLaborCostRate, DEFAULT_QUOTE_LABOR_COST_RATE),
     defaultLaborSellRate: asNumber(settings?.defaultLaborSellRate, DEFAULT_QUOTE_LABOR_SELL_RATE),
     defaultMaterialMarkup: asNumber(settings?.defaultMaterialMarkup, DEFAULT_QUOTE_MATERIAL_MARKUP),
+    cashBankBalance: asNumber(settings?.cashBankBalance, 0),
+    cashTaxReserve: asNumber(settings?.cashTaxReserve, 0),
+    cashOperatingReserveMonths: asNumber(settings?.cashOperatingReserveMonths, 0),
+    cashAsOfDate: asString(settings?.cashAsOfDate),
   };
 }
 

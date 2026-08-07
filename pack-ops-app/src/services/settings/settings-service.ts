@@ -80,6 +80,10 @@ export interface SettingsData {
     OrgBusinessSettings,
     "defaultTaxRate" | "defaultLaborCostRate" | "defaultLaborSellRate" | "defaultMaterialMarkup"
   >;
+  cashSnapshot: Pick<
+    OrgBusinessSettings,
+    "cashBankBalance" | "cashTaxReserve" | "cashOperatingReserveMonths" | "cashAsOfDate"
+  >;
   logoDataUrl: string | null;
   users: SettingsUserRow[];
   pendingInvites: SettingsInviteRow[];
@@ -168,6 +172,12 @@ export class SettingsService {
         defaultLaborCostRate: settings.defaultLaborCostRate,
         defaultLaborSellRate: settings.defaultLaborSellRate,
         defaultMaterialMarkup: settings.defaultMaterialMarkup,
+      },
+      cashSnapshot: {
+        cashBankBalance: settings.cashBankBalance,
+        cashTaxReserve: settings.cashTaxReserve,
+        cashOperatingReserveMonths: settings.cashOperatingReserveMonths,
+        cashAsOfDate: settings.cashAsOfDate,
       },
       logoDataUrl: buildLogoDataUrl(appSettings?.logo_b64 ?? null),
       users: (users ?? []).map((user) => ({
@@ -298,6 +308,35 @@ export class SettingsService {
       defaultLaborCostRate: input.defaultLaborCostRate,
       defaultLaborSellRate: input.defaultLaborSellRate,
       defaultMaterialMarkup: input.defaultMaterialMarkup,
+    });
+
+    const { error } = await this.client
+      .from("orgs")
+      .update({ settings, updated_at: new Date().toISOString() })
+      .eq("id", this.context.orgId);
+    if (error) throw error;
+  }
+
+  async saveCashSnapshot(input: {
+    cashBankBalance: number;
+    cashTaxReserve: number;
+    cashOperatingReserveMonths: number;
+    cashAsOfDate: string;
+  }): Promise<void> {
+    this.assertCanManageSettings();
+
+    const { data: org, error: orgError } = await this.client
+      .from("orgs")
+      .select("settings")
+      .eq("id", this.context.orgId)
+      .single();
+    if (orgError) throw orgError;
+
+    const settings = mergeOrgBusinessSettings(org.settings, {
+      cashBankBalance: input.cashBankBalance,
+      cashTaxReserve: input.cashTaxReserve,
+      cashOperatingReserveMonths: input.cashOperatingReserveMonths,
+      cashAsOfDate: input.cashAsOfDate.trim(),
     });
 
     const { error } = await this.client

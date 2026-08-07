@@ -26,6 +26,8 @@ export const APP_ROUTES = {
   financeCategories: "/finance/categories",
   financeAccounts: "/finance/accounts",
   jobPerformance: "/job-performance",
+  scorecard: "/scorecard",
+  financialBaseline: "/financial-baseline",
   settings: "/settings",
   time: "/time",
   field: "/field",

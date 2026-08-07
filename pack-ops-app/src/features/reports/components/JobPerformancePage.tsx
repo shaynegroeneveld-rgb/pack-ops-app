@@ -111,6 +111,89 @@ function computeTotals(rows: JobPerformanceReportRow[]): JobPerformanceTotals {
   };
 }
 
+const NO_JOB_TYPE_VALUE = "__no_job_type__";
+
+interface JobTypeBreakdownRow {
+  jobTypeId: string | null;
+  jobTypeName: string;
+  totals: JobPerformanceTotals;
+}
+
+function computeJobTypeBreakdown(rows: JobPerformanceReportRow[]): JobTypeBreakdownRow[] {
+  const grouped = new Map<string, { jobTypeId: string | null; jobTypeName: string; rows: JobPerformanceReportRow[] }>();
+
+  for (const row of rows) {
+    const key = row.jobTypeId ?? NO_JOB_TYPE_VALUE;
+    const current = grouped.get(key) ?? {
+      jobTypeId: row.jobTypeId,
+      jobTypeName: row.jobTypeName ?? "No Job Type",
+      rows: [],
+    };
+    current.rows.push(row);
+    grouped.set(key, current);
+  }
+
+  return Array.from(grouped.values())
+    .map((group) => ({
+      jobTypeId: group.jobTypeId,
+      jobTypeName: group.jobTypeName,
+      totals: computeTotals(group.rows),
+    }))
+    .sort((left, right) => right.totals.actualGrossProfit - left.totals.actualGrossProfit);
+}
+
+function renderJobTypeBreakdown(breakdown: JobTypeBreakdownRow[]) {
+  if (breakdown.length === 0) {
+    return null;
+  }
+
+  return (
+    <section style={{ ...cardStyle(), display: "grid", gap: "12px", marginBottom: "16px" }}>
+      <div>
+        <h2 style={{ margin: 0, fontSize: "20px" }}>By Job Type</h2>
+        <p style={{ margin: "4px 0 0", color: brand.textSoft }}>
+          Profitability of the jobs shown below, segmented by job type.
+        </p>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", minWidth: "640px", borderCollapse: "collapse", fontSize: "14px" }}>
+          <thead>
+            <tr style={{ color: brand.textSoft, textAlign: "left" }}>
+              <th style={{ padding: "8px 0", borderBottom: "1px solid #e4e8f1" }}>Job Type</th>
+              <th style={{ padding: "8px 0", borderBottom: "1px solid #e4e8f1" }}>Jobs</th>
+              <th style={{ padding: "8px 0", borderBottom: "1px solid #e4e8f1" }}>Invoiced Revenue</th>
+              <th style={{ padding: "8px 0", borderBottom: "1px solid #e4e8f1" }}>Actual Cost</th>
+              <th style={{ padding: "8px 0", borderBottom: "1px solid #e4e8f1" }}>Actual Profit</th>
+              <th style={{ padding: "8px 0", borderBottom: "1px solid #e4e8f1" }}>Margin</th>
+            </tr>
+          </thead>
+          <tbody>
+            {breakdown.map((group) => (
+              <tr key={group.jobTypeId ?? NO_JOB_TYPE_VALUE}>
+                <td style={{ padding: "9px 0", borderBottom: "1px solid #eef2f6", fontWeight: 700 }}>{group.jobTypeName}</td>
+                <td style={{ padding: "9px 0", borderBottom: "1px solid #eef2f6" }}>{group.totals.jobsCounted}</td>
+                <td style={{ padding: "9px 0", borderBottom: "1px solid #eef2f6" }}>{formatMoney(group.totals.invoicedRevenue)}</td>
+                <td style={{ padding: "9px 0", borderBottom: "1px solid #eef2f6" }}>{formatMoney(group.totals.actualTotalCost)}</td>
+                <td
+                  style={{
+                    padding: "9px 0",
+                    borderBottom: "1px solid #eef2f6",
+                    color: group.totals.actualGrossProfit < 0 ? "#9b2525" : "inherit",
+                    fontWeight: 700,
+                  }}
+                >
+                  {formatMoney(group.totals.actualGrossProfit)}
+                </td>
+                <td style={{ padding: "9px 0", borderBottom: "1px solid #eef2f6" }}>{formatPercent(group.totals.actualMarginPct)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function renderTotals(totals: JobPerformanceTotals) {
   return (
     <section style={{ ...cardStyle(), display: "grid", gap: "12px", marginBottom: "16px" }}>
@@ -342,9 +425,11 @@ export function JobPerformancePage() {
   const [filters, setFilters] = useState<{
     archiveScope: "active" | "archived" | "all";
     status: Job["status"] | "";
+    jobTypeId: string;
   }>({
     archiveScope: "active",
     status: "",
+    jobTypeId: "",
   });
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -380,16 +465,25 @@ export function JobPerformancePage() {
     if (!report) {
       return [];
     }
-    if (!normalizedSearch) {
-      return report.rows;
-    }
-    return report.rows.filter(
-      (row) =>
-        row.jobNumber.toLowerCase().includes(normalizedSearch) ||
-        row.title.toLowerCase().includes(normalizedSearch),
-    );
-  }, [report, normalizedSearch]);
+    return report.rows.filter((row) => {
+      if (normalizedSearch) {
+        const matchesSearch =
+          row.jobNumber.toLowerCase().includes(normalizedSearch) || row.title.toLowerCase().includes(normalizedSearch);
+        if (!matchesSearch) {
+          return false;
+        }
+      }
+      if (filters.jobTypeId === NO_JOB_TYPE_VALUE) {
+        return row.jobTypeId === null;
+      }
+      if (filters.jobTypeId) {
+        return row.jobTypeId === filters.jobTypeId;
+      }
+      return true;
+    });
+  }, [report, normalizedSearch, filters.jobTypeId]);
   const totals = useMemo(() => computeTotals(filteredRows), [filteredRows]);
+  const jobTypeBreakdown = useMemo(() => computeJobTypeBreakdown(filteredRows), [filteredRows]);
 
   return (
     <section style={pageStyle()}>
@@ -411,7 +505,7 @@ export function JobPerformancePage() {
           <button
             type="button"
             onClick={() => {
-              setFilters({ archiveScope: "active", status: "" });
+              setFilters({ archiveScope: "active", status: "", jobTypeId: "" });
               setSearchQuery("");
             }}
             style={secondaryButtonStyle()}
@@ -466,12 +560,34 @@ export function JobPerformancePage() {
               ))}
             </select>
           </label>
+
+          <label style={{ display: "grid", gap: "6px" }}>
+            <span style={{ fontSize: "13px", color: brand.textSoft }}>Job Type</span>
+            <select
+              value={filters.jobTypeId}
+              onChange={(event) =>
+                setFilters((current) => ({
+                  ...current,
+                  jobTypeId: event.target.value,
+                }))
+              }
+            >
+              <option value="">All job types</option>
+              <option value={NO_JOB_TYPE_VALUE}>No Job Type</option>
+              {(report?.jobTypeOptions ?? []).map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       </section>
 
       {report ? (
         <>
           {renderTotals(totals)}
+          {jobTypeBreakdown.length > 1 ? renderJobTypeBreakdown(jobTypeBreakdown) : null}
 
           <section style={{ display: "grid", gap: "12px" }}>
             <div style={{ color: brand.textSoft, fontSize: "14px" }}>
@@ -491,6 +607,7 @@ export function JobPerformancePage() {
                     <strong style={{ fontSize: "18px", lineHeight: 1.2 }}>{row.jobNumber} · {row.title}</strong>
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
                       <span style={statusBadge(row.status)}>{statusLabel(row.status)}</span>
+                      {row.jobTypeName ? <span style={badgeStyle("#eef2ff", "#163fcb")}>{row.jobTypeName}</span> : null}
                       {row.isArchived ? <span style={badgeStyle("#f3f5f7", "#445168")}>Archived</span> : null}
                     </div>
                   </div>

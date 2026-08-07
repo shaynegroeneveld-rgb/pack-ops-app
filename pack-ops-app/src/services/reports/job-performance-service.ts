@@ -6,6 +6,7 @@ import { CatalogItemsRepositoryImpl } from "@/data/repositories/catalog-items.re
 import type { RepositoryContext } from "@/data/repositories/contracts";
 import { JobManualActualCostLinesRepositoryImpl } from "@/data/repositories/job-manual-actual-cost-lines.repository.impl";
 import { JobMaterialsRepositoryImpl } from "@/data/repositories/job-materials.repository.impl";
+import { JobTypesRepositoryImpl } from "@/data/repositories/job-types.repository.impl";
 import { QuoteLineItemsRepositoryImpl } from "@/data/repositories/quote-line-items.repository.impl";
 import { TimeEntriesRepositoryImpl } from "@/data/repositories/time-entries.repository.impl";
 import type { Database } from "@/data/supabase/types";
@@ -26,12 +27,15 @@ export interface JobPerformanceReportRow {
   title: string;
   status: Job["status"];
   isArchived: boolean;
+  jobTypeId: string | null;
+  jobTypeName: string | null;
   performance: JobPerformanceSummary | null;
 }
 
 export interface JobPerformanceReportData {
   rows: JobPerformanceReportRow[];
   statusOptions: Array<{ value: Job["status"]; label: string }>;
+  jobTypeOptions: Array<{ id: string; name: string }>;
 }
 
 function canViewJobPerformance(user: User): boolean {
@@ -56,6 +60,7 @@ export class JobPerformanceService {
   readonly catalogItems;
   readonly jobManualActualCostLines;
   readonly jobMaterials;
+  readonly jobTypes;
   readonly quoteLineItems;
   readonly timeEntries;
 
@@ -67,6 +72,7 @@ export class JobPerformanceService {
     this.catalogItems = new CatalogItemsRepositoryImpl(context, client);
     this.jobManualActualCostLines = new JobManualActualCostLinesRepositoryImpl(context, client);
     this.jobMaterials = new JobMaterialsRepositoryImpl(context, client);
+    this.jobTypes = new JobTypesRepositoryImpl(context, client);
     this.quoteLineItems = new QuoteLineItemsRepositoryImpl(context, client);
     this.timeEntries = new TimeEntriesRepositoryImpl(context, client);
   }
@@ -99,13 +105,14 @@ export class JobPerformanceService {
       jobsQuery = jobsQuery.eq("status", filters.status);
     }
 
-    const [{ data: jobsData, error: jobsError }, catalogItems, jobMaterials, manualActualCostLines, timeEntries, orgResponse] = await Promise.all([
+    const [{ data: jobsData, error: jobsError }, catalogItems, jobMaterials, manualActualCostLines, timeEntries, orgResponse, jobTypes] = await Promise.all([
       jobsQuery,
       this.catalogItems.list({ filter: { includeInactive: true } }),
       this.jobMaterials.list(),
       this.jobManualActualCostLines.list(),
       this.timeEntries.list(),
       this.client.from("orgs").select("settings").eq("id", this.context.orgId).single(),
+      this.jobTypes.list({ filter: { includeInactive: true } }),
     ]);
 
     if (jobsError) {
@@ -253,12 +260,16 @@ export class JobPerformanceService {
       quoteLineItemsByQuoteId.set(String(line.quoteId), current);
     }
 
+    const jobTypesById = new Map(jobTypes.map((jobType) => [String(jobType.id), jobType]));
+
     const rows = jobs.map((job) => ({
       jobId: String(job.id),
       jobNumber: job.number,
       title: job.title,
       status: job.status,
       isArchived: Boolean(job.deletedAt),
+      jobTypeId: job.jobTypeId ? String(job.jobTypeId) : null,
+      jobTypeName: job.jobTypeId ? jobTypesById.get(String(job.jobTypeId))?.name ?? null : null,
       performance: computeJobPerformanceSummary({
         job,
         estimatedMaterialLines:
@@ -285,6 +296,7 @@ export class JobPerformanceService {
       statusOptions: Array.from(new Set(rows.map((row) => row.status)))
         .sort()
         .map((value) => ({ value, label: statusLabel(value) })),
+      jobTypeOptions: jobTypes.map((jobType) => ({ id: String(jobType.id), name: jobType.name })),
     };
   }
 }
