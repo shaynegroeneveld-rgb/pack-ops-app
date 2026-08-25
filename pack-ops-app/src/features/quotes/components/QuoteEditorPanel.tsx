@@ -338,6 +338,8 @@ export function QuoteEditorPanel({
         finalTotal: 0,
         grossProfit: 0,
         grossMarginPercent: 0,
+        revenuePerHour: null as number | null,
+        grossProfitPerHour: null as number | null,
       };
     }
 
@@ -361,6 +363,9 @@ export function QuoteEditorPanel({
     const totalCost = roundMoney(materialCost + laborCost);
     const grossProfit = roundMoney(subtotal - totalCost);
     const grossMarginPercent = subtotal > 0 ? roundMoney((grossProfit / subtotal) * 100) : 0;
+    const laborHours = laborLines.reduce((total, line) => total + (line.quantity ?? 0), 0);
+    const revenuePerHour = laborHours > 0 ? roundMoney(subtotal / laborHours) : null;
+    const grossProfitPerHour = laborHours > 0 ? roundMoney(grossProfit / laborHours) : null;
 
     return {
       materialCost,
@@ -373,6 +378,8 @@ export function QuoteEditorPanel({
       finalTotal,
       grossProfit,
       grossMarginPercent,
+      revenuePerHour,
+      grossProfitPerHour,
     };
   }, [draft]);
 
@@ -1512,6 +1519,8 @@ export function QuoteEditorPanel({
               <div><div style={{ color: "#5b6475", fontSize: "13px" }}>Labor Sell</div><strong>${totals.laborSell.toFixed(2)}</strong></div>
               <div><div style={{ color: "#5b6475", fontSize: "13px" }}>Gross Profit</div><strong>${totals.grossProfit.toFixed(2)}</strong></div>
               <div><div style={{ color: "#5b6475", fontSize: "13px" }}>Gross Margin %</div><strong>{totals.grossMarginPercent.toFixed(2)}%</strong></div>
+              <div><div style={{ color: "#5b6475", fontSize: "13px" }}>Revenue / Hour</div><strong>{totals.revenuePerHour === null ? "—" : `$${totals.revenuePerHour.toFixed(2)}`}</strong></div>
+              <div><div style={{ color: "#5b6475", fontSize: "13px" }}>Gross Profit / Hour</div><strong>{totals.grossProfitPerHour === null ? "—" : `$${totals.grossProfitPerHour.toFixed(2)}`}</strong></div>
             </div>
             <div
               style={{
