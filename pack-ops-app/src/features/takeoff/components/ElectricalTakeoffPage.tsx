@@ -55,6 +55,8 @@ interface DeviceRecipeLine {
 }
 
 type DeviceRecipes = Record<string, DeviceRecipeLine[]>;
+type GangRuleKind = "box" | "plate";
+type GangMaterialRules = Record<string, string>;
 
 interface QuoteDraft {
   customerName: string;
@@ -173,11 +175,21 @@ const emptyAdjustmentDraft: ManualAdjustmentDraft = {
 const TAKEOFF_CATALOG_STORAGE_KEY = "packops-takeoff-material-catalog-v1";
 const TAKEOFF_MATERIAL_MAPPING_STORAGE_KEY = "packops-takeoff-material-mappings-v1";
 const TAKEOFF_DEVICE_RECIPES_STORAGE_KEY = "packops-takeoff-device-recipes-v1";
+const TAKEOFF_GANG_RULES_STORAGE_KEY = "packops-takeoff-gang-material-rules-v1";
 
 function readStoredDeviceRecipes(): DeviceRecipes {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(TAKEOFF_DEVICE_RECIPES_STORAGE_KEY) ?? "{}");
     return parsed && typeof parsed === "object" ? parsed as DeviceRecipes : {};
+  } catch {
+    return {};
+  }
+}
+
+function readStoredGangRules(): GangMaterialRules {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(TAKEOFF_GANG_RULES_STORAGE_KEY) ?? "{}");
+    return parsed && typeof parsed === "object" ? parsed as GangMaterialRules : {};
   } catch {
     return {};
   }
@@ -542,6 +554,7 @@ export function ElectricalTakeoffPage() {
   const [isAutomationAnalyzing, setIsAutomationAnalyzing] = useState(false);
   const [catalogMappings, setCatalogMappings] = useState<Record<string, string>>(() => readStoredCatalogMappings());
   const [deviceRecipes, setDeviceRecipes] = useState<DeviceRecipes>(() => readStoredDeviceRecipes());
+  const [gangMaterialRules, setGangMaterialRules] = useState<GangMaterialRules>(() => readStoredGangRules());
   const [isDeviceRecipesOpen, setIsDeviceRecipesOpen] = useState(false);
   const [selectedRecipeDeviceId, setSelectedRecipeDeviceId] = useState(DEVICE_CATALOG[0]?.id ?? "");
   const { catalogQuery } = useMaterialsSlice(currentUser);
@@ -624,8 +637,13 @@ export function ElectricalTakeoffPage() {
     window.localStorage.setItem(TAKEOFF_DEVICE_RECIPES_STORAGE_KEY, JSON.stringify(deviceRecipes));
   }, [deviceRecipes]);
 
+  useEffect(() => {
+    window.localStorage.setItem(TAKEOFF_GANG_RULES_STORAGE_KEY, JSON.stringify(gangMaterialRules));
+  }, [gangMaterialRules]);
+
   function handleReviewMaterials() {
     const deviceCounts = readTakeoffDeviceCounts(iframeRef.current);
+    const gangCounts = readTakeoffGangCounts(iframeRef.current);
     const unconfiguredDevices = deviceCounts.filter(({ deviceId }) =>
       !(deviceRecipes[deviceId]?.some((line) => line.catalogItemId && line.quantity > 0)),
     );
@@ -637,7 +655,17 @@ export function ElectricalTakeoffPage() {
       return;
     }
 
-    const lines = buildDeviceRecipeMaterialLines(deviceCounts, deviceRecipes, catalogItems);
+    const missingGangRules = gangCounts.flatMap(({ gangs }) =>
+      (["box", "plate"] as GangRuleKind[]).filter((kind) => !gangMaterialRules[gangRuleKey(gangs, kind)]).map((kind) => `${gangs}-gang ${kind}`),
+    );
+    if (missingGangRules.length > 0) {
+      setReviewLines(null);
+      setReviewError(`Set exact Pack Ops gang materials for: ${missingGangRules.join(", ")}. No guessed box materials were added.`);
+      setIsDeviceRecipesOpen(true);
+      return;
+    }
+
+    const lines = buildDeviceRecipeMaterialLines(deviceCounts, deviceRecipes, gangCounts, gangMaterialRules, catalogItems);
     if (lines.length === 0) {
       setReviewLines(null);
       setReviewError("No placed PDF devices were found. Place devices on the plan first, then review materials.");
@@ -1548,6 +1576,36 @@ export function ElectricalTakeoffPage() {
               <button type="button" style={{ ...toolbarButtonStyle, justifySelf: "start" }} onClick={addDeviceRecipeLine}>
                 Add Pack Ops material
               </button>
+
+              <section style={{ borderTop: `1px solid ${brand.border}`, paddingTop: "14px", display: "grid", gap: "10px" }}>
+                <div>
+                  <h3 style={{ margin: 0, color: brand.text, fontSize: "16px" }}>1-gang to 4-gang box rules</h3>
+                  <p style={{ margin: "4px 0 0", color: brand.textSoft, fontSize: "13px" }}>
+                    These exact materials replace the box and plate when devices are grouped on the PDF.
+                  </p>
+                </div>
+                {[1, 2, 3, 4].map((gangs) => (
+                  <div key={gangs} style={{ display: "grid", gridTemplateColumns: "90px minmax(0, 1fr) minmax(0, 1fr)", gap: "8px", alignItems: "end" }}>
+                    <strong style={{ color: brand.text, paddingBottom: "12px" }}>{gangs}-gang</strong>
+                    {(["box", "plate"] as GangRuleKind[]).map((kind) => (
+                      <div key={kind} style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                        {kind === "box" ? "Box material" : "Plate / cover material"}
+                        <MaterialSearchSelect
+                          catalogItems={catalogItems.filter((item) => item.isActive)}
+                          selectedMaterialId={gangMaterialRules[gangRuleKey(gangs, kind)] ?? ""}
+                          isPending={catalogQuery.isLoading}
+                          placeholder={`Search exact ${gangs}-gang ${kind}...`}
+                          onSelect={(catalogItemId) => {
+                            setGangMaterialRules((current) => ({ ...current, [gangRuleKey(gangs, kind)]: catalogItemId }));
+                            setReviewLines(null);
+                            setCreatedQuote(null);
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </section>
               <div style={{ color: brand.primaryDark, fontSize: "12px", fontWeight: 700 }}>
                 Changes save automatically on this browser and apply to existing and future placed devices when you review the takeoff.
               </div>
@@ -2302,6 +2360,15 @@ interface PlacedDeviceCount {
   quantity: number;
 }
 
+interface PlacedGangCount {
+  gangs: number;
+  quantity: number;
+}
+
+function gangRuleKey(gangs: number, kind: GangRuleKind): string {
+  return `${gangs}-${kind}`;
+}
+
 function readTakeoffDeviceCounts(iframe: HTMLIFrameElement | null): PlacedDeviceCount[] {
   const document = iframe?.contentDocument;
   if (!document) return [];
@@ -2318,9 +2385,23 @@ function readTakeoffDeviceCounts(iframe: HTMLIFrameElement | null): PlacedDevice
   return [...counts.values()];
 }
 
+function readTakeoffGangCounts(iframe: HTMLIFrameElement | null): PlacedGangCount[] {
+  const document = iframe?.contentDocument;
+  if (!document) return [];
+  return Array.from(document.querySelectorAll(".takeoff:not(.compact) > div")).flatMap((row) => {
+    const label = row.querySelector("span")?.textContent?.trim() ?? "";
+    const match = label.match(/^([1-4])-gang box$/i);
+    const quantity = parseTakeoffQuantity(row.querySelector("strong")?.textContent?.trim() ?? "");
+    if (!match || !Number.isFinite(quantity) || quantity <= 0) return [];
+    return [{ gangs: Number(match[1]), quantity }];
+  });
+}
+
 function buildDeviceRecipeMaterialLines(
   deviceCounts: PlacedDeviceCount[],
   recipes: DeviceRecipes,
+  gangCounts: PlacedGangCount[],
+  gangRules: GangMaterialRules,
   catalogItems: CatalogItem[],
 ): MatchedTakeoffMaterialLine[] {
   const catalogById = new Map<string, CatalogItem>(catalogItems.map((item) => [String(item.id), item]));
@@ -2346,6 +2427,29 @@ function buildDeviceRecipeMaterialLines(
         lineCost: material.costPrice === null ? null : Math.round(material.costPrice * quantity * 100) / 100,
         source: "takeoff",
         note: `Exact saved device recipe: ${device.name}`,
+      });
+    });
+  });
+
+  gangCounts.forEach(({ gangs, quantity }) => {
+    (["box", "plate"] as GangRuleKind[]).forEach((kind) => {
+      const material = catalogById.get(gangRules[gangRuleKey(gangs, kind)] ?? "");
+      if (!material) return;
+      const current = rolledUp.get(material.id);
+      if (current) {
+        current.quantity = Math.round((current.quantity + quantity) * 100) / 100;
+        current.lineCost = material.costPrice === null ? null : Math.round(material.costPrice * current.quantity * 100) / 100;
+        return;
+      }
+      rolledUp.set(material.id, {
+        section: material.category || "Boxes & plates",
+        item: material.name,
+        quantity,
+        match: material,
+        matchScore: 1,
+        lineCost: material.costPrice === null ? null : Math.round(material.costPrice * quantity * 100) / 100,
+        source: "takeoff",
+        note: `Exact saved ${gangs}-gang ${kind} rule`,
       });
     });
   });
