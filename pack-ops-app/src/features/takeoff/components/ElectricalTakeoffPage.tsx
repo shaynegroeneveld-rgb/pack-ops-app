@@ -154,7 +154,7 @@ const inputStyle: CSSProperties = {
 };
 
 const emptyAdjustmentDraft: ManualAdjustmentDraft = {
-  adjustmentKind: "material",
+  adjustmentKind: "device",
   catalogItemId: "",
   customItem: "",
   quantity: "1",
@@ -626,10 +626,10 @@ export function ElectricalTakeoffPage() {
     setCreatedQuote(null);
   }
 
-  function handleAddManualAdjustment() {
-    const quantity = Number(manualAdjustmentDraft.quantity);
+  function handleAddManualAdjustment(direction: 1 | -1) {
+    const quantity = Math.abs(Number(manualAdjustmentDraft.quantity));
     if (!Number.isFinite(quantity) || quantity === 0) {
-      setReviewError("Manual adjustment quantity must be a positive or negative number.");
+      setReviewError("Enter how many devices or materials you want to add or remove.");
       return;
     }
 
@@ -646,7 +646,7 @@ export function ElectricalTakeoffPage() {
         id: crypto.randomUUID(),
         adjustmentKind: manualAdjustmentDraft.adjustmentKind,
         item: itemName,
-        quantity: Math.round(quantity * 100) / 100,
+        quantity: direction * (Math.round(quantity * 100) / 100),
         catalogItemId: catalogItem?.id ?? null,
         note: manualAdjustmentDraft.note.trim() || null,
       },
@@ -1450,7 +1450,7 @@ export function ElectricalTakeoffPage() {
                     Device & Material Adjustments
                   </h2>
                   <p style={{ margin: "4px 0 0", color: brand.textSoft, fontSize: "13px" }}>
-                    Add or subtract one-off devices and materials. These roll into the review, CSV, and quote prep list.
+                    Add or remove boxes/devices and connect them directly to your Pack Ops materials.
                   </p>
                 </div>
                 <button type="button" style={toolbarButtonStyle} onClick={() => setIsAdjustmentsOpen(false)}>
@@ -1481,45 +1481,44 @@ export function ElectricalTakeoffPage() {
                       }
                       style={inputStyle}
                     >
-                      <option value="material">Material</option>
-                      <option value="device">Device</option>
+                      <option value="device">Box / device</option>
+                      <option value="material">Material only</option>
                     </select>
                   </label>
                   <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
-                    Quantity +/-
+                    How many
                     <input
                       value={manualAdjustmentDraft.quantity}
                       onChange={(event) => setManualAdjustmentDraft((draft) => ({ ...draft, quantity: event.target.value }))}
                       type="number"
                       step="0.25"
+                      min="0.25"
                       style={inputStyle}
                     />
                   </label>
                 </div>
 
-                <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
-                  Catalog material/device
-                  <select
-                    value={manualAdjustmentDraft.catalogItemId}
-                    onChange={(event) =>
-                      setManualAdjustmentDraft((draft) => ({
-                        ...draft,
-                        catalogItemId: event.target.value,
-                        customItem: event.target.value ? "" : draft.customItem,
-                      }))
+                <div style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                  Pack Ops material
+                  <MaterialSearchSelect
+                    catalogItems={catalogItems.filter((item) => item.isActive)}
+                    selectedMaterialId={manualAdjustmentDraft.catalogItemId}
+                    isPending={catalogQuery.isLoading}
+                    placeholder="Search by name, SKU, alias, or category..."
+                    onSelect={(catalogItemId) =>
+                      setManualAdjustmentDraft((draft) => ({ ...draft, catalogItemId, customItem: "" }))
                     }
-                    style={inputStyle}
-                  >
-                    <option value="">Custom / unmatched</option>
-                    {catalogItems
-                      .filter((item) => item.isActive)
-                      .map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}{item.sku ? ` (${item.sku})` : ""}
-                        </option>
-                      ))}
-                  </select>
-                </label>
+                  />
+                  {manualAdjustmentDraft.catalogItemId ? (
+                    <button
+                      type="button"
+                      onClick={() => setManualAdjustmentDraft((draft) => ({ ...draft, catalogItemId: "" }))}
+                      style={{ border: 0, background: "transparent", color: brand.primaryDark, padding: 0, justifySelf: "start", fontSize: "12px", fontWeight: 800, cursor: "pointer" }}
+                    >
+                      Use a custom item instead
+                    </button>
+                  ) : null}
+                </div>
 
                 {!manualAdjustmentDraft.catalogItemId ? (
                   <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
@@ -1543,9 +1542,14 @@ export function ElectricalTakeoffPage() {
                   />
                 </label>
 
-                <button type="button" style={{ ...toolbarButtonStyle, justifySelf: "start" }} onClick={handleAddManualAdjustment}>
-                  Add adjustment
-                </button>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <button type="button" style={toolbarButtonStyle} onClick={() => handleAddManualAdjustment(1)}>
+                    Add to takeoff
+                  </button>
+                  <button type="button" style={{ ...toolbarButtonStyle, color: "#9a3412", borderColor: "#f0c2a7" }} onClick={() => handleAddManualAdjustment(-1)}>
+                    Remove from takeoff
+                  </button>
+                </div>
               </div>
 
               <section style={{ display: "grid", gap: "8px" }}>
@@ -1571,7 +1575,7 @@ export function ElectricalTakeoffPage() {
                       >
                         <span>
                           <strong style={{ color: brand.text }}>
-                            {adjustment.adjustmentKind === "device" ? "Device" : "Material"}
+                            {adjustment.adjustmentKind === "device" ? "Box / device" : "Material"}
                           </strong>
                           {" · "}
                           {adjustment.item}
