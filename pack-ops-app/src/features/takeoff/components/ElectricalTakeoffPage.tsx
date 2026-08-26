@@ -4,6 +4,7 @@ import automationPdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { useAuthContext } from "@/app/contexts/auth-context";
 import type { CatalogItem } from "@/domain/materials/types";
 import type { QuoteLineItemInput, QuoteView } from "@/domain/quotes/types";
+import { MaterialSearchSelect } from "@/features/materials/components/MaterialSearchSelect";
 import { brand, pageStyle } from "@/features/shared/ui/mobile-styles";
 import { useMaterialsSlice } from "@/features/materials/hooks/use-materials-slice";
 import { useQuotesSlice } from "@/features/quotes/hooks/use-quotes-slice";
@@ -970,30 +971,36 @@ export function ElectricalTakeoffPage() {
                   </div>
                   <div style={{ color: brand.textSoft, fontSize: "12px" }}>{line.section}</div>
                   {line.source === "takeoff" ? (
-                    <label style={{ display: "grid", gap: "5px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
-                      Actual Pack Ops material
-                      <select
-                        value={catalogMappings[takeoffMaterialMappingKey(line)] ?? ""}
-                        onChange={(event) => handleCatalogMappingChange(line, event.target.value)}
-                        style={{ ...inputStyle, width: "100%" }}
-                      >
-                        <option value="">
-                          {line.match ? `Auto match: ${line.match.name}` : "Choose a priced catalog item..."}
-                        </option>
-                        {pricedCatalogItems.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name}{item.sku ? ` (${item.sku})` : ""} · ${item.costPrice?.toFixed(2)} / {item.unit}
-                          </option>
-                        ))}
-                      </select>
-                      <span style={{ color: catalogMappings[takeoffMaterialMappingKey(line)] ? brand.primaryDark : brand.textSoft, fontWeight: 600 }}>
-                        {catalogMappings[takeoffMaterialMappingKey(line)]
-                          ? "Saved exact mapping - reused on future takeoffs."
-                          : line.match
-                            ? `Auto-matched at ${Math.round(line.matchScore * 100)}% confidence. Choose an item to lock it in.`
-                            : "Choose the exact item used by your company."}
-                      </span>
-                    </label>
+                    <div style={{ display: "grid", gap: "6px" }}>
+                      <div style={{ color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                        Search or change Pack Ops material
+                      </div>
+                      <MaterialSearchSelect
+                        catalogItems={pricedCatalogItems}
+                        selectedMaterialId={catalogMappings[takeoffMaterialMappingKey(line)] ?? line.match?.id ?? ""}
+                        isPending={catalogQuery.isLoading}
+                        placeholder="Search by name, SKU, alias, or category..."
+                        onSelect={(materialId) => handleCatalogMappingChange(line, materialId)}
+                      />
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", flexWrap: "wrap" }}>
+                        <span style={{ color: catalogMappings[takeoffMaterialMappingKey(line)] ? brand.primaryDark : brand.textSoft, fontSize: "12px", fontWeight: 600 }}>
+                          {catalogMappings[takeoffMaterialMappingKey(line)]
+                            ? "Saved for this device on future takeoffs."
+                            : line.match
+                              ? `Suggested match (${Math.round(line.matchScore * 100)}% confidence). Select it to save it.`
+                              : "Search for the exact material your company uses."}
+                        </span>
+                        {catalogMappings[takeoffMaterialMappingKey(line)] ? (
+                          <button
+                            type="button"
+                            onClick={() => handleCatalogMappingChange(line, "")}
+                            style={{ border: 0, background: "transparent", color: brand.primaryDark, padding: 0, fontSize: "12px", fontWeight: 800, cursor: "pointer" }}
+                          >
+                            Clear saved choice
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
                   ) : null}
                   {line.source === "manual" ? (
                     <div style={{ color: brand.primaryDark, fontSize: "12px", fontWeight: 800 }}>
