@@ -8,6 +8,7 @@ import { MaterialSearchSelect } from "@/features/materials/components/MaterialSe
 import { brand, pageStyle } from "@/features/shared/ui/mobile-styles";
 import { useMaterialsSlice } from "@/features/materials/hooks/use-materials-slice";
 import { useQuotesSlice } from "@/features/quotes/hooks/use-quotes-slice";
+import { DEVICE_CATALOG } from "@/features/takeoff/device-catalog";
 
 interface TakeoffMaterialLine {
   section: string;
@@ -46,6 +47,14 @@ interface TakeoffLabourLine {
   item: string;
   hours: number;
 }
+
+interface DeviceRecipeLine {
+  id: string;
+  catalogItemId: string;
+  quantity: number;
+}
+
+type DeviceRecipes = Record<string, DeviceRecipeLine[]>;
 
 interface QuoteDraft {
   customerName: string;
@@ -163,6 +172,16 @@ const emptyAdjustmentDraft: ManualAdjustmentDraft = {
 
 const TAKEOFF_CATALOG_STORAGE_KEY = "packops-takeoff-material-catalog-v1";
 const TAKEOFF_MATERIAL_MAPPING_STORAGE_KEY = "packops-takeoff-material-mappings-v1";
+const TAKEOFF_DEVICE_RECIPES_STORAGE_KEY = "packops-takeoff-device-recipes-v1";
+
+function readStoredDeviceRecipes(): DeviceRecipes {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(TAKEOFF_DEVICE_RECIPES_STORAGE_KEY) ?? "{}");
+    return parsed && typeof parsed === "object" ? parsed as DeviceRecipes : {};
+  } catch {
+    return {};
+  }
+}
 const AUTOMATION_PAGE_WIDTH = 820;
 
 const AUTOMATION_ELECTRICAL_KEYWORDS = [
@@ -522,6 +541,9 @@ export function ElectricalTakeoffPage() {
   const [automationError, setAutomationError] = useState<string | null>(null);
   const [isAutomationAnalyzing, setIsAutomationAnalyzing] = useState(false);
   const [catalogMappings, setCatalogMappings] = useState<Record<string, string>>(() => readStoredCatalogMappings());
+  const [deviceRecipes, setDeviceRecipes] = useState<DeviceRecipes>(() => readStoredDeviceRecipes());
+  const [isDeviceRecipesOpen, setIsDeviceRecipesOpen] = useState(false);
+  const [selectedRecipeDeviceId, setSelectedRecipeDeviceId] = useState(DEVICE_CATALOG[0]?.id ?? "");
   const { catalogQuery } = useMaterialsSlice(currentUser);
   const { builderResourcesQuery, createQuote } = useQuotesSlice(currentUser);
   const catalogItems = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
@@ -598,15 +620,31 @@ export function ElectricalTakeoffPage() {
     window.localStorage.setItem(TAKEOFF_MATERIAL_MAPPING_STORAGE_KEY, JSON.stringify(catalogMappings));
   }, [catalogMappings]);
 
+  useEffect(() => {
+    window.localStorage.setItem(TAKEOFF_DEVICE_RECIPES_STORAGE_KEY, JSON.stringify(deviceRecipes));
+  }, [deviceRecipes]);
+
   function handleReviewMaterials() {
-    const lines = readTakeoffMaterialLines(iframeRef.current);
-    if (lines.length === 0) {
+    const deviceCounts = readTakeoffDeviceCounts(iframeRef.current);
+    const unconfiguredDevices = deviceCounts.filter(({ deviceId }) =>
+      !(deviceRecipes[deviceId]?.some((line) => line.catalogItemId && line.quantity > 0)),
+    );
+    if (unconfiguredDevices.length > 0) {
       setReviewLines(null);
-      setReviewError("No takeoff material rows found yet. Place devices on the plan first, then review materials.");
+      setReviewError(`Set exact Pack Ops materials for: ${unconfiguredDevices.map(({ name }) => name).join(", ")}. No guessed materials were added.`);
+      setIsDeviceRecipesOpen(true);
+      setSelectedRecipeDeviceId(unconfiguredDevices[0]?.deviceId ?? selectedRecipeDeviceId);
       return;
     }
 
-    setReviewLines(lines.map((line) => matchTakeoffLine(line, pricedCatalogItems, catalogMappings[takeoffMaterialMappingKey(line)])));
+    const lines = buildDeviceRecipeMaterialLines(deviceCounts, deviceRecipes, catalogItems);
+    if (lines.length === 0) {
+      setReviewLines(null);
+      setReviewError("No placed PDF devices were found. Place devices on the plan first, then review materials.");
+      return;
+    }
+
+    setReviewLines(lines);
     setReviewError(null);
     setCreatedQuote(null);
   }
@@ -623,6 +661,36 @@ export function ElectricalTakeoffPage() {
       if (takeoffMaterialMappingKey(reviewLine) !== mappingKey) return reviewLine;
       return matchTakeoffLine(reviewLine, pricedCatalogItems, catalogItemId || undefined);
     }) ?? null);
+    setCreatedQuote(null);
+  }
+
+  function addDeviceRecipeLine() {
+    setDeviceRecipes((current) => ({
+      ...current,
+      [selectedRecipeDeviceId]: [
+        ...(current[selectedRecipeDeviceId] ?? []),
+        { id: crypto.randomUUID(), catalogItemId: "", quantity: 1 },
+      ],
+    }));
+  }
+
+  function updateDeviceRecipeLine(lineId: string, patch: Partial<DeviceRecipeLine>) {
+    setDeviceRecipes((current) => ({
+      ...current,
+      [selectedRecipeDeviceId]: (current[selectedRecipeDeviceId] ?? []).map((line) =>
+        line.id === lineId ? { ...line, ...patch } : line,
+      ),
+    }));
+    setReviewLines(null);
+    setCreatedQuote(null);
+  }
+
+  function removeDeviceRecipeLine(lineId: string) {
+    setDeviceRecipes((current) => ({
+      ...current,
+      [selectedRecipeDeviceId]: (current[selectedRecipeDeviceId] ?? []).filter((line) => line.id !== lineId),
+    }));
+    setReviewLines(null);
     setCreatedQuote(null);
   }
 
@@ -832,6 +900,9 @@ export function ElectricalTakeoffPage() {
           </button>
           <button type="button" style={toolbarButtonStyle} onClick={handleReviewMaterials}>
             Review Takeoff Materials
+          </button>
+          <button type="button" style={toolbarButtonStyle} onClick={() => setIsDeviceRecipesOpen(true)}>
+            Device Material Setup
           </button>
           <button type="button" style={toolbarButtonStyle} onClick={() => setIsAdjustmentsOpen(true)}>
             Add / Modify Devices
@@ -1411,6 +1482,75 @@ export function ElectricalTakeoffPage() {
               >
                 {createQuote.isPending ? "Creating..." : "Create Draft Quote"}
               </button>
+            </section>
+          </div>
+        ) : null}
+
+        {isDeviceRecipesOpen ? (
+          <div
+            role="presentation"
+            style={{ position: "absolute", inset: 0, zIndex: 9, background: "rgba(15, 23, 42, 0.48)", padding: "18px", display: "grid", placeItems: "center" }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="device-material-setup-title"
+              style={{ width: "min(760px, 100%)", maxHeight: "min(780px, 100%)", overflow: "auto", border: `1px solid ${brand.border}`, borderRadius: "14px", background: "#fff", boxShadow: "0 24px 70px rgba(15, 23, 42, 0.3)", padding: "16px", display: "grid", gap: "14px" }}
+            >
+              <header style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "12px" }}>
+                <div>
+                  <h2 id="device-material-setup-title" style={{ margin: 0, color: brand.text, fontSize: "20px" }}>Device Material Setup</h2>
+                  <p style={{ margin: "4px 0 0", color: brand.textSoft, fontSize: "13px" }}>
+                    Define the exact Pack Ops materials used every time this device is placed on a PDF. Nothing is guessed.
+                  </p>
+                </div>
+                <button type="button" style={toolbarButtonStyle} onClick={() => setIsDeviceRecipesOpen(false)}>Done</button>
+              </header>
+
+              <label style={{ display: "grid", gap: "5px", color: brand.textSoft, fontSize: "12px", fontWeight: 800 }}>
+                PDF device
+                <select value={selectedRecipeDeviceId} onChange={(event) => setSelectedRecipeDeviceId(event.target.value)} style={inputStyle}>
+                  {DEVICE_CATALOG.map((device) => (
+                    <option key={device.id} value={device.id}>
+                      {device.symbol} · {device.name}{deviceRecipes[device.id]?.length ? " · configured" : " · needs setup"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div style={{ display: "grid", gap: "10px" }}>
+                {(deviceRecipes[selectedRecipeDeviceId] ?? []).map((recipeLine, index) => (
+                  <article key={recipeLine.id} style={{ border: `1px solid ${brand.border}`, borderRadius: "10px", padding: "10px", display: "grid", gridTemplateColumns: "minmax(0, 1fr) 100px auto", gap: "8px", alignItems: "end" }}>
+                    <div style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                      Pack Ops material {index + 1}
+                      <MaterialSearchSelect
+                        catalogItems={catalogItems.filter((item) => item.isActive)}
+                        selectedMaterialId={recipeLine.catalogItemId}
+                        isPending={catalogQuery.isLoading}
+                        placeholder="Search exact Pack Ops material..."
+                        onSelect={(catalogItemId) => updateDeviceRecipeLine(recipeLine.id, { catalogItemId })}
+                      />
+                    </div>
+                    <label style={{ display: "grid", gap: "4px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                      Qty per device
+                      <input type="number" min="0.01" step="0.01" value={recipeLine.quantity} onChange={(event) => updateDeviceRecipeLine(recipeLine.id, { quantity: Math.max(0, Number(event.target.value)) })} style={inputStyle} />
+                    </label>
+                    <button type="button" style={{ ...toolbarButtonStyle, color: "#9a3412", borderColor: "#f0c2a7" }} onClick={() => removeDeviceRecipeLine(recipeLine.id)}>Remove</button>
+                  </article>
+                ))}
+                {(deviceRecipes[selectedRecipeDeviceId] ?? []).length === 0 ? (
+                  <div style={{ border: `1px dashed ${brand.border}`, borderRadius: "10px", padding: "14px", color: brand.textSoft, fontSize: "13px" }}>
+                    No materials configured for this device yet.
+                  </div>
+                ) : null}
+              </div>
+
+              <button type="button" style={{ ...toolbarButtonStyle, justifySelf: "start" }} onClick={addDeviceRecipeLine}>
+                Add Pack Ops material
+              </button>
+              <div style={{ color: brand.primaryDark, fontSize: "12px", fontWeight: 700 }}>
+                Changes save automatically on this browser and apply to existing and future placed devices when you review the takeoff.
+              </div>
             </section>
           </div>
         ) : null}
@@ -2154,6 +2294,63 @@ function readTakeoffMaterialLines(iframe: HTMLIFrameElement | null): TakeoffMate
   });
 
   return rollUpTakeoffMaterialLines([...materialLines, ...wireLines]);
+}
+
+interface PlacedDeviceCount {
+  deviceId: string;
+  name: string;
+  quantity: number;
+}
+
+function readTakeoffDeviceCounts(iframe: HTMLIFrameElement | null): PlacedDeviceCount[] {
+  const document = iframe?.contentDocument;
+  if (!document) return [];
+
+  const devicesByName = new Map(DEVICE_CATALOG.map((device) => [device.name.trim().toLowerCase(), device]));
+  const counts = new Map<string, PlacedDeviceCount>();
+  Array.from(document.querySelectorAll(".takeoff:not(.compact) > div")).forEach((row) => {
+    const label = row.querySelector("span")?.textContent?.trim() ?? "";
+    const device = devicesByName.get(label.toLowerCase());
+    const quantity = parseTakeoffQuantity(row.querySelector("strong")?.textContent?.trim() ?? "");
+    if (!device || device.id === "floor-riser" || !Number.isFinite(quantity) || quantity <= 0) return;
+    counts.set(device.id, { deviceId: device.id, name: device.name, quantity });
+  });
+  return [...counts.values()];
+}
+
+function buildDeviceRecipeMaterialLines(
+  deviceCounts: PlacedDeviceCount[],
+  recipes: DeviceRecipes,
+  catalogItems: CatalogItem[],
+): MatchedTakeoffMaterialLine[] {
+  const catalogById = new Map<string, CatalogItem>(catalogItems.map((item) => [String(item.id), item]));
+  const rolledUp = new Map<string, MatchedTakeoffMaterialLine>();
+
+  deviceCounts.forEach((device) => {
+    (recipes[device.deviceId] ?? []).forEach((recipeLine) => {
+      const material = catalogById.get(recipeLine.catalogItemId);
+      const quantity = Math.round(device.quantity * recipeLine.quantity * 100) / 100;
+      if (!material || quantity <= 0) return;
+      const current = rolledUp.get(material.id);
+      if (current) {
+        current.quantity = Math.round((current.quantity + quantity) * 100) / 100;
+        current.lineCost = material.costPrice === null ? null : Math.round(material.costPrice * current.quantity * 100) / 100;
+        return;
+      }
+      rolledUp.set(material.id, {
+        section: material.category || "Device materials",
+        item: material.name,
+        quantity,
+        match: material,
+        matchScore: 1,
+        lineCost: material.costPrice === null ? null : Math.round(material.costPrice * quantity * 100) / 100,
+        source: "takeoff",
+        note: `Exact saved device recipe: ${device.name}`,
+      });
+    });
+  });
+
+  return [...rolledUp.values()].sort((left, right) => left.section.localeCompare(right.section) || left.item.localeCompare(right.item));
 }
 
 function readTakeoffLabourLines(iframe: HTMLIFrameElement | null): TakeoffLabourLine[] {
