@@ -161,6 +161,7 @@ const emptyAdjustmentDraft: ManualAdjustmentDraft = {
 };
 
 const TAKEOFF_CATALOG_STORAGE_KEY = "packops-takeoff-material-catalog-v1";
+const TAKEOFF_MATERIAL_MAPPING_STORAGE_KEY = "packops-takeoff-material-mappings-v1";
 const AUTOMATION_PAGE_WIDTH = 820;
 
 const AUTOMATION_ELECTRICAL_KEYWORDS = [
@@ -519,6 +520,7 @@ export function ElectricalTakeoffPage() {
   const [automationResult, setAutomationResult] = useState<AutomationAnalysisResult | null>(null);
   const [automationError, setAutomationError] = useState<string | null>(null);
   const [isAutomationAnalyzing, setIsAutomationAnalyzing] = useState(false);
+  const [catalogMappings, setCatalogMappings] = useState<Record<string, string>>(() => readStoredCatalogMappings());
   const { catalogQuery } = useMaterialsSlice(currentUser);
   const { builderResourcesQuery, createQuote } = useQuotesSlice(currentUser);
   const catalogItems = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
@@ -591,6 +593,10 @@ export function ElectricalTakeoffPage() {
     syncTakeoffCatalog();
   }, [takeoffCatalogItems]);
 
+  useEffect(() => {
+    window.localStorage.setItem(TAKEOFF_MATERIAL_MAPPING_STORAGE_KEY, JSON.stringify(catalogMappings));
+  }, [catalogMappings]);
+
   function handleReviewMaterials() {
     const lines = readTakeoffMaterialLines(iframeRef.current);
     if (lines.length === 0) {
@@ -599,8 +605,23 @@ export function ElectricalTakeoffPage() {
       return;
     }
 
-    setReviewLines(lines.map((line) => matchTakeoffLine(line, pricedCatalogItems)));
+    setReviewLines(lines.map((line) => matchTakeoffLine(line, pricedCatalogItems, catalogMappings[takeoffMaterialMappingKey(line)])));
     setReviewError(null);
+    setCreatedQuote(null);
+  }
+
+  function handleCatalogMappingChange(line: MatchedTakeoffMaterialLine, catalogItemId: string) {
+    const mappingKey = takeoffMaterialMappingKey(line);
+    setCatalogMappings((current) => {
+      const next = { ...current };
+      if (catalogItemId) next[mappingKey] = catalogItemId;
+      else delete next[mappingKey];
+      return next;
+    });
+    setReviewLines((current) => current?.map((reviewLine) => {
+      if (takeoffMaterialMappingKey(reviewLine) !== mappingKey) return reviewLine;
+      return matchTakeoffLine(reviewLine, pricedCatalogItems, catalogItemId || undefined);
+    }) ?? null);
     setCreatedQuote(null);
   }
 
@@ -948,6 +969,32 @@ export function ElectricalTakeoffPage() {
                     <span style={{ color: brand.primaryDark, fontWeight: 800 }}>{line.quantity}</span>
                   </div>
                   <div style={{ color: brand.textSoft, fontSize: "12px" }}>{line.section}</div>
+                  {line.source === "takeoff" ? (
+                    <label style={{ display: "grid", gap: "5px", color: brand.textSoft, fontSize: "12px", fontWeight: 700 }}>
+                      Actual Pack Ops material
+                      <select
+                        value={catalogMappings[takeoffMaterialMappingKey(line)] ?? ""}
+                        onChange={(event) => handleCatalogMappingChange(line, event.target.value)}
+                        style={{ ...inputStyle, width: "100%" }}
+                      >
+                        <option value="">
+                          {line.match ? `Auto match: ${line.match.name}` : "Choose a priced catalog item..."}
+                        </option>
+                        {pricedCatalogItems.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}{item.sku ? ` (${item.sku})` : ""} · ${item.costPrice?.toFixed(2)} / {item.unit}
+                          </option>
+                        ))}
+                      </select>
+                      <span style={{ color: catalogMappings[takeoffMaterialMappingKey(line)] ? brand.primaryDark : brand.textSoft, fontWeight: 600 }}>
+                        {catalogMappings[takeoffMaterialMappingKey(line)]
+                          ? "Saved exact mapping - reused on future takeoffs."
+                          : line.match
+                            ? `Auto-matched at ${Math.round(line.matchScore * 100)}% confidence. Choose an item to lock it in.`
+                            : "Choose the exact item used by your company."}
+                      </span>
+                    </label>
+                  ) : null}
                   {line.source === "manual" ? (
                     <div style={{ color: brand.primaryDark, fontSize: "12px", fontWeight: 800 }}>
                       Manual {line.adjustmentKind} adjustment{line.note ? ` · ${line.note}` : ""}
@@ -2138,7 +2185,22 @@ function getTakeoffProjectName(iframe: HTMLIFrameElement | null): string | null 
   return projectInput?.value?.trim() || null;
 }
 
-function matchTakeoffLine(line: TakeoffMaterialLine, catalogItems: CatalogItem[]): MatchedTakeoffMaterialLine {
+function matchTakeoffLine(line: TakeoffMaterialLine, catalogItems: CatalogItem[], mappedCatalogItemId?: string): MatchedTakeoffMaterialLine {
+  const mappedItem = mappedCatalogItemId
+    ? catalogItems.find((item) => item.id === mappedCatalogItemId) ?? null
+    : null;
+  if (mappedItem) {
+    return {
+      ...line,
+      match: mappedItem,
+      matchScore: 1,
+      lineCost: mappedItem.costPrice !== null
+        ? Math.round(mappedItem.costPrice * line.quantity * 100) / 100
+        : null,
+      source: "takeoff",
+    };
+  }
+
   const rankedMatches = catalogItems
     .map((item) => ({ item, score: scoreCatalogMatch(line.item, item) }))
     .sort((left, right) => right.score - left.score);
@@ -2155,6 +2217,25 @@ function matchTakeoffLine(line: TakeoffMaterialLine, catalogItems: CatalogItem[]
     lineCost,
     source: "takeoff",
   };
+}
+
+function takeoffMaterialMappingKey(line: TakeoffMaterialLine): string {
+  return `${line.section.trim().toLowerCase()}::${line.item.trim().toLowerCase()}`;
+}
+
+function readStoredCatalogMappings(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(TAKEOFF_MATERIAL_MAPPING_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+    );
+  } catch {
+    return {};
+  }
 }
 
 function buildReviewLines(
