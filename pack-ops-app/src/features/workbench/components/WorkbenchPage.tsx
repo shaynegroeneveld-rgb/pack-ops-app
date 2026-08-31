@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   Calculator,
+  CalendarDays,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -29,6 +30,7 @@ import { useAuthContext } from "@/app/contexts/auth-context";
 import { useUiStore } from "@/app/store/ui-store";
 import { getSupabaseClient } from "@/data/supabase/client";
 import { JOB_STATUSES, JOB_WAITING_REASONS, type JobStatus } from "@/domain/enums";
+import type { UserId } from "@/domain/ids";
 import type {
   ActualInvoiceControls,
   ActualsInvoicePreviewBase,
@@ -84,6 +86,20 @@ type EditJobDraft = {
   waitingReason: string;
   jobTypeId: string;
 };
+type ScheduleJobDraft = {
+  day: string;
+  startTime: string;
+  durationHours: string;
+  userId: string;
+  notes: string;
+};
+
+function localDateInputValue(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 type InvoicePreviewOptions = {
   showMaterials: boolean;
   showLabour: boolean;
@@ -1278,6 +1294,14 @@ export function WorkbenchPage() {
     return window.localStorage.getItem("pack-ops:show-hidden-jobs") === "true";
   });
   const [showEditJob, setShowEditJob] = useState(false);
+  const [showScheduleJob, setShowScheduleJob] = useState(false);
+  const [scheduleJobDraft, setScheduleJobDraft] = useState<ScheduleJobDraft>({
+    day: localDateInputValue(),
+    startTime: "08:00",
+    durationHours: "8",
+    userId: "",
+    notes: "",
+  });
   const [showManualActualComposer, setShowManualActualComposer] = useState(false);
   const [showInvoiceGenerator, setShowInvoiceGenerator] = useState(false);
   const [invoiceSource, setInvoiceSource] = useState<InvoiceGenerationSource>("quote");
@@ -1352,6 +1376,7 @@ export function WorkbenchPage() {
     addActualPart: addActualPartToSlice,
     createJob,
     createJobType,
+    scheduleJob,
     createQuickContact,
     assignCurrentUser,
     assignJob,
@@ -2240,6 +2265,40 @@ export function WorkbenchPage() {
       jobTypeId: selectedJob.job.jobTypeId ?? "",
     });
     setShowEditJob(true);
+  }
+
+  function openScheduleJob() {
+    if (!selectedJob) return;
+    const assignedUserId = selectedJob.assignments[0]?.userId ?? "";
+    setScheduleJobDraft({
+      day: localDateInputValue(),
+      startTime: "08:00",
+      durationHours: String(selectedJob.job.estimatedHours && selectedJob.job.estimatedHours > 0
+        ? Math.min(selectedJob.job.estimatedHours, 8)
+        : 8),
+      userId: String(assignedUserId),
+      notes: "",
+    });
+    setShowScheduleJob(true);
+  }
+
+  async function handleScheduleJob() {
+    if (!selectedJob) return;
+    const durationHours = Number(scheduleJobDraft.durationHours);
+    if (!scheduleJobDraft.day || !Number.isFinite(durationHours) || durationHours <= 0) {
+      setLocalFeedback({ tone: "error", text: "Choose a date and enter schedule hours greater than zero." });
+      return;
+    }
+    await scheduleJob.mutateAsync({
+      jobId: selectedJob.job.id,
+      day: scheduleJobDraft.day,
+      startTime: scheduleJobDraft.startTime || null,
+      durationHours,
+      timeBucket: "anytime",
+      userId: scheduleJobDraft.userId ? scheduleJobDraft.userId as UserId : null,
+      notes: scheduleJobDraft.notes.trim() || null,
+    });
+    setShowScheduleJob(false);
   }
 
   async function handleSaveJobEdits() {
@@ -3386,17 +3445,25 @@ export function WorkbenchPage() {
               <div style={{ color: "var(--color-text-soft)", fontSize: "13px", overflowWrap: "anywhere" }}>{selectedJob.contactSubtitle}</div>
             ) : null}
           </div>
-          <div
-            style={{
-              border: "1px solid #d9dfeb",
-              borderRadius: "999px",
-              padding: "8px 12px",
-              background: "#f8fafc",
-              fontWeight: 700,
-            }}
-          >
-            {getWorkbenchJobPhaseLabel(selectedJob.job)}
-            {selectedJob.job.waitingReason ? ` · ${getWorkbenchWaitingReasonLabel(selectedJob.job.waitingReason)}` : ""}
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+            {canUpdateJobStatus ? (
+              <Button variant="primary" size="sm" onClick={openScheduleJob}>
+                <CalendarDays size={16} aria-hidden="true" />
+                Schedule Job
+              </Button>
+            ) : null}
+            <div
+              style={{
+                border: "1px solid #d9dfeb",
+                borderRadius: "999px",
+                padding: "8px 12px",
+                background: "#f8fafc",
+                fontWeight: 700,
+              }}
+            >
+              {getWorkbenchJobPhaseLabel(selectedJob.job)}
+              {selectedJob.job.waitingReason ? ` · ${getWorkbenchWaitingReasonLabel(selectedJob.job.waitingReason)}` : ""}
+            </div>
           </div>
         </div>
 
@@ -4198,6 +4265,55 @@ export function WorkbenchPage() {
             </div>
         </Modal>
       ) : null}
+
+      <Modal
+        open={Boolean(showScheduleJob && selectedJob)}
+        onClose={() => setShowScheduleJob(false)}
+        placement="bottom"
+        title="Schedule Job"
+      >
+        {selectedJob ? (
+          <div style={{ display: "grid", gap: "14px" }}>
+            <p style={{ margin: 0, color: "var(--color-text-soft)" }}>
+              Schedule {selectedJob.job.number} · {selectedJob.job.title} without leaving the job page.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "12px" }}>
+              <label style={{ display: "grid", gap: "6px" }}>
+                <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Date</span>
+                <input type="date" value={scheduleJobDraft.day} onChange={(event) => setScheduleJobDraft((current) => ({ ...current, day: event.target.value }))} />
+              </label>
+              <label style={{ display: "grid", gap: "6px" }}>
+                <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Start time</span>
+                <input type="time" value={scheduleJobDraft.startTime} onChange={(event) => setScheduleJobDraft((current) => ({ ...current, startTime: event.target.value }))} />
+              </label>
+              <label style={{ display: "grid", gap: "6px" }}>
+                <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Hours</span>
+                <input type="number" min="0.25" step="0.25" value={scheduleJobDraft.durationHours} onChange={(event) => setScheduleJobDraft((current) => ({ ...current, durationHours: event.target.value }))} />
+              </label>
+            </div>
+            <label style={{ display: "grid", gap: "6px" }}>
+              <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Crew member</span>
+              <select value={scheduleJobDraft.userId} onChange={(event) => setScheduleJobDraft((current) => ({ ...current, userId: event.target.value }))}>
+                <option value="">Unassigned</option>
+                {assignableUsers.map((user) => <option key={user.id} value={user.id}>{user.label}</option>)}
+              </select>
+            </label>
+            <label style={{ display: "grid", gap: "6px" }}>
+              <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Schedule notes</span>
+              <textarea rows={3} value={scheduleJobDraft.notes} onChange={(event) => setScheduleJobDraft((current) => ({ ...current, notes: event.target.value }))} placeholder="Optional instructions for this scheduled block" />
+            </label>
+            {jobWorkspace?.nextScheduledWork ? (
+              <div style={{ border: "1px solid #d9dfeb", borderRadius: "12px", padding: "10px 12px", background: "#f8fafc", color: "var(--color-text-soft)", fontSize: "13px" }}>
+                This job already has upcoming scheduled work. Saving will add another block.
+              </div>
+            ) : null}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+              <Button variant="secondary" onClick={() => setShowScheduleJob(false)}>Cancel</Button>
+              <Button variant="primary" onClick={() => void handleScheduleJob()} loading={scheduleJob.isPending}>Schedule Job</Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
 
       <Modal
         open={Boolean(showEditJob && selectedJob && editJobDraft)}

@@ -10,6 +10,7 @@ import {
   type TimeEntryDraft,
 } from "@/domain/time-entries/draft";
 import type { AuthenticatedUser } from "@/domain/users/types";
+import { SchedulingService } from "@/services/scheduling/scheduling-service";
 import { WorkbenchService } from "@/services/workbench/workbench-service";
 
 const WORKBENCH_QUERY_KEY = ["workbench", "jobs"];
@@ -68,6 +69,25 @@ export function useWorkbenchSlice(
   const service = useMemo(
     () =>
       new WorkbenchService(
+        {
+          orgId: authenticatedUser.user.orgId,
+          actorUserId: authenticatedUser.user.id,
+        },
+        authenticatedUser.user,
+        client,
+      ),
+    [
+      authenticatedUser.user.id,
+      authenticatedUser.user.orgId,
+      authenticatedUser.user.role,
+      authenticatedUser.user.isForeman,
+      authenticatedUser.user.canApproveTime,
+      client,
+    ],
+  );
+  const schedulingService = useMemo(
+    () =>
+      new SchedulingService(
         {
           orgId: authenticatedUser.user.orgId,
           actorUserId: authenticatedUser.user.id,
@@ -407,6 +427,19 @@ export function useWorkbenchSlice(
         tone: "error",
         text: getFriendlyErrorMessage(error, "Could not create the job type."),
       });
+    },
+  });
+
+  const scheduleJob = useMutation({
+    mutationFn: (input: Parameters<SchedulingService["createScheduleBlock"]>[0]) =>
+      schedulingService.createScheduleBlock(input),
+    onSuccess: async () => {
+      setFeedback({ tone: "success", text: "Job scheduled." });
+      await queryClient.invalidateQueries({ queryKey: ["scheduling"] });
+      await queryClient.invalidateQueries({ queryKey: JOB_WORKSPACE_QUERY_KEY });
+    },
+    onError: (error) => {
+      setFeedback({ tone: "error", text: getFriendlyErrorMessage(error, "Could not schedule the job.") });
     },
   });
 
@@ -1096,6 +1129,7 @@ export function useWorkbenchSlice(
     addActualPart,
     createJob,
     createJobType,
+    scheduleJob,
     assignCurrentUser,
     assignJob,
     removeJobAssignment,
