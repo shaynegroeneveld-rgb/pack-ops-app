@@ -680,6 +680,13 @@ export class WorkbenchService {
     return this.jobTypes.create(input);
   }
 
+  async listJobTypeOptions(): Promise<JobType[]> {
+    if (!canCreateWorkbenchJob(this.currentUser)) {
+      return [];
+    }
+    return this.jobTypes.list({ filter: { includeInactive: false } });
+  }
+
   async updateJobBasics(input: {
     jobId: string;
     title: string;

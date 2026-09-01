@@ -136,6 +136,12 @@ export function useWorkbenchSlice(
     enabled: capabilities.canCreateJob,
   });
 
+  const jobTypeOptionsQuery = useQuery({
+    queryKey: ["workbench", "job-types", authenticatedUser.user.id],
+    queryFn: () => service.listJobTypeOptions(),
+    enabled: capabilities.canCreateJob,
+  });
+
   const assignableUsersQuery = useQuery({
     queryKey: ["workbench", "assignable-users", authenticatedUser.user.id],
     queryFn: () => service.listAssignableUsers(),
@@ -421,6 +427,7 @@ export function useWorkbenchSlice(
     mutationFn: (input: Parameters<WorkbenchService["createJobType"]>[0]) => service.createJobType(input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: JOB_WORKSPACE_QUERY_KEY });
+      await queryClient.invalidateQueries({ queryKey: ["workbench", "job-types", authenticatedUser.user.id] });
     },
     onError: (error) => {
       setFeedback({
@@ -1183,6 +1190,7 @@ export function useWorkbenchSlice(
       }
     },
     contactsQuery,
+    jobTypeOptionsQuery,
     assignableUsersQuery,
     jobWorkspaceQuery,
     attachmentPreviewUrlsQuery,

@@ -1,30 +1,40 @@
 import { useEffect, useState } from "react";
 
+import type { JobType } from "@/domain/job-types/types";
 import type { WorkbenchContactOption } from "@/services/workbench/workbench-service";
+
+const ADD_NEW_JOB_TYPE_VALUE = "__add_new_job_type__";
 
 export interface CreateJobPanelProps {
   canCreateJob: boolean;
   contacts: WorkbenchContactOption[];
+  jobTypeOptions: JobType[];
   defaultContactId?: string | null;
   isPending: boolean;
   isCreatingContact: boolean;
-  onCreate: (input: { title: string; description: string; contactId: string; estimatedHours?: number | null }) => Promise<unknown>;
+  onCreate: (input: { title: string; description: string; contactId: string; estimatedHours?: number | null; jobTypeId?: string | null }) => Promise<unknown>;
   onCreateContact: (input: { displayName: string; email?: string; phone?: string }) => Promise<WorkbenchContactOption>;
+  onCreateJobType: (input: { name: string }) => Promise<JobType>;
 }
 
 export function CreateJobPanel({
   canCreateJob,
   contacts,
+  jobTypeOptions,
   defaultContactId,
   isPending,
   isCreatingContact,
   onCreate,
   onCreateContact,
+  onCreateJobType,
 }: CreateJobPanelProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [estimatedHours, setEstimatedHours] = useState("");
   const [contactId, setContactId] = useState(defaultContactId ?? "");
+  const [jobTypeId, setJobTypeId] = useState("");
+  const [newJobTypeName, setNewJobTypeName] = useState("");
+  const [showNewJobType, setShowNewJobType] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [showQuickContact, setShowQuickContact] = useState(false);
   const [contactName, setContactName] = useState("");
@@ -98,6 +108,7 @@ export function CreateJobPanel({
                   title,
                   description,
                   contactId,
+                  jobTypeId: jobTypeId || null,
                   ...(normalizedEstimatedHours ? { estimatedHours: Number(normalizedEstimatedHours) } : {}),
                 };
                 console.info("[CreateJobPanel] create job submit", createPayload);
@@ -108,6 +119,7 @@ export function CreateJobPanel({
                 setTitle("");
                 setDescription("");
                 setEstimatedHours("");
+                setJobTypeId("");
               } catch {
                 return;
               } finally {
@@ -121,6 +133,44 @@ export function CreateJobPanel({
         {selectedContact?.subtitle ? (
           <p style={{ margin: 0, color: "#5b6475" }}>Contact: {selectedContact.subtitle}</p>
         ) : null}
+        <div style={{ display: "grid", gap: "8px" }}>
+          <label style={{ display: "grid", gap: "6px" }}>
+            <span style={{ color: "#5b6475", fontSize: "13px" }}>Job type</span>
+            <select
+              value={showNewJobType ? ADD_NEW_JOB_TYPE_VALUE : jobTypeId}
+              onChange={(event) => {
+                if (event.target.value === ADD_NEW_JOB_TYPE_VALUE) {
+                  setShowNewJobType(true);
+                  setNewJobTypeName("");
+                  return;
+                }
+                setShowNewJobType(false);
+                setJobTypeId(event.target.value);
+              }}
+            >
+              <option value="">No job type</option>
+              {jobTypeOptions.map((jobType) => <option key={jobType.id} value={jobType.id}>{jobType.name}</option>)}
+              <option value={ADD_NEW_JOB_TYPE_VALUE}>+ Add new job type</option>
+            </select>
+          </label>
+          {showNewJobType ? (
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <input value={newJobTypeName} onChange={(event) => setNewJobTypeName(event.target.value)} placeholder="New job type name" style={{ flex: "1 1 220px" }} />
+              <button
+                type="button"
+                disabled={!newJobTypeName.trim()}
+                onClick={async () => {
+                  const created = await onCreateJobType({ name: newJobTypeName.trim() });
+                  setJobTypeId(created.id);
+                  setShowNewJobType(false);
+                  setNewJobTypeName("");
+                }}
+              >
+                Add and select
+              </button>
+            </div>
+          ) : null}
+        </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <button onClick={() => setShowDetails((value) => !value)} disabled={!canCreateJob}>
             {showDetails ? "Hide Details" : "Add Details"}

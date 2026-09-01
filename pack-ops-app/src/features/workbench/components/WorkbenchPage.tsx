@@ -1371,6 +1371,7 @@ export function WorkbenchPage() {
     jobsQuery,
     queueQuery,
     contactsQuery,
+    jobTypeOptionsQuery,
     assignableUsersQuery,
     actualPartOptions,
     addActualPart: addActualPartToSlice,
@@ -2530,11 +2531,13 @@ export function WorkbenchPage() {
         <CreateJobPanel
           canCreateJob={capabilities.canCreateJob}
           contacts={contacts}
+          jobTypeOptions={jobTypeOptionsQuery.data ?? []}
           defaultContactId={null}
           isPending={createJob.isPending}
           isCreatingContact={createQuickContact.isPending}
           onCreate={(input) => createJob.mutateAsync(input)}
           onCreateContact={(input) => createQuickContact.mutateAsync(input)}
+          onCreateJobType={(input) => createJobType.mutateAsync(input)}
         />
       </Modal>
 
