@@ -12,7 +12,7 @@ export interface CreateJobPanelProps {
   defaultContactId?: string | null;
   isPending: boolean;
   isCreatingContact: boolean;
-  onCreate: (input: { title: string; description: string; contactId: string; estimatedHours?: number | null; jobTypeId?: string | null }) => Promise<unknown>;
+  onCreate: (input: { title: string; description: string; contactId: string; estimatedHours?: number | null; jobTypeId?: string | null; isInternalOverhead?: boolean }) => Promise<unknown>;
   onCreateContact: (input: { displayName: string; email?: string; phone?: string }) => Promise<WorkbenchContactOption>;
   onCreateJobType: (input: { name: string }) => Promise<JobType>;
 }
@@ -35,6 +35,7 @@ export function CreateJobPanel({
   const [jobTypeId, setJobTypeId] = useState("");
   const [newJobTypeName, setNewJobTypeName] = useState("");
   const [showNewJobType, setShowNewJobType] = useState(false);
+  const [isInternalOverhead, setIsInternalOverhead] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [showQuickContact, setShowQuickContact] = useState(false);
   const [contactName, setContactName] = useState("");
@@ -109,6 +110,7 @@ export function CreateJobPanel({
                   description,
                   contactId,
                   jobTypeId: jobTypeId || null,
+                  isInternalOverhead,
                   ...(normalizedEstimatedHours ? { estimatedHours: Number(normalizedEstimatedHours) } : {}),
                 };
                 console.info("[CreateJobPanel] create job submit", createPayload);
@@ -120,6 +122,7 @@ export function CreateJobPanel({
                 setDescription("");
                 setEstimatedHours("");
                 setJobTypeId("");
+                setIsInternalOverhead(false);
               } catch {
                 return;
               } finally {
@@ -171,6 +174,13 @@ export function CreateJobPanel({
             </div>
           ) : null}
         </div>
+        <label style={{ display: "flex", gap: "10px", alignItems: "flex-start", border: "1px solid #d9dfeb", borderRadius: "12px", padding: "10px 12px" }}>
+          <input type="checkbox" checked={isInternalOverhead} onChange={(event) => setIsInternalOverhead(event.target.checked)} />
+          <span>
+            <strong style={{ display: "block" }}>Internal / overhead cost centre</strong>
+            <small style={{ color: "#5b6475" }}>Pins this above regular jobs, keeps it office-side, and excludes it from customer-job profitability.</small>
+          </span>
+        </label>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <button onClick={() => setShowDetails((value) => !value)} disabled={!canCreateJob}>
             {showDetails ? "Hide Details" : "Add Details"}

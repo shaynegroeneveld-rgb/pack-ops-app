@@ -52,7 +52,7 @@ export interface JobMaterialView extends JobMaterialEntry {
   currentCatalogUnitPrice: number | null;
 }
 
-export type JobManualActualCategory = "labor" | "material" | "equipment" | "subcontractor" | "other";
+export type JobManualActualCategory = "labor" | "material" | "mileage" | "equipment" | "subcontractor" | "other";
 
 export interface JobManualActualCostLine extends AuditedEntity {
   id: string;

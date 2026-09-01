@@ -159,12 +159,12 @@ function collapseLaborLines(lines: InvoicePreviewLine[], sectionName: string | n
   ];
 }
 
-function getManualActualUnit(category: "labor" | "material" | "equipment" | "subcontractor" | "other") {
-  return category === "labor" ? "hours" : "unit";
+function getManualActualUnit(category: "labor" | "material" | "mileage" | "equipment" | "subcontractor" | "other") {
+  return category === "labor" ? "hours" : category === "mileage" ? "km" : "unit";
 }
 
 function mapManualActualCategoryToInvoiceCategory(
-  category: "labor" | "material" | "equipment" | "subcontractor" | "other",
+  category: "labor" | "material" | "mileage" | "equipment" | "subcontractor" | "other",
 ): "labor" | "material" | "other" {
   if (category === "labor") {
     return "labor";

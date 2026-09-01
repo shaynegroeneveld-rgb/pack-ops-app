@@ -133,7 +133,7 @@ export interface ActualsInvoiceLaborInput {
 export interface ActualsInvoiceManualInput {
   id: string;
   description: string;
-  category: "labor" | "material" | "equipment" | "subcontractor" | "other";
+  category: "labor" | "material" | "mileage" | "equipment" | "subcontractor" | "other";
   quantity: number;
   unitCost: number;
   totalCost: number;

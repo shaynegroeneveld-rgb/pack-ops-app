@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { getSupabaseClient } from "@/data/supabase/client";
 import { getSyncErrorMessage } from "@/data/sync/errors";
-import type { Job } from "@/domain/jobs/types";
+import type { Job, JobManualActualCategory } from "@/domain/jobs/types";
 import {
   createManualTimeEntryDraft,
   stopTimeEntryDraft,
@@ -401,6 +401,7 @@ export function useWorkbenchSlice(
       contactId: string;
       estimatedHours?: number | null;
       jobTypeId?: string | null;
+      isInternalOverhead?: boolean;
     }) => {
       console.info("[useWorkbenchSlice] createJob input", input);
       return service.createJob(input);
@@ -477,6 +478,7 @@ export function useWorkbenchSlice(
       contactId: string;
       estimatedHours?: number | null;
       jobTypeId?: string | null;
+      isInternalOverhead?: boolean;
     }) => {
       console.info("[useWorkbenchSlice] updateJob input", input);
       return service.updateJobBasics(input);
@@ -911,7 +913,7 @@ export function useWorkbenchSlice(
   const createManualActualCostLine = useMutation({
     mutationFn: (input: {
       jobId: string;
-      category: "labor" | "material" | "equipment" | "subcontractor" | "other";
+      category: JobManualActualCategory;
       description: string;
       quantity: number;
       unitCost: number;
@@ -940,7 +942,7 @@ export function useWorkbenchSlice(
   const updateManualActualCostLine = useMutation({
     mutationFn: (input: {
       id: string;
-      category: "labor" | "material" | "equipment" | "subcontractor" | "other";
+      category: JobManualActualCategory;
       description: string;
       quantity: number;
       unitCost: number;

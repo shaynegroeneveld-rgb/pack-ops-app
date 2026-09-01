@@ -136,7 +136,7 @@ export class JobsRepositoryImpl
       city: null,
       region: null,
       postalCode: null,
-      tags: [],
+      tags: input.tags ?? [],
       scheduledStart: input.scheduledStart ?? null,
       scheduledEnd: input.scheduledEnd ?? null,
       actualStart: null,
@@ -168,7 +168,7 @@ export class JobsRepositoryImpl
       ...jobsMapper.toInsert(input),
       status: job.status,
       waiting_reason: null,
-      tags: [],
+      tags: job.tags,
     };
     console.info("[JobsRepository] enqueue job upsert payload", queuePayload);
 
@@ -195,6 +195,7 @@ export class JobsRepositoryImpl
       ...(input.waitingReason !== undefined ? { waitingReason: input.waitingReason } : {}),
       ...(input.contactId !== undefined ? { contactId: input.contactId } : {}),
       ...(input.jobTypeId !== undefined ? { jobTypeId: input.jobTypeId } : {}),
+      ...(input.tags !== undefined ? { tags: input.tags } : {}),
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.fieldName !== undefined ? { fieldName: input.fieldName } : {}),
       ...(input.addressLine1 !== undefined ? { addressLine1: input.addressLine1 } : {}),

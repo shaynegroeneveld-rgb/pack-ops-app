@@ -50,6 +50,40 @@ function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function csvCell(value: string | number | null | undefined): string {
+  const text = value === null || value === undefined ? "" : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function downloadJobPerformanceCsv(rows: JobPerformanceReportRow[]) {
+  const headers = [
+    "Job Number", "Title", "Status", "Job Type", "Archived", "Quoted Value", "Invoiced Revenue",
+    "Collected Revenue", "Outstanding Revenue", "Actual Hours", "Actual Labour Cost", "Actual Material/Other Cost",
+    "Actual Total Cost", "Actual Gross Profit", "Actual Margin %", "Revenue Per Hour", "Gross Profit Per Hour",
+    "Estimated Hours", "Hours Variance", "Estimated Total Cost", "Cost Variance", "Health", "Payment Status",
+  ];
+  const body = rows.map((row) => {
+    const performance = row.performance;
+    return [
+      row.jobNumber, row.title, row.status, row.jobTypeName, row.isArchived ? "Yes" : "No",
+      performance?.coreMoney.quotedValue, performance?.coreMoney.invoicedRevenue, performance?.coreMoney.collectedRevenue,
+      performance?.coreMoney.outstandingRevenue, performance?.actualHours, performance?.actualLaborCost,
+      performance?.actualMaterialCost, performance?.coreMoney.actualTotalCost, performance?.coreMoney.actualGrossProfit,
+      performance?.coreMoney.actualMarginPct, performance?.coreMoney.revenuePerHour, performance?.coreMoney.grossProfitPerHour,
+      performance?.estimatedHours, performance?.hoursVariance, performance?.estimateAccuracy.estimatedTotalCost,
+      performance?.estimateAccuracy.costVariance, performance?.diagnostics.healthStatus,
+      performance?.billingHealth.paymentStatus,
+    ].map(csvCell).join(",");
+  });
+  const blob = new Blob([[headers.map(csvCell).join(","), ...body].join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `pack-ops-job-performance-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 interface JobPerformanceTotals {
   jobsCounted: number;
   jobsWithRevenue: number;
@@ -60,6 +94,9 @@ interface JobPerformanceTotals {
   actualTotalCost: number;
   actualGrossProfit: number;
   actualMarginPct: number | null;
+  actualHours: number;
+  revenuePerHour: number | null;
+  grossProfitPerHour: number | null;
 }
 
 function computeTotals(rows: JobPerformanceReportRow[]): JobPerformanceTotals {
@@ -69,9 +106,11 @@ function computeTotals(rows: JobPerformanceReportRow[]): JobPerformanceTotals {
   let actualGrossProfit = 0;
   let jobsWithRevenue = 0;
   let jobsAtLoss = 0;
+  let actualHours = 0;
 
   for (const row of rows) {
     const money = row.performance?.coreMoney;
+    actualHours += row.performance?.actualHours ?? 0;
     if (!money) {
       continue;
     }
@@ -108,6 +147,9 @@ function computeTotals(rows: JobPerformanceReportRow[]): JobPerformanceTotals {
     actualTotalCost,
     actualGrossProfit,
     actualMarginPct: invoicedRevenue > 0 ? roundMoney((actualGrossProfit / invoicedRevenue) * 100) : null,
+    actualHours: roundMoney(actualHours),
+    revenuePerHour: actualHours > 0 ? roundMoney(invoicedRevenue / actualHours) : null,
+    grossProfitPerHour: actualHours > 0 ? roundMoney(actualGrossProfit / actualHours) : null,
   };
 }
 
@@ -156,7 +198,7 @@ function renderJobTypeBreakdown(breakdown: JobTypeBreakdownRow[]) {
         </p>
       </div>
       <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", minWidth: "640px", borderCollapse: "collapse", fontSize: "14px" }}>
+        <table style={{ width: "100%", minWidth: "860px", borderCollapse: "collapse", fontSize: "14px" }}>
           <thead>
             <tr style={{ color: brand.textSoft, textAlign: "left" }}>
               <th style={{ padding: "8px 0", borderBottom: "1px solid #e4e8f1" }}>Job Type</th>
@@ -165,6 +207,8 @@ function renderJobTypeBreakdown(breakdown: JobTypeBreakdownRow[]) {
               <th style={{ padding: "8px 0", borderBottom: "1px solid #e4e8f1" }}>Actual Cost</th>
               <th style={{ padding: "8px 0", borderBottom: "1px solid #e4e8f1" }}>Actual Profit</th>
               <th style={{ padding: "8px 0", borderBottom: "1px solid #e4e8f1" }}>Margin</th>
+              <th style={{ padding: "8px 0", borderBottom: "1px solid #e4e8f1" }}>Revenue / hr</th>
+              <th style={{ padding: "8px 0", borderBottom: "1px solid #e4e8f1" }}>Profit / hr</th>
             </tr>
           </thead>
           <tbody>
@@ -185,6 +229,8 @@ function renderJobTypeBreakdown(breakdown: JobTypeBreakdownRow[]) {
                   {formatMoney(group.totals.actualGrossProfit)}
                 </td>
                 <td style={{ padding: "9px 0", borderBottom: "1px solid #eef2f6" }}>{formatPercent(group.totals.actualMarginPct)}</td>
+                <td style={{ padding: "9px 0", borderBottom: "1px solid #eef2f6" }}>{formatMoney(group.totals.revenuePerHour)}</td>
+                <td style={{ padding: "9px 0", borderBottom: "1px solid #eef2f6", fontWeight: 700 }}>{formatMoney(group.totals.grossProfitPerHour)}</td>
               </tr>
             ))}
           </tbody>
@@ -487,11 +533,16 @@ export function JobPerformancePage() {
 
   return (
     <section style={pageStyle()}>
-      <header style={{ display: "grid", gap: "6px", marginBottom: "18px" }}>
-        <h1 style={titleStyle()}>Job Performance</h1>
-        <p style={subtitleStyle()}>
-          Owner-facing job performance reporting with hours, costs, sell, and current margin estimates.
-        </p>
+      <header style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start", flexWrap: "wrap", marginBottom: "18px" }}>
+        <div style={{ display: "grid", gap: "6px" }}>
+          <h1 style={titleStyle()}>Job Performance</h1>
+          <p style={subtitleStyle()}>
+            Owner-facing job performance reporting with hours, costs, sell, and current margin estimates.
+          </p>
+        </div>
+        <button type="button" onClick={() => downloadJobPerformanceCsv(filteredRows)} disabled={filteredRows.length === 0} style={secondaryButtonStyle()}>
+          Export Performance Data
+        </button>
       </header>
 
       <section style={{ ...cardStyle(), display: "grid", gap: "12px", marginBottom: "16px" }}>

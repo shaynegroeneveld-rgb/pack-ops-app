@@ -85,6 +85,7 @@ type EditJobDraft = {
   status: JobStatus;
   waitingReason: string;
   jobTypeId: string;
+  isInternalOverhead: boolean;
 };
 type ScheduleJobDraft = {
   day: string;
@@ -1423,7 +1424,12 @@ export function WorkbenchPage() {
     activeTab: jobScreen === "attachments" ? "attachments" : jobScreen === "actuals" ? "actuals" : "activity",
   });
 
-  const jobs = jobsQuery.data ?? [];
+  const jobs = useMemo(
+    () => [...(jobsQuery.data ?? [])].sort((left, right) =>
+      Number(right.job.tags.includes("internal-overhead")) - Number(left.job.tags.includes("internal-overhead")),
+    ),
+    [jobsQuery.data],
+  );
   const statusFilteredJobs = jobs.filter((item) => jobStatusFilter === "all" || item.job.status === jobStatusFilter);
   const searchFilteredJobs = statusFilteredJobs.filter((item) => matchesWorkbenchJobSearch(item, jobSearch));
   const activeJobs = searchFilteredJobs.filter((item) => !HIDDEN_JOB_STATUSES.includes(item.job.status));
@@ -2264,6 +2270,7 @@ export function WorkbenchPage() {
       status: selectedJob.job.status,
       waitingReason: selectedJob.job.waitingReason ?? "other",
       jobTypeId: selectedJob.job.jobTypeId ?? "",
+      isInternalOverhead: selectedJob.job.tags.includes("internal-overhead"),
     });
     setShowEditJob(true);
   }
@@ -2323,6 +2330,7 @@ export function WorkbenchPage() {
       contactId: editJobDraft.contactId,
       estimatedHours,
       jobTypeId: editJobDraft.jobTypeId || null,
+      isInternalOverhead: editJobDraft.isInternalOverhead,
     });
 
     if (
@@ -3433,6 +3441,9 @@ export function WorkbenchPage() {
               Jobs
             </Button>
             <div style={{ color: "var(--color-text-soft)", fontSize: "13px", fontWeight: 700 }}>{selectedJob.job.number}</div>
+            {selectedJob.job.tags.includes("internal-overhead") ? (
+              <div style={{ color: "#7a4d00", fontSize: "13px", fontWeight: 800 }}>Pinned · Internal / Overhead</div>
+            ) : null}
             <h1 style={{ margin: 0, fontSize: "28px", overflowWrap: "anywhere" }}>{selectedJob.job.title}</h1>
             {selectedJob.job.fieldName ? (
               <div style={{ color: "#0a4f45", fontSize: "14px", fontWeight: 700, overflowWrap: "anywhere" }}>
@@ -3449,7 +3460,7 @@ export function WorkbenchPage() {
             ) : null}
           </div>
           <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-            {canUpdateJobStatus ? (
+            {canUpdateJobStatus && !selectedJob.job.tags.includes("internal-overhead") ? (
               <Button variant="primary" size="sm" onClick={openScheduleJob}>
                 <CalendarDays size={16} aria-hidden="true" />
                 Schedule Job
@@ -3934,11 +3945,19 @@ export function WorkbenchPage() {
                   <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Category</span>
                   <select
                     value={manualActualCostDraft.category}
-                    onChange={(event) => setManualActualCostDraft((current) => ({ ...current, category: event.target.value as JobManualActualCategory }))}
+                    onChange={(event) => setManualActualCostDraft((current) => {
+                      const category = event.target.value as JobManualActualCategory;
+                      return {
+                        ...current,
+                        category,
+                        description: category === "mileage" && !current.description.trim() ? "Job mileage" : current.description,
+                      };
+                    })}
                     style={{ minWidth: 0 }}
                   >
                     <option value="labor">Labour</option>
                     <option value="material">Material</option>
+                    <option value="mileage">Mileage</option>
                     <option value="equipment">Equipment</option>
                     <option value="subcontractor">Subcontractor</option>
                     <option value="other">Other</option>
@@ -3979,7 +3998,9 @@ export function WorkbenchPage() {
                   </select>
                 </label>
                 <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
-                  <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Quantity</span>
+                  <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
+                    {manualActualCostDraft.category === "mileage" ? "Kilometres" : "Quantity"}
+                  </span>
                   <input
                     value={manualActualCostDraft.quantity}
                     onChange={(event) =>
@@ -3995,12 +4016,14 @@ export function WorkbenchPage() {
                       })
                     }
                     inputMode="decimal"
-                    placeholder="Qty"
+                    placeholder={manualActualCostDraft.category === "mileage" ? "Kilometres" : "Qty"}
                     style={{ minWidth: 0 }}
                   />
                 </label>
                 <label style={{ display: "grid", gap: "6px", minWidth: 0 }}>
-                  <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Unit Cost</span>
+                  <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
+                    {manualActualCostDraft.category === "mileage" ? "Rate per km" : "Unit Cost"}
+                  </span>
                   <input
                     value={manualActualCostDraft.unitCost}
                     onChange={(event) =>
@@ -4016,7 +4039,7 @@ export function WorkbenchPage() {
                       })
                     }
                     inputMode="decimal"
-                    placeholder="Unit cost"
+                    placeholder={manualActualCostDraft.category === "mileage" ? "$/km" : "Unit cost"}
                     style={{ minWidth: 0 }}
                   />
                 </label>
@@ -4406,6 +4429,18 @@ export function WorkbenchPage() {
                     <option value={ADD_NEW_JOB_TYPE_VALUE}>+ Add new job type...</option>
                   </select>
                 )}
+              </label>
+
+              <label style={{ display: "flex", gap: "10px", alignItems: "flex-start", border: "1px solid #d9dfeb", borderRadius: "12px", padding: "10px 12px" }}>
+                <input
+                  type="checkbox"
+                  checked={editJobDraft.isInternalOverhead}
+                  onChange={(event) => setEditJobDraft((current) => current ? { ...current, isInternalOverhead: event.target.checked } : current)}
+                />
+                <span>
+                  <strong style={{ display: "block" }}>Internal / overhead cost centre</strong>
+                  <small style={{ color: "var(--color-text-soft)" }}>Pinned in office Workbench and excluded from customer-job performance.</small>
+                </span>
               </label>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>

@@ -353,6 +353,9 @@ export class WorkbenchService {
 
     return jobs
       .filter((job) => {
+        if (job.tags.includes("internal-overhead") && this.currentUser.role === "field") {
+          return false;
+        }
         const visible = canViewWorkbenchJob(this.currentUser, job, assignments);
         console.info("[WorkbenchService] job visibility check", {
           jobId: job.id,
@@ -599,6 +602,7 @@ export class WorkbenchService {
     contactId: string;
     estimatedHours?: number | null;
     jobTypeId?: string | null;
+    isInternalOverhead?: boolean;
   }): Promise<Job> {
     if (!canCreateWorkbenchJob(this.currentUser)) {
       throw new Error("You cannot create jobs.");
@@ -648,6 +652,7 @@ export class WorkbenchService {
       number: data,
       contactId: input.contactId as Job["contactId"],
       jobTypeId: (input.jobTypeId ?? null) as Job["jobTypeId"],
+      tags: input.isInternalOverhead ? ["internal-overhead"] : [],
       title: input.title,
       fieldName: input.fieldName?.trim() || null,
       addressLine1: input.addressLine1?.trim() || null,
@@ -695,6 +700,7 @@ export class WorkbenchService {
     contactId: string;
     estimatedHours?: number | null;
     jobTypeId?: string | null;
+    isInternalOverhead?: boolean;
   }): Promise<Job> {
     console.info("[WorkbenchService] updateJobBasics input", {
       input,
@@ -717,6 +723,13 @@ export class WorkbenchService {
               throw new Error("Estimated hours must be greater than 0.");
             })();
 
+    const existingJob = input.isInternalOverhead !== undefined ? await this.jobs.getById(input.jobId) : null;
+    const updatedTags = input.isInternalOverhead === undefined
+      ? undefined
+      : input.isInternalOverhead
+        ? [...new Set([...(existingJob?.tags ?? []), "internal-overhead"])]
+        : (existingJob?.tags ?? []).filter((tag) => tag !== "internal-overhead");
+
     const updatedJob = await this.jobs.update(input.jobId, {
       title: input.title.trim(),
       fieldName: input.fieldName?.trim() || null,
@@ -724,6 +737,7 @@ export class WorkbenchService {
       contactId: input.contactId as Job["contactId"],
       estimatedHours,
       ...(input.jobTypeId !== undefined ? { jobTypeId: input.jobTypeId as Job["jobTypeId"] } : {}),
+      ...(updatedTags !== undefined ? { tags: updatedTags } : {}),
     });
 
     console.info("[WorkbenchService] updateJobBasics local result", updatedJob);
@@ -736,7 +750,8 @@ export class WorkbenchService {
         (job.description ?? null) === (updatedJob.description ?? null) &&
         job.contactId === updatedJob.contactId &&
         (job.estimatedHours ?? null) === (updatedJob.estimatedHours ?? null) &&
-        (job.jobTypeId ?? null) === (updatedJob.jobTypeId ?? null),
+        (job.jobTypeId ?? null) === (updatedJob.jobTypeId ?? null) &&
+        job.tags.includes("internal-overhead") === updatedJob.tags.includes("internal-overhead"),
       "Job update was queued locally, but the authoritative job record did not match after sync.",
     );
   }

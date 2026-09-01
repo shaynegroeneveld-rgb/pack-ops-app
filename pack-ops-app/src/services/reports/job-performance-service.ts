@@ -124,8 +124,9 @@ export class JobPerformanceService {
     const settings = readOrgBusinessSettings(orgResponse.data.settings);
 
     const jobs = (jobsData ?? []).map((row) => jobsMapper.toDomain(row as JobRow));
-    const jobIds = jobs.map((job) => String(job.id));
-    const quoteIds = jobs
+    const customerJobs = jobs.filter((job) => !job.tags.includes("internal-overhead"));
+    const jobIds = customerJobs.map((job) => String(job.id));
+    const quoteIds = customerJobs
       .map((job) => job.quoteId)
       .filter((quoteId): quoteId is NonNullable<Job["quoteId"]> => Boolean(quoteId));
 
@@ -262,7 +263,7 @@ export class JobPerformanceService {
 
     const jobTypesById = new Map(jobTypes.map((jobType) => [String(jobType.id), jobType]));
 
-    const rows = jobs.map((job) => ({
+    const rows = customerJobs.map((job) => ({
       jobId: String(job.id),
       jobNumber: job.number,
       title: job.title,
