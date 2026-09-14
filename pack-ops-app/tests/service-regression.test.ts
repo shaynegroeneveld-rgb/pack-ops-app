@@ -1,0 +1,6 @@
+import {it,expect,vi} from 'vitest';
+import {WorkbenchService} from '@/services/workbench/workbench-service';
+import {toScheduleRangeIso} from '@/features/field/components/field-mode-shared';
+it('a quantity-only correction preserves existing optional material metadata',async()=>{const update=vi.fn().mockResolvedValue({});await WorkbenchService.prototype.updateJobMaterial.call({jobMaterials:{update}} as any,{jobMaterialId:'entry',catalogItemId:'material',quantity:3});expect(update).toHaveBeenCalledWith('entry',{catalogItemId:'material',quantity:3});});
+it('allows explicit clearing of a part without clearing costs or note',async()=>{const update=vi.fn().mockResolvedValue({});await WorkbenchService.prototype.updateJobMaterial.call({jobMaterials:{update}} as any,{jobMaterialId:'entry',catalogItemId:'material',quantity:3,sectionName:null});expect(update).toHaveBeenCalledWith('entry',{catalogItemId:'material',quantity:3,sectionName:null});});
+it('schedule ranges cover the local calendar day',()=>{const start=new Date(toScheduleRangeIso('2026-09-14'));const end=new Date(toScheduleRangeIso('2026-09-14',true));expect(start.getDate()).toBe(14);expect(start.getHours()).toBe(0);expect(end.getDate()).toBe(14);expect(end.getHours()).toBe(23);expect(end.getMilliseconds()).toBe(999);});

@@ -334,7 +334,8 @@ export function PayrollAssistPage() {
         <section style={cardStyle()}>Loading payroll assist...</section>
       ) : (
         <section style={cardStyle()}>
-          <div style={{ color: "#8f1d1d" }}>Could not load payroll assist data.</div>
+          <div role="alert" style={{ color: "#8f1d1d" }}>Could not load payroll assist data.</div>
+          <button type="button" onClick={() => void payroll.workspaceQuery.refetch()} disabled={payroll.workspaceQuery.isFetching}>Try again</button>
         </section>
       )}
     </section>

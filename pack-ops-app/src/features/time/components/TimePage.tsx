@@ -296,6 +296,7 @@ export function TimePage() {
       ) : (
         <Card variant="surface">
           <div style={{ color: "var(--color-danger-strong)" }}>Could not load time report.</div>
+          <button type="button" onClick={() => void reportQuery.refetch()} disabled={reportQuery.isFetching}>Try again</button>
         </Card>
       )}
     </section>

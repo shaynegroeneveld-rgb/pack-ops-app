@@ -1,3 +1,6 @@
+import type {WorkbenchJobCard} from "@/services/workbench/workbench-service";
+import { JobTaskBoard } from "@/features/jobs/components/JobTaskBoard";
+import { readTaskContext, jobTasks, isTaskOpen } from "@/services/jobs/job-organization";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -166,7 +169,7 @@ const DEFAULT_INVOICE_PREVIEW_OPTIONS: InvoicePreviewOptions = {
   showItemPrices: true,
   descriptionOfWork: "",
 };
-const HIDDEN_JOB_STATUSES: JobStatus[] = ["work_complete", "ready_to_invoice", "invoiced", "closed", "cancelled"];
+const HIDDEN_JOB_STATUSES: JobStatus[] = ["invoiced", "closed", "cancelled"];
 
 function formatDateTimeLabel(value: string) {
   return new Intl.DateTimeFormat(undefined, {
@@ -732,11 +735,7 @@ function InfoHint({ text }: { text: string }) {
 }
 
 interface JobListRowCardProps {
-  item: {
-    job: Job;
-    contactName: string | null;
-    contactSubtitle: string | null;
-  };
+  item: WorkbenchJobCard;
   badge: { background: string; color: string; label: string };
   onOpen: () => void;
 }
@@ -782,8 +781,9 @@ function JobListRowCard({ item, badge, onOpen }: JobListRowCardProps) {
           {item.contactSubtitle ? (
             <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>{item.contactSubtitle}</div>
           ) : null}
+          <div style={{fontSize:13,color:"var(--color-text-soft)"}}>{jobTasks(item.actionItems,item.job.id).filter(isTaskOpen).length} tasks to do · {item.neededMaterialsCount} pickup items · {item.assignments.length} crew assigned</div>
           {item.job.description ? (
-            <div style={{ color: "var(--color-text-soft)", fontSize: "14px" }}>{item.job.description}</div>
+            <div style={{ color: "var(--color-text-soft)", fontSize: "14px",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden" }}>{item.job.description}</div>
           ) : null}
         </div>
       </button>
@@ -1281,18 +1281,24 @@ function ManualActualCostEditorCard({
 }
 
 export function WorkbenchPage() {
+  const {currentUser,signOut}=useAuthContext();
+  return currentUser ? <AuthenticatedWorkbenchPage key={currentUser.user.id} currentUser={currentUser} signOut={signOut} /> : null;
+}
+function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNullable<ReturnType<typeof useAuthContext>["currentUser"]>;signOut: ReturnType<typeof useAuthContext>["signOut"]}) {
   const { confirm } = useConfirm();
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [jobScreen, setJobScreen] = useState<JobScreen>("main");
   const [showCreateJob, setShowCreateJob] = useState(false);
   const [jobStatusFilter, setJobStatusFilter] = useState<"all" | JobStatus>("all");
   const [jobSearch, setJobSearch] = useState("");
+  const [jobFocus,setJobFocus]=useState<"all"|"tasks"|"materials"|"billing">("all");
+  const [showAllActivity,setShowAllActivity]=useState(false);
   const [showAssignPeople, setShowAssignPeople] = useState(false);
   const [showHiddenJobs, setShowHiddenJobs] = useState(() => {
     if (typeof window === "undefined") {
       return false;
     }
-    return window.localStorage.getItem("pack-ops:show-hidden-jobs") === "true";
+    try { return window.localStorage.getItem("pack-ops:show-hidden-jobs") === "true"; } catch { return false; }
   });
   const [showEditJob, setShowEditJob] = useState(false);
   const [showScheduleJob, setShowScheduleJob] = useState(false);
@@ -1357,18 +1363,16 @@ export function WorkbenchPage() {
   const manualActualSectionRef = useRef<HTMLElement | null>(null);
   const manualActualComposerCardRef = useRef<HTMLDivElement | null>(null);
   const manualActualDescriptionRef = useRef<HTMLInputElement | null>(null);
-  const { currentUser, signOut } = useAuthContext();
   const client = getSupabaseClient(import.meta.env);
   const selectedWorkbenchJobId = useUiStore((state) => state.selectedWorkbenchJobId);
   const setSelectedWorkbenchJobId = useUiStore((state) => state.setSelectedWorkbenchJobId);
 
-  if (!currentUser) {
-    return null;
-  }
   const currentUserId = String(currentUser.user.id);
 
   const {
     capabilities,
+    createActionItem,
+    resolveActionItem,
     jobsQuery,
     queueQuery,
     contactsQuery,
@@ -1432,7 +1436,10 @@ export function WorkbenchPage() {
   );
   const statusFilteredJobs = jobs.filter((item) => jobStatusFilter === "all" || item.job.status === jobStatusFilter);
   const searchFilteredJobs = statusFilteredJobs.filter((item) => matchesWorkbenchJobSearch(item, jobSearch));
-  const activeJobs = searchFilteredJobs.filter((item) => !HIDDEN_JOB_STATUSES.includes(item.job.status));
+  const activeJobs = searchFilteredJobs.filter((item) => !HIDDEN_JOB_STATUSES.includes(item.job.status))
+    .filter(item => jobFocus === "all" || (jobFocus === "tasks" && jobTasks(item.actionItems,item.job.id).some(isTaskOpen))
+      || (jobFocus === "materials" && item.neededMaterialsCount > 0)
+      || (jobFocus === "billing" && ["work_complete","ready_to_invoice"].includes(item.job.status)));
   const hiddenJobs = searchFilteredJobs.filter((item) => HIDDEN_JOB_STATUSES.includes(item.job.status));
   const contacts = contactsQuery.data ?? [];
   const assignableUsers = assignableUsersQuery.data ?? [];
@@ -1861,11 +1868,12 @@ export function WorkbenchPage() {
     if (typeof window === "undefined") {
       return;
     }
-    window.localStorage.setItem("pack-ops:show-hidden-jobs", showHiddenJobs ? "true" : "false");
+    try { window.localStorage.setItem("pack-ops:show-hidden-jobs", showHiddenJobs ? "true" : "false"); } catch { /* Optional display preference. */ }
   }, [showHiddenJobs]);
 
   useEffect(() => {
     setActivityNoteDraft("");
+    setShowAllActivity(false);
     setEstimatedCopyFeedback("");
     setNeededMaterialDraft(createEmptyJobMaterialDraft());
     setUsedMaterialDraft(createEmptyJobMaterialDraft());
@@ -2494,7 +2502,7 @@ export function WorkbenchPage() {
         </Card>
       ) : null}
 
-      {capabilities.canViewAllActiveTimers ? (
+      {capabilities.canViewAllActiveTimers && activeTimers.length > 0 ? (
         <section style={cardStyle("#fff")}>
           <div style={sectionHeadingRow()}>
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -2614,6 +2622,10 @@ export function WorkbenchPage() {
         </section>
       ) : null}
 
+      <div className="job-organizer job-chips" aria-label="Focus jobs">
+        {([["all","All active"],["tasks","Open tasks"],["materials","Materials to pick up"],["billing","Ready for billing"]] as const).map(([value,label]) =>
+          <button type="button" key={value} aria-pressed={jobFocus===value} onClick={()=>setJobFocus(value)}>{label}</button>)}
+      </div>
       {activeJobs.length > 0 ? (
         <section style={{ display: "grid", gap: "12px" }}>
           <div style={sectionHeadingRow()}>
@@ -2633,7 +2645,7 @@ export function WorkbenchPage() {
         </section>
       ) : searchFilteredJobs.length > 0 ? (
         <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>
-          No active jobs right now.
+          No active jobs match this view. Choose All active to see the full list.
         </Card>
       ) : jobs.length > 0 ? (
         <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>
@@ -2657,7 +2669,7 @@ export function WorkbenchPage() {
             }}
           >
             <span>
-              <strong style={{ display: "block" }}>Completed / Hidden</strong>
+              <strong style={{ display: "block" }}>Invoiced / Closed</strong>
               <span style={{ color: "var(--color-text-soft)", fontSize: "14px" }}>
                 {hiddenJobs.length} job{hiddenJobs.length === 1 ? "" : "s"}
               </span>
@@ -2673,7 +2685,7 @@ export function WorkbenchPage() {
             />
           </button>
 
-          {showHiddenJobs ? (
+          {showHiddenJobs || jobSearch.trim() || jobStatusFilter !== "all" ? (
             <div style={{ display: "grid", gap: "12px" }}>
               {hiddenJobs.map((item) => (
                 <JobListRowCard
@@ -3643,6 +3655,20 @@ export function WorkbenchPage() {
         </div>
       </div>
 
+      <JobTaskBoard key={selectedJob.job.id} jobId={selectedJob.job.id}
+        items={selectedJob.actionItems} parts={actualPartOptions} currentUser={currentUser.user}
+        crew={actualsWorkerOptions} canCreate={selectedJob.permissions.canCreateActionItem}
+        onCreate={(input) => createActionItem.mutateAsync({ ...input, jobId: selectedJob.job.id })}
+        onComplete={(item) => resolveActionItem.mutateAsync(item)} />
+      <section className="job-organizer" aria-label="Job parts overview">
+        <h2>Job parts</h2><p>Keep materials and time with the part of the job they belong to.</p>
+        <div className="job-parts-grid">{actualPartOptions.map(part => {
+          const materialCount = (jobWorkspace?.usedMaterials ?? []).filter(row => (row.sectionName?.trim() || "General") === part).length;
+          const entries = (jobWorkspace?.timeEntries ?? []).filter(row => (row.sectionName?.trim() || "General") === part && row.status !== "rejected");
+          return <div className="job-part-card" key={part}><strong>{part}</strong><p>{materialCount} material entries · {entries.length} time entries</p>
+            <button type="button" onClick={() => setJobScreen("actuals")}>View materials & time</button></div>;
+        })}</div>
+      </section>
       <section style={{ ...cardStyle("#fafcff"), minWidth: 0 }}>
         <h3 style={{ marginTop: 0, marginBottom: "12px" }}>Overview</h3>
         <div style={{ display: "grid", gap: "10px", marginBottom: "16px" }}>
@@ -3726,12 +3752,13 @@ export function WorkbenchPage() {
               <SkeletonBlock height="52px" />
             </div>
           ) : null}
+          {(jobWorkspace?.activity.length ?? 0)>6 && <button type="button" onClick={()=>setShowAllActivity(value=>!value)}>{showAllActivity?"Show recent activity":`Show all ${jobWorkspace?.activity.length} updates`}</button>}
           {!jobWorkspaceQuery.isLoading && (jobWorkspace?.activity.length ?? 0) === 0 ? (
             <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>
               No activity yet. Notes and uploads will start building the job history here.
             </Card>
           ) : null}
-          {(jobWorkspace?.activity ?? []).map((entry) => (
+          {(jobWorkspace?.activity ?? []).slice(0,showAllActivity?undefined:6).map((entry) => (
             <div key={entry.id} style={{ ...cardStyle("#fafcff"), padding: "14px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap" }}>
                 <div>
@@ -3748,7 +3775,8 @@ export function WorkbenchPage() {
         </div>
       </section>
 
-      <section style={{ ...cardStyle("#fff"), minWidth: 0 }}>
+      <details style={{ ...cardStyle("#fff"), minWidth: 0 }}>
+        <summary style={{ cursor: "pointer", fontWeight: 700, padding: "8px 0" }}>Planned materials & pickup list ({neededMaterialDisplayItems.length})</summary>
         <div style={sectionHeadingRow()}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <h3 style={{ margin: 0 }}>Materials Needed</h3>
@@ -3914,7 +3942,7 @@ export function WorkbenchPage() {
             </div>
           )}
         </div>
-      </section>
+      </details>
 
       <section ref={manualActualSectionRef} style={{ ...cardStyle("#fff"), minWidth: 0 }}>
         <div style={sectionHeadingRow()}>

@@ -9,7 +9,7 @@ import { JobTypeEditorPanel, type JobTypeEditorDraft } from "@/features/material
 import { MaterialEditorPanel, type MaterialEditorDraft } from "@/features/materials/components/MaterialEditorPanel";
 import { SupplierInvoiceReviewPanel } from "@/features/materials/components/SupplierInvoiceReviewPanel";
 import { useMaterialsSlice } from "@/features/materials/hooks/use-materials-slice";
-import { matchesCatalogItemSearch } from "@/services/materials/material-search";
+import { rankCatalogItems } from "@/services/materials/material-search";
 import type {
   AssemblyView,
   CatalogCleanupPair,
@@ -230,7 +230,7 @@ export function MaterialsPage() {
       return catalogItems;
     }
 
-    return catalogItems.filter((item) => matchesCatalogItemSearch(item, catalogSearch));
+    return rankCatalogItems(catalogItems, catalogSearch);
   }, [catalogItems, catalogSearch]);
 
   async function handleMaterialSubmit(draft: MaterialEditorDraft) {

@@ -10,6 +10,7 @@ export interface ActionItemFilter {
 }
 
 export interface CreateActionItemInput {
+  requestId?: string;
   entityType: ActionItem["entityType"];
   entityId: ActionItem["entityId"];
   category: ActionItem["category"];

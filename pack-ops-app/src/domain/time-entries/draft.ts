@@ -201,17 +201,20 @@ export function clampTimeEntryHours(hours: number): number {
 }
 
 export function parseTimeEntryHoursInput(raw: string): number | null {
-  const normalized = raw.trim();
-  if (!normalized) {
+  const normalized = raw.trim().replace(",", ".");
+  if (!normalized || normalized === ".") {
+    return null;
+  }
+  if (!/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(normalized)) {
     return null;
   }
 
   const parsed = Number(normalized);
-  if (!Number.isFinite(parsed)) {
+  if (!Number.isFinite(parsed) || parsed < 0.05 || parsed > 24) {
     return null;
   }
 
-  return clampTimeEntryHours(parsed);
+  return parsed;
 }
 
 export function formatTimeEntryHoursInput(hours: number): string {

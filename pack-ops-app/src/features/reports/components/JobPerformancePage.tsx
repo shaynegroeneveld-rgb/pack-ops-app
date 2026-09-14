@@ -683,7 +683,8 @@ export function JobPerformancePage() {
         </section>
       ) : (
         <section style={cardStyle()}>
-          <div style={{ color: "#8f1d1d" }}>Could not load job performance.</div>
+          <div role="alert" style={{ color: "#8f1d1d" }}>Could not load job performance.</div>
+          <button type="button" onClick={() => void reportQuery.refetch()} disabled={reportQuery.isFetching}>Try again</button>
         </section>
       )}
     </section>

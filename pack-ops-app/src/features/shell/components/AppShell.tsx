@@ -426,7 +426,7 @@ export function AppShell() {
     isOffline,
   });
   const syncTitle = isOffline
-    ? "You are offline. Changes will stay local until the connection returns."
+    ? "You are offline. Some actions need a connection. Keep unsaved forms open and check that each change is saved."
     : syncIndicator.failedCount > 0
       ? syncIndicator.lastError
         ? `Sync failed: ${syncIndicator.lastError}`

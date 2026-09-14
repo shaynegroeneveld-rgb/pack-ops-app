@@ -44,10 +44,8 @@ export class JobMaterialsRepositoryImpl implements JobMaterialsRepository {
 
   async create(input: CreateJobMaterialInput): Promise<JobMaterialEntry> {
     const now = new Date().toISOString();
-    const { data, error } = await this.client
-      .from("job_materials")
-      .insert({
-        id: createId(),
+    const payload = {
+        id: input.requestId || createId(),
         ...jobMaterialsMapper.toInsert({
           orgId: this.context.orgId,
           jobId: input.jobId,
@@ -69,11 +67,21 @@ export class JobMaterialsRepositoryImpl implements JobMaterialsRepository {
         }),
         created_at: now,
         updated_at: now,
-      })
+      };
+    const { data, error } = await this.client.from("job_materials").insert(payload)
       .select("*")
       .single();
 
     if (error) {
+      if (error.code === "23505" && input.requestId) {
+        const { data: existing, error: lookupError } = await this.client.from("job_materials")
+          .select("*").eq("org_id", this.context.orgId).eq("id", input.requestId).single();
+        if (lookupError || !existing || existing.deleted_at) throw error;
+        const keys = ["job_id", "catalog_item_id", "kind", "quantity", "note", "display_name", "sku_snapshot", "unit_snapshot", "unit_cost", "unit_sell", "markup_percent", "section_name", "created_by"] as const;
+        const same = keys.every(key => String(existing[key] ?? "") === String(payload[key] ?? ""));
+        if (!same) throw new Error("This entry was already saved with different details. Check Saved entries before adding another.");
+        return jobMaterialsMapper.toDomain(existing);
+      }
       throw error;
     }
 

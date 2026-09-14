@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   deriveTimeEntryDraftDateValue,
@@ -75,6 +75,7 @@ export function TimeTrackerPanel({
   const [manualHoursInput, setManualHoursInput] = useState("");
   const [isAddingPart, setIsAddingPart] = useState(false);
   const [newPartName, setNewPartName] = useState("");
+  const hoursFocused=useRef(false);
   const runningDraft = activeRunningTimerDraft ?? (draft?.activeTimerId ? draft : null);
   const isRunning = draft ? isTimeEntryDraftRunning(draft) : false;
   const hasRunningTimerElsewhere = Boolean(runningDraft && runningDraft.jobId !== selectedJobId);
@@ -123,11 +124,12 @@ export function TimeTrackerPanel({
       return;
     }
 
+    if (hoursFocused.current) return;
     setManualHoursInput(formatTimeEntryHoursInput(draftHours));
-  }, [draft, draftHours]);
+  }, [draft?.jobId,draft?.startedAt,draft?.endedAt,draft?.source]);
 
   const manualHoursInvalid =
-    draft?.source === "manual" && manualHoursInput.trim().length > 0 && parseTimeEntryHoursInput(manualHoursInput) === null;
+    draft?.source === "manual" && parseTimeEntryHoursInput(manualHoursInput) === null;
 
   function handlePartSelectChange(value: string) {
     if (value === ADD_NEW_PART_VALUE) {
@@ -367,8 +369,10 @@ export function TimeTrackerPanel({
                   <input
                     type="text"
                     inputMode="decimal"
-                    placeholder="1.5"
+                    placeholder=".5 or 1.5"
                     value={manualHoursInput}
+                    onFocus={()=>{hoursFocused.current=true;}}
+                    aria-invalid={manualHoursInvalid}
                     onChange={(event) => {
                       const nextValue = event.target.value;
                       setManualHoursInput(nextValue);
@@ -382,9 +386,10 @@ export function TimeTrackerPanel({
                       });
                     }}
                     onBlur={() => {
+                      hoursFocused.current=false;
                       const parsedHours = parseTimeEntryHoursInput(manualHoursInput);
                       if (parsedHours === null) {
-                        setManualHoursInput(draftHours !== null ? formatTimeEntryHoursInput(draftHours) : "");
+
                         return;
                       }
                       setManualHoursInput(formatTimeEntryHoursInput(parsedHours));
@@ -393,7 +398,7 @@ export function TimeTrackerPanel({
                 </label>
                 {manualHoursInvalid ? (
                   <div style={{ color: "#8f1d1d", fontSize: "13px" }}>
-                    Enter hours as a simple decimal like 1.5 or 2.25.
+                    Enter 0.05 to 24 hours, with up to 2 decimals. .5 means 30 minutes.
                   </div>
                 ) : null}
               </>

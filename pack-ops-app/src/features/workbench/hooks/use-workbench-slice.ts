@@ -1,3 +1,4 @@
+import {readTaskContext,jobTasks} from "@/services/jobs/job-organization";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -188,7 +189,12 @@ export function useWorkbenchSlice(
   }, [pendingActualPartNames, selectedJobIdForParts]);
 
   const actualPartOptions = useMemo(() => {
-    const ordered = new Set<string>();
+    const ordered = new Set<string>(["General"]);
+    for (const row of [...(jobWorkspaceQuery.data?.estimatedMaterials ?? []),...(jobWorkspaceQuery.data?.neededMaterials ?? [])]) {
+      if(row.sectionName?.trim())ordered.add(row.sectionName.trim());
+    }
+    const card=(jobsQuery.data??[]).find(card=>card.job.id===selectedJobIdForParts);
+    for(const task of jobTasks(card?.actionItems??[],selectedJobIdForParts??""))ordered.add(readTaskContext(task.description).part);
     for (const partName of pendingActualPartNames) {
       if (partName.trim()) {
         ordered.add(partName.trim());
@@ -215,11 +221,12 @@ export function useWorkbenchSlice(
       (jobWorkspaceQuery.data?.timeEntries ?? []).some((entry: any) => !entry.sectionName?.trim()) ||
       (jobWorkspaceQuery.data?.manualActualCostLines ?? []).some((line: any) => !line.sectionName?.trim())
     ) {
-      return ["General", ...Array.from(ordered)];
+      return Array.from(ordered);
     }
     return Array.from(ordered);
   }, [
     pendingActualPartNames,
+    jobsQuery.data,selectedJobIdForParts,jobWorkspaceQuery.data,
     jobWorkspaceQuery.data?.usedMaterials,
     jobWorkspaceQuery.data?.timeEntries,
     jobWorkspaceQuery.data?.manualActualCostLines,
@@ -713,7 +720,7 @@ export function useWorkbenchSlice(
   });
 
   const createActionItem = useMutation({
-    mutationFn: (input: { jobId: string; title: string; description: string }) => {
+    mutationFn: (input: Parameters<WorkbenchService["createActionItemForJob"]>[0]) => {
       console.info("[useWorkbenchSlice] createActionItem input", input);
       return service.createActionItemForJob(input);
     },
@@ -780,6 +787,7 @@ export function useWorkbenchSlice(
   const createJobMaterial = useMutation({
     mutationFn: (input: {
       jobId: string;
+      requestId?: string;
       catalogItemId: string;
       kind: "used" | "needed";
       quantity: number;
@@ -827,10 +835,10 @@ export function useWorkbenchSlice(
       patchActiveWorkspace((current) => ({
         ...current,
         usedMaterials: (current.usedMaterials ?? []).map((line: any) =>
-          line.id === updatedLine.id ? toWorkspaceJobMaterialView(updatedLine, input) : line,
+          line.id === updatedLine.id ? toWorkspaceJobMaterialView(updatedLine, { ...line, ...input }) : line,
         ),
         neededMaterials: (current.neededMaterials ?? []).map((line: any) =>
-          line.id === updatedLine.id ? toWorkspaceJobMaterialView(updatedLine, input) : line,
+          line.id === updatedLine.id ? toWorkspaceJobMaterialView(updatedLine, { ...line, ...input }) : line,
         ),
       }));
       setFeedback({ tone: "success", text: "Material entry updated." });

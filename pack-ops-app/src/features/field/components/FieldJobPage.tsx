@@ -1,3 +1,5 @@
+import { JobTaskBoard } from "@/features/jobs/components/JobTaskBoard";
+import { collectJobParts, jobTasks, readTaskContext } from "@/services/jobs/job-organization";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuthContext } from "@/app/contexts/auth-context";
@@ -43,13 +45,17 @@ interface FieldJobPageProps {
 
 export function FieldJobPage({ jobId }: FieldJobPageProps) {
   const { currentUser } = useAuthContext();
+  return currentUser ? <AuthenticatedFieldJobPage key={jobId} jobId={jobId} currentUser={currentUser} /> : null;
+}
+
+function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {currentUser: NonNullable<ReturnType<typeof useAuthContext>["currentUser"]>}) {
   const setActiveRoute = useUiStore((state) => state.setActiveRoute);
   const [jobAccordions, setJobAccordions] = useState<Record<JobAccordionKey, boolean>>({
     info: false,
     timer: false,
     notes: false,
     attachments: false,
-    materials: false,
+    materials: true,
   });
   const [noteDraft, setNoteDraft] = useState("");
   const [neededMaterialDraft, setNeededMaterialDraft] = useState({
@@ -61,12 +67,9 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
   const [manualHoursInput, setManualHoursInput] = useState("");
   const [isAddingTimePart, setIsAddingTimePart] = useState(false);
   const [newTimePartName, setNewTimePartName] = useState("");
+  const hoursFocused=useRef(false);
   const noteInputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  if (!currentUser) {
-    return null;
-  }
 
   const workbench = useWorkbenchSlice(currentUser, {
     selectedJobId: jobId,
@@ -88,6 +91,8 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
   const selectedNeededMaterials = jobWorkspace?.neededMaterials ?? [];
   const selectedUsedMaterials = jobWorkspace?.usedMaterials ?? [];
   const selectedTimeEntries = jobWorkspace?.timeEntries ?? [];
+  const jobParts = collectJobParts(workbench.actualPartOptions.map(sectionName=>({sectionName})),selectedUsedMaterials, selectedNeededMaterials, selectedTimeEntries,
+    jobWorkspace?.estimatedMaterials ?? [], jobTasks(selectedJobCard?.actionItems ?? [], jobId).map(task => ({sectionName: readTaskContext(task.description).part})));
   const selectedFieldDraft = workbench.timeEntryDraft?.jobId === selectedJobCard?.job.id ? workbench.timeEntryDraft : null;
   const manualOrStoppedDraft =
     selectedFieldDraft && (!isTimeEntryDraftRunning(selectedFieldDraft) || selectedFieldDraft.source === "manual")
@@ -172,8 +177,9 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
       return;
     }
 
+    if (hoursFocused.current) return;
     setManualHoursInput(formatTimeEntryHoursInput(deriveTimeEntryDraftHours(manualOrStoppedDraft)));
-  }, [manualOrStoppedDraft]);
+  }, [manualOrStoppedDraft?.jobId,manualOrStoppedDraft?.startedAt,manualOrStoppedDraft?.endedAt]);
 
   function toggleJobAccordion(key: JobAccordionKey) {
     setJobAccordions((current) => ({ ...current, [key]: !current[key] }));
@@ -183,7 +189,7 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
     const isOpen = jobAccordions[key];
     return (
       <div style={{ display: "grid", gap: "8px" }}>
-        <button type="button" onClick={() => toggleJobAccordion(key)} style={toggleButtonStyle(isOpen)}>
+        <button type="button" aria-expanded={isOpen} aria-controls={`field-section-${key}`} onClick={() => toggleJobAccordion(key)} style={toggleButtonStyle(isOpen)}>
           <span style={{ display: "flex", gap: "12px", alignItems: "center" }}>
             <span style={{ fontSize: "20px" }}>
               {key === "info" ? "ℹ️" : key === "timer" ? "⏱️" : key === "notes" ? "📝" : key === "attachments" ? "📎" : "📦"}
@@ -192,14 +198,14 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
           </span>
           <span style={{ color: fieldColors.goldBright, fontSize: "18px" }}>{isOpen ? "▾" : "▸"}</span>
         </button>
-        {isOpen ? <div style={{ ...softCardStyle(), padding: "14px" }}>{children}</div> : null}
+        <div id={`field-section-${key}`} hidden={!isOpen} style={{ ...softCardStyle(), padding: "14px" }}>{children}</div>
       </div>
     );
   }
 
   const parsedManualHours =
     manualOrStoppedDraft && manualHoursInput.trim().length > 0 ? parseTimeEntryHoursInput(manualHoursInput) : null;
-  const manualHoursInvalid = Boolean(manualOrStoppedDraft && manualHoursInput.trim().length > 0 && parsedManualHours === null);
+  const manualHoursInvalid = Boolean(manualOrStoppedDraft && parsedManualHours === null);
 
   async function handleAddNeededMaterial() {
     if (!selectedJobCard || !neededMaterialDraft.materialId) {
@@ -307,8 +313,9 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
             Back
           </button>
           <div style={{ ...shellCardStyle(), padding: "18px", display: "grid", gap: "8px" }}>
-            <strong style={{ fontSize: "22px", color: fieldColors.white }}>Job not found</strong>
-            <span style={{ color: fieldColors.whiteSoft }}>This field job could not be loaded. Go back to Field Mode and open it again.</span>
+            <strong style={{ fontSize: "22px", color: fieldColors.white }}>{workbench.jobsQuery.isError ? "Could not load jobs" : "Job not available"}</strong>
+            <span style={{ color: fieldColors.whiteSoft }}>Check your connection or ask the office to check your job assignment.</span>
+            <button type="button" style={actionButtonStyle()} onClick={() => void workbench.jobsQuery.refetch()} disabled={workbench.jobsQuery.isFetching}>Try again</button>
           </div>
         </div>
       </div>
@@ -399,6 +406,19 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
           </div>
         ) : null}
 
+        {workbench.jobWorkspaceQuery.isError && <div role="alert" style={{...softCardStyle(),padding:14}}>
+          Job details could not be refreshed. Saved information may be out of date.
+          <button type="button" style={actionButtonStyle("secondary")} onClick={()=>void workbench.jobWorkspaceQuery.refetch()}>Try again</button>
+        </div>}
+        <JobTaskBoard key={jobId} field jobId={jobId} items={selectedJobCard.actionItems}
+          parts={jobParts} currentUser={currentUser.user} crew={timerWorkerOptions}
+          canCreate={selectedJobCard.permissions.canCreateActionItem}
+          onCreate={(input) => workbench.createActionItem.mutateAsync({...input, jobId})}
+          onComplete={(item) => workbench.resolveActionItem.mutateAsync(item)} />
+        <nav className="job-organizer job-organizer--field" aria-label="Quick job actions" style={{display: "flex", gap: 8, flexWrap: "wrap"}}>
+          {([['materials','Log materials'],['timer','Time'],['notes','Add note']] as const).map(([key,label]) =>
+            <button key={key} type="button" onClick={() => {setJobAccordions(current=>({...current,[key]:true})); requestAnimationFrame(()=>document.getElementById(`field-section-${key}`)?.scrollIntoView({behavior:'smooth',block:'start'}));}}>{label}</button>)}
+        </nav>
         {renderSectionCard(
           "info",
           "Info",
@@ -568,8 +588,10 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
                   <input
                     type="text"
                     inputMode="decimal"
-                    placeholder="1.5"
+                    placeholder=".5 or 1.5"
                     value={manualHoursInput}
+                    onFocus={()=>{hoursFocused.current=true;}}
+                    aria-invalid={manualHoursInvalid}
                     onChange={(event) => {
                       const nextValue = event.target.value;
                       setManualHoursInput(nextValue);
@@ -584,12 +606,13 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
                       });
                     }}
                     onBlur={() => {
+                      hoursFocused.current=false;
                       if (!manualOrStoppedDraft) {
                         return;
                       }
                       const parsedHours = parseTimeEntryHoursInput(manualHoursInput);
                       if (parsedHours === null) {
-                        setManualHoursInput(formatTimeEntryHoursInput(deriveTimeEntryDraftHours(manualOrStoppedDraft)));
+
                         return;
                       }
                       setManualHoursInput(formatTimeEntryHoursInput(parsedHours));
@@ -597,9 +620,10 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
                     style={inputStyle()}
                   />
                 </label>
+
                 {manualHoursInvalid ? (
                   <div style={{ color: fieldColors.danger, fontSize: "13px" }}>
-                    Enter hours as a simple decimal like 1.5 or 2.25.
+                    Enter 0.05 to 24 hours, with up to 2 decimals. .5 means 30 minutes.
                   </div>
                 ) : null}
                 <label style={{ display: "grid", gap: "6px" }}>
@@ -676,7 +700,7 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
                 style={inputStyle()}
               />
             </label>
-            <button type="button" style={actionButtonStyle()} onClick={() => void handleAddNote()} disabled={!noteDraft.trim()}>
+            <button type="button" style={actionButtonStyle()} onClick={() => void handleAddNote().catch(() => undefined)} disabled={!noteDraft.trim() || workbench.addJobNote.isPending}>
               Save Note
             </button>
             {(jobWorkspace?.notes ?? []).slice(0, 8).map((note) => (
@@ -696,7 +720,7 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
           "attachments",
           "Attachments",
           <div style={{ display: "grid", gap: "12px" }}>
-            <input ref={fileInputRef} type="file" hidden onChange={(event) => void handleUploadAttachment(event.target.files?.[0] ?? null)} />
+            <input ref={fileInputRef} type="file" hidden onChange={(event) => void handleUploadAttachment(event.target.files?.[0] ?? null).catch(() => undefined)} />
             <button type="button" style={actionButtonStyle()} onClick={() => fileInputRef.current?.click()}>
               Upload Attachment
             </button>
@@ -724,6 +748,20 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
           "materials",
           "Materials",
           <div style={{ display: "grid", gap: "16px" }}>
+            <div style={{ ...softCardStyle(), padding: "14px", display: "grid", gap: "10px" }}>
+              <FieldMaterialsUsedPanel
+                jobId={selectedJobCard.job.id}
+                draftScope={`${currentUser.user.orgId}:${currentUser.user.id}`}
+                parts={jobParts}
+                plannedMaterialIds={[...selectedNeededMaterials, ...(jobWorkspace?.estimatedMaterials ?? [])].map(row => row.catalogItemId).filter((id): id is NonNullable<typeof id> => Boolean(id))}
+                catalogItems={catalogItems}
+                assemblies={jobWorkspace?.assemblyOptions ?? []}
+                usedMaterials={selectedUsedMaterials}
+                onCreateUsedMaterial={(input) => workbench.createJobMaterial.mutateAsync(input)}
+                onUpdateUsedMaterial={(input) => workbench.updateJobMaterial.mutateAsync(input)}
+                onDeleteUsedMaterial={(jobMaterialId) => workbench.deleteJobMaterial.mutateAsync(jobMaterialId)}
+              />
+            </div>
             {selectedNeededMaterials.length > 0 ? (
               <div
                 style={{
@@ -776,7 +814,7 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
                   type="button"
                   style={actionButtonStyle()}
                   disabled={!neededMaterialDraft.materialId || workbench.createJobMaterial.isPending}
-                  onClick={() => void handleAddNeededMaterial()}
+                  onClick={() => void handleAddNeededMaterial().catch(() => undefined)}
                 >
                   Add Material Needed
                 </button>
@@ -784,7 +822,7 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
                   type="button"
                   style={actionButtonStyle("secondary")}
                   disabled={selectedNeededMaterials.length === 0 || workbench.clearNeededMaterials.isPending}
-                  onClick={() => void workbench.clearNeededMaterials.mutateAsync(selectedJobCard.job.id)}
+                  onClick={() => { if (window.confirm("Mark every item on the pickup list as picked up? This clears the list; it does not record materials used.")) workbench.clearNeededMaterials.mutate(selectedJobCard.job.id); }}
                 >
                   Mark all picked up
                 </button>
@@ -810,17 +848,7 @@ export function FieldJobPage({ jobId }: FieldJobPageProps) {
               )}
             </div>
 
-            <div style={{ ...softCardStyle(), padding: "14px", display: "grid", gap: "10px" }}>
-              <FieldMaterialsUsedPanel
-                jobId={selectedJobCard.job.id}
-                catalogItems={catalogItems}
-                assemblies={jobWorkspace?.assemblyOptions ?? []}
-                usedMaterials={selectedUsedMaterials}
-                onCreateUsedMaterial={(input) => workbench.createJobMaterial.mutateAsync(input)}
-                onUpdateUsedMaterial={(input) => workbench.updateJobMaterial.mutateAsync(input)}
-                onDeleteUsedMaterial={(jobMaterialId) => workbench.deleteJobMaterial.mutateAsync(jobMaterialId)}
-              />
-            </div>
+
           </div>,
         )}
       </div>

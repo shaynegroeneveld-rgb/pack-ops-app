@@ -17,40 +17,14 @@ function normalizeSearchText(value: string): string {
   for (const [pattern, replacement] of NORMALIZATION_REPLACEMENTS) {
     normalized = normalized.replace(pattern, replacement);
   }
-  return normalized.replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  return normalized
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function tokenize(value: string): string[] {
   return normalizeSearchText(value).split(" ").filter(Boolean);
-}
-
-function bigramSet(value: string): Set<string> {
-  const normalized = normalizeSearchText(value).replace(/\s+/g, "");
-  if (normalized.length < 2) {
-    return new Set(normalized ? [normalized] : []);
-  }
-
-  const result = new Set<string>();
-  for (let index = 0; index < normalized.length - 1; index += 1) {
-    result.add(normalized.slice(index, index + 2));
-  }
-  return result;
-}
-
-function normalizedSimilarity(left: string, right: string): number {
-  const leftSet = bigramSet(left);
-  const rightSet = bigramSet(right);
-  if (leftSet.size === 0 || rightSet.size === 0) {
-    return 0;
-  }
-
-  let shared = 0;
-  for (const token of leftSet) {
-    if (rightSet.has(token)) {
-      shared += 1;
-    }
-  }
-  return (2 * shared) / (leftSet.size + rightSet.size);
 }
 
 export function buildCatalogSearchText(item: CatalogItem): string {
@@ -59,37 +33,99 @@ export function buildCatalogSearchText(item: CatalogItem): string {
     item.sku ?? "",
     item.category ?? "",
     item.notes ?? "",
-    ...item.aliases,
+    ...(item.aliases ?? []),
   ]
     .filter(Boolean)
     .join(" ");
 }
 
-export function matchesCatalogItemSearch(item: CatalogItem, query: string): boolean {
-  const normalizedQuery = normalizeSearchText(query);
-  if (!normalizedQuery) {
-    return true;
+// Match every requested word. Never fuzzy-match sizes or supplier codes.
+function oneEditApart(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  if (a.length === b.length) {
+    const different = [...a]
+      .map((c, i) => (c === b[i] ? -1 : i))
+      .filter((i) => i >= 0);
+    return (
+      different.length === 1 ||
+      (different.length === 2 &&
+        different[1] === different[0]! + 1 &&
+        a[different[0]!] === b[different[1]!] &&
+        a[different[1]!] === b[different[0]!])
+    );
   }
-
-  const searchText = buildCatalogSearchText(item);
-  const normalizedText = normalizeSearchText(searchText);
-  if (normalizedText.includes(normalizedQuery)) {
-    return true;
+  const short = a.length < b.length ? a : b,
+    long = a.length < b.length ? b : a;
+  let i = 0,
+    j = 0,
+    edits = 0;
+  while (i < short.length && j < long.length) {
+    if (short[i] === long[j]) {
+      i++;
+      j++;
+    } else {
+      j++;
+      if (++edits > 1) return false;
+    }
   }
-
-  const queryTokens = tokenize(normalizedQuery);
-  if (queryTokens.length > 0 && queryTokens.every((token) => normalizedText.includes(token))) {
-    return true;
-  }
-
-  const searchTokens = tokenize(searchText);
-  const fuzzyScore = normalizedSimilarity(normalizedQuery, normalizedText);
-  if (fuzzyScore >= 0.48) {
-    return true;
-  }
-
-  return queryTokens.some((token) =>
-    searchTokens.some((candidate) => candidate.startsWith(token) || normalizedSimilarity(token, candidate) >= 0.72),
-  );
+  return true;
 }
-
+export function catalogSearchScore(item: CatalogItem, query: string): number {
+  const q = normalizeSearchText(query);
+  if (!q) return 1;
+  const sku = (item.sku ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const code = query.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (sku && code === sku && (/[a-z]/.test(code) || normalizeSearchText(item.sku ?? "") === q)) return 10000;
+  if (sku && /[a-z]/.test(code) && code.length >= 3 && sku.startsWith(code))
+    return 8000;
+  const name = normalizeSearchText(item.name),
+    aliases = (item.aliases ?? []).map(normalizeSearchText);
+  const words = tokenize(buildCatalogSearchText(item));
+  let score = 0;
+  for (const token of q.split(" ")) {
+    if (words.includes(token)) {
+      score += 100;
+      continue;
+    }
+    // Numbers must match a complete numeric token: 12 must not match 120.
+    if (/\d/.test(token)) return 0;
+    if (words.some((word) => word.startsWith(token))) {
+      score += 65;
+      continue;
+    }
+    if (
+      token.length >= 4 &&
+      words.some((word) => !/\d/.test(word) && oneEditApart(token, word))
+    ) {
+      score += 25;
+      continue;
+    }
+    return 0;
+  }
+  if (name === q) score += 3000;
+  else if (aliases.includes(q)) score += 2500;
+  else if (name.startsWith(q)) score += 1200;
+  else if (name.includes(q)) score += 800;
+  return score;
+}
+export function rankCatalogItems(
+  items: CatalogItem[],
+  query: string,
+): CatalogItem[] {
+  if (!query.trim()) return items;
+  return items
+    .map((item, index) => ({
+      item,
+      index,
+      score: catalogSearchScore(item, query),
+    }))
+    .filter((row) => row.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((row) => row.item);
+}
+export function matchesCatalogItemSearch(
+  item: CatalogItem,
+  query: string,
+): boolean {
+  return catalogSearchScore(item, query) > 0;
+}

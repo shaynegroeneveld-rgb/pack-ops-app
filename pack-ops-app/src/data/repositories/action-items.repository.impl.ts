@@ -52,8 +52,19 @@ export class ActionItemsRepositoryImpl
     }
 
     const items = (data ?? []).map((row) => actionItemsMapper.toDomain(row));
-    await localDb.actionItems.bulkPut(items);
-    return items;
+    // A refresh must not overwrite an action still waiting to sync on this device.
+    const queued = await localDb.syncQueue.filter(entry => entry.orgId === this.context.orgId && entry.actorUserId === this.context.actorUserId && entry.entityType === "action_items").toArray();
+    const queuedIds = new Set(queued.map(entry => entry.entityId));
+    await localDb.actionItems.bulkPut(items.filter(item => !queuedIds.has(item.id)));
+    const pendingItems = await localDb.actionItems.filter(item => item.orgId === this.context.orgId && queuedIds.has(item.id)).toArray();
+    const merged = new Map(items.map(item => [item.id, item]));
+    pendingItems.forEach(item => merged.set(item.id,item));
+    const filter = options?.filter;
+    return [...merged.values()].filter(item => !item.deletedAt
+      && (!filter?.entityId || item.entityId === filter.entityId)
+      && (!filter?.entityType || item.entityType === filter.entityType)
+      && (!filter?.assignedTo || item.assignedTo === filter.assignedTo)
+      && (!filter?.statuses?.length || filter.statuses.includes(item.status)));
   }
 
   async getById(id: string): Promise<ActionItem | null> {
@@ -78,7 +89,17 @@ export class ActionItemsRepositoryImpl
 
   async create(input: CreateActionItemInput): Promise<ActionItem> {
     const now = this.now();
-    const id = createId();
+    const id = input.requestId || createId();
+    if (input.requestId) {
+      const existing = await localDb.actionItems.get(id);
+      if (existing) {
+        const same = existing.orgId === this.context.orgId && existing.entityId === input.entityId && existing.entityType === input.entityType
+          && existing.title === input.title && existing.description === (input.description ?? null)
+          && existing.assignedTo === (input.assignedTo ?? null) && existing.dueAt === (input.dueAt ?? null) && !existing.deletedAt;
+        if (!same) throw new Error("This task is already queued with different details. Restore the original text and retry, or check the job tasks after syncing.");
+        return existing;
+      }
+    }
     const item: ActionItem = {
       id: id as ActionItem["id"],
       orgId: this.context.orgId as ActionItem["orgId"],
@@ -106,7 +127,6 @@ export class ActionItemsRepositoryImpl
     console.info("[ActionItemsRepository] create input", input);
     console.info("[ActionItemsRepository] local action item result", item);
 
-    await localDb.actionItems.put(item);
     const queuePayload = {
       id,
       org_id: this.context.orgId,
@@ -122,11 +142,14 @@ export class ActionItemsRepositoryImpl
       operation: "upsert",
       payload: queuePayload,
     });
+    await localDb.transaction("rw", localDb.actionItems, localDb.syncQueue, async () => {
+      await localDb.actionItems.put(item);
     await this.enqueue({
       entityType: "action_items",
       entityId: id,
       operation: "upsert",
       payload: queuePayload,
+    });
     });
 
     return item;

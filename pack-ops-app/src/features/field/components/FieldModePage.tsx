@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuthContext } from "@/app/contexts/auth-context";
 import { APP_ROUTES } from "@/app/router/routes";
@@ -8,6 +8,8 @@ import { getAllowedNextJobStatuses } from "@/domain/jobs/status";
 import {
   deriveTimeEntryDraftElapsedLabel,
   deriveTimeEntryDraftHours,
+  parseTimeEntryHoursInput,
+  formatTimeEntryHoursInput,
   updateManualTimeEntryDraftHours,
   type TimeEntryDraft,
 } from "@/domain/time-entries/draft";
@@ -81,6 +83,8 @@ function isActivateKey(key: string) {
 }
 
 export function FieldModePage() {
+  const [hoursText,setHoursText]=useState("");
+  const hoursFocused=useRef(false);
   const { currentUser } = useAuthContext();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
@@ -144,6 +148,10 @@ export function FieldModePage() {
   const canManageSchedule = currentUser.user.role === "owner" || currentUser.user.role === "office";
   const draftJobCard = timeEntryDraft?.jobId ? jobCardById.get(String(timeEntryDraft.jobId)) ?? null : null;
   const timeDraftHours = timeEntryDraft ? deriveTimeEntryDraftHours(timeEntryDraft, new Date(clockNowMs)) : null;
+  const hoursInvalid=parseTimeEntryHoursInput(hoursText)===null;
+  useEffect(()=>{
+    if(!hoursFocused.current)setHoursText(timeEntryDraft?formatTimeEntryHoursInput(deriveTimeEntryDraftHours(timeEntryDraft)):"");
+  },[timeEntryDraft?.jobId,timeEntryDraft?.startedAt,timeEntryDraft?.endedAt]);
   const timeDraftElapsed = timeEntryDraft ? deriveTimeEntryDraftElapsedLabel(timeEntryDraft, new Date(clockNowMs)) : null;
 
   const upcomingBlocks = scheduling.upcomingBlocksQuery.data ?? [];
@@ -674,7 +682,7 @@ export function FieldModePage() {
       Boolean(timeEntryDraft.jobId) &&
       Boolean(timeEntryDraft.startedAt) &&
       Boolean(timeEntryDraft.endedAt) &&
-      (timeDraftHours ?? 0) > 0;
+      (timeDraftHours ?? 0) > 0 && !hoursInvalid;
 
     return (
       <Modal
@@ -768,27 +776,26 @@ export function FieldModePage() {
           <label style={{ display: "grid", gap: "6px" }}>
             <span style={infoLabelStyle()}>Total Hours</span>
             <input
-              type="number"
-              min="0.05"
-              max="24"
-              step="0.05"
-              value={timeDraftHours?.toFixed(2) ?? ""}
-              onChange={(event) => {
-                const nextHours = Number(event.target.value);
-                if (!Number.isFinite(nextHours) || nextHours <= 0) {
-                  return;
-                }
-                const nextDraft = updateManualTimeEntryDraftHours(timeEntryDraft, nextHours);
-                workbench.updateTimeEntryDraft({
-                  startedAt: nextDraft.startedAt,
-                  endedAt: nextDraft.endedAt,
-                });
+              type="text"
+              inputMode="decimal"
+              placeholder=".5 or 1.5"
+              aria-invalid={hoursInvalid}
+              value={hoursText}
+              onFocus={()=>{hoursFocused.current=true;}}
+              onBlur={()=>{hoursFocused.current=false;const hours=parseTimeEntryHoursInput(hoursText);if(hours!==null)setHoursText(formatTimeEntryHoursInput(hours));}}
+              onChange={event=>{
+                setHoursText(event.target.value);
+                const hours=parseTimeEntryHoursInput(event.target.value);
+                if(hours===null)return;
+                const next=updateManualTimeEntryDraftHours(timeEntryDraft,hours);
+                workbench.updateTimeEntryDraft({startedAt:next.startedAt,endedAt:next.endedAt});
               }}
               style={inputStyle()}
             />
           </label>
 
           <label style={{ display: "grid", gap: "6px" }}>
+            {hoursInvalid && <span role="alert">Enter 0.05 to 24 hours, with up to 2 decimals. .5 means 30 minutes.</span>}
             <span style={infoLabelStyle()}>Note / Description</span>
             <textarea
               rows={3}

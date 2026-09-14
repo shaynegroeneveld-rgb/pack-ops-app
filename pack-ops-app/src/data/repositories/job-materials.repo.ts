@@ -6,6 +6,7 @@ export interface JobMaterialFilter {
 }
 
 export interface CreateJobMaterialInput {
+  requestId?: string;
   jobId: string;
   catalogItemId: string;
   kind: JobMaterialEntry["kind"];

@@ -173,12 +173,12 @@ export function EditableTimeEntryItem({
               <input
                 type="text"
                 inputMode="decimal"
-                placeholder="1.5"
+                placeholder=".5 or 1.5"
                 value={hours}
+                aria-invalid={parsedHours===null}
                 onChange={(event) => setHours(event.target.value)}
                 onBlur={() => {
                   if (parsedHours === null) {
-                    setHours(formatTimeEntryHoursInput(entry.hours));
                     return;
                   }
                   setHours(formatTimeEntryHoursInput(parsedHours));

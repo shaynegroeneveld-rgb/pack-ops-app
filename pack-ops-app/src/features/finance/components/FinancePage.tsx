@@ -353,6 +353,10 @@ export function FinancePage({ initialTab = "transactions" }: { initialTab?: Fina
       </header>
 
       {feedback ? <div style={feedbackStyle(feedback.tone)}>{feedback.text}</div> : null}
+      {[finance.accountsQuery,finance.categoriesQuery,finance.contactsQuery,finance.transactionsQuery].some(query=>query.isError) &&
+        <div role="alert" style={feedbackStyle("error")}>Some finance information could not load. Lists may be incomplete.
+          <button type="button" onClick={()=>void Promise.allSettled([finance.accountsQuery.refetch(),finance.categoriesQuery.refetch(),finance.contactsQuery.refetch(),finance.transactionsQuery.refetch()])}>Try again</button>
+        </div>}
 
       {activeTab === "transactions" ? (
         <div style={{ display: "grid", gap: "16px" }}>

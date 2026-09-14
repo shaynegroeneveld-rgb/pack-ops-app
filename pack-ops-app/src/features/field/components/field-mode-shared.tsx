@@ -77,7 +77,7 @@ export function endOfWeek(day: string): string {
 }
 
 export function toScheduleRangeIso(day: string, end = false): string {
-  return `${day}T${end ? "23:59:59" : "00:00:00"}.000Z`;
+  return new Date(`${day}T${end ? "23:59:59.999" : "00:00:00.000"}`).toISOString();
 }
 
 export function formatMoney(value: number | null | undefined): string {
@@ -216,6 +216,6 @@ export function loadRecentJobIds(): string[] {
 export function storeRecentJobId(jobId: string): string[] {
   const current = loadRecentJobIds();
   const next = [jobId, ...current.filter((value) => value !== jobId)].slice(0, 6);
-  window.localStorage.setItem(RECENT_JOBS_STORAGE_KEY, JSON.stringify(next));
+  try { window.localStorage.setItem(RECENT_JOBS_STORAGE_KEY, JSON.stringify(next)); } catch { /* Recent jobs are optional when device storage is unavailable. */ }
   return next;
 }

@@ -1211,6 +1211,7 @@ export class WorkbenchService {
 
   async createJobMaterial(input: {
     jobId: string;
+    requestId?: string;
     catalogItemId: string;
     kind: "used" | "needed";
     quantity: number;
@@ -1231,6 +1232,7 @@ export class WorkbenchService {
     }
 
     return this.jobMaterials.create({
+      ...(input.requestId ? { requestId: input.requestId } : {}),
       jobId: input.jobId,
       catalogItemId: input.catalogItemId,
       kind: input.kind,
@@ -1269,14 +1271,14 @@ export class WorkbenchService {
     return this.jobMaterials.update(input.jobMaterialId, {
       catalogItemId: input.catalogItemId,
       quantity: Math.round(input.quantity * 100) / 100,
-      note: input.note?.trim() || null,
-      displayName: input.displayName?.trim() || null,
-      skuSnapshot: input.skuSnapshot?.trim() || null,
-      unitSnapshot: input.unitSnapshot?.trim() || null,
-      unitCost: input.unitCost ?? null,
-      unitSell: input.unitSell ?? null,
-      markupPercent: input.markupPercent ?? null,
-      sectionName: input.sectionName?.trim() || null,
+      ...(input.note !== undefined ? { note: input.note?.trim() || null } : {}),
+      ...(input.displayName !== undefined ? { displayName: input.displayName?.trim() || null } : {}),
+      ...(input.skuSnapshot !== undefined ? { skuSnapshot: input.skuSnapshot?.trim() || null } : {}),
+      ...(input.unitSnapshot !== undefined ? { unitSnapshot: input.unitSnapshot?.trim() || null } : {}),
+      ...(input.unitCost !== undefined ? { unitCost: input.unitCost } : {}),
+      ...(input.unitSell !== undefined ? { unitSell: input.unitSell } : {}),
+      ...(input.markupPercent !== undefined ? { markupPercent: input.markupPercent } : {}),
+      ...(input.sectionName !== undefined ? { sectionName: input.sectionName?.trim() || null } : {}),
     });
   }
 
@@ -1783,28 +1785,36 @@ export class WorkbenchService {
 
   async createActionItemForJob(input: {
     jobId: string;
+    requestId?: string;
     title: string;
     description: string;
+    assignedTo?: string | null;
+    dueAt?: string | null;
   }): Promise<ActionItem> {
-    console.info("[WorkbenchService] createActionItemForJob input", {
-      ...input,
-      currentUserId: this.currentUser.id,
-      orgId: this.context.orgId,
-    });
+    if (!canCreateWorkbenchActionItem(this.currentUser)) throw new Error("Only the office can create job tasks.");
+    if (!input.title.trim()) throw new Error("Give the task a name.");
+    const job = await this.jobs.getById(input.jobId);
+    if (!job || job.orgId !== this.context.orgId) throw new Error("Job not found.");
+    if (input.assignedTo && !(await this.listAssignableUsers()).some(user => user.id === input.assignedTo)) {
+      throw new Error("Choose a crew member from this company.");
+    }
+    if (input.dueAt && !Number.isFinite(Date.parse(input.dueAt))) throw new Error("Choose a valid due date.");
 
     const item = await this.actionItems.create({
+      ...(input.requestId ? {requestId: input.requestId} : {}),
       entityType: "jobs",
       entityId: input.jobId,
       category: "follow_up",
-      title: input.title,
+      title: input.title.trim(),
       description: input.description,
-      assignedTo: this.currentUser.id,
+      assignedTo: (input.assignedTo ?? null) as ActionItem["assignedTo"],
+      dueAt: input.dueAt ?? null,
       createdBy: this.currentUser.id,
       priority: "normal",
     });
 
     console.info("[WorkbenchService] createActionItemForJob local result", item);
-    await this.sync.flushPendingQueue();
+    await this.sync.flushPendingQueue({ force: true });
     console.info("[WorkbenchService] createActionItemForJob push result", {
       queueCount: await localDb.syncQueue.count(),
     });
