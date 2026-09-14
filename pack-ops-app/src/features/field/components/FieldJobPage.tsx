@@ -821,7 +821,7 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
                 <button
                   type="button"
                   style={actionButtonStyle("secondary")}
-                  disabled={selectedNeededMaterials.length === 0 || workbench.clearNeededMaterials.isPending}
+                  disabled={selectedNeededMaterials.length === 0 || workbench.clearNeededMaterials.isPending || workbench.markMaterialPickedUp.isPending}
                   onClick={() => { if (window.confirm("Mark every item on the pickup list as picked up? This clears the list; it does not record materials used.")) workbench.clearNeededMaterials.mutate(selectedJobCard.job.id); }}
                 >
                   Mark all picked up
@@ -838,6 +838,12 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
                     <span style={{ color: fieldColors.goldBright, fontSize: "13px" }}>
                       {material.quantity} {material.unitSnapshot ?? material.materialUnit}
                     </span>
+                    <button type="button" style={{ ...actionButtonStyle("secondary"), minHeight: 48, marginTop: 10, width: "100%" }}
+                      disabled={workbench.markMaterialPickedUp.isPending || workbench.clearNeededMaterials.isPending}
+                      aria-label={`Mark ${material.displayName ?? material.materialName} picked up`}
+                      onClick={() => workbench.markMaterialPickedUp.mutate(material.id)}>
+                      {workbench.markMaterialPickedUp.isPending && workbench.markMaterialPickedUp.variables === material.id ? "Saving…" : "✓ Picked up"}
+                    </button>
                     {material.note ? (
                       <div style={{ color: fieldColors.whiteSoft, fontSize: "12px", marginTop: "4px", overflowWrap: "anywhere" }}>
                         {material.note}

@@ -870,6 +870,17 @@ export function useWorkbenchSlice(
     },
   });
 
+  const markMaterialPickedUp = useMutation({
+    mutationFn: (jobMaterialId: string) => service.deleteJobMaterial(jobMaterialId),
+    onSuccess: async (_, id) => {
+      patchActiveWorkspace((current) => ({ ...current, neededMaterials: (current.neededMaterials ?? []).filter((line: any) => line.id !== id) }));
+      setFeedback({ tone: "success", text: "Picked up — removed from the pickup list. Materials used are unchanged." });
+      await queryClient.invalidateQueries({ queryKey: JOB_WORKSPACE_QUERY_KEY });
+      await queryClient.invalidateQueries({ queryKey: WORKBENCH_QUERY_KEY });
+    },
+    onError: (error) => setFeedback({ tone: "error", text: getFriendlyErrorMessage(error, "Could not mark this material picked up. Please try again.") }),
+  });
+
   const clearNeededMaterials = useMutation({
     mutationFn: (jobId: string) => service.clearNeededMaterials(jobId),
     onSuccess: async () => {
@@ -1215,6 +1226,7 @@ export function useWorkbenchSlice(
     updateJobMaterial,
     deleteJobMaterial,
     clearNeededMaterials,
+    markMaterialPickedUp,
     duplicateJobMaterial,
     addAssemblyToActuals,
     createManualActualCostLine,

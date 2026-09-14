@@ -930,10 +930,10 @@ export function FieldModePage() {
               disabled={workbench.clearNeededMaterials.isPending}
               onClick={(event) => {
                 stopEvent(event);
-                void workbench.clearNeededMaterials.mutateAsync(jobCard.job.id);
+                openFieldJob(jobCard.job.id);
               }}
             >
-              Mark materials picked up
+              Open pickup checklist
             </button>
           </>
         ) : null}

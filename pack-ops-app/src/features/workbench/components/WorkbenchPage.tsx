@@ -1417,6 +1417,7 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
     createJobMaterial,
     updateJobMaterial,
     deleteJobMaterial,
+    markMaterialPickedUp,
     duplicateJobMaterial,
     addAssemblyToActuals,
     createManualActualCostLine,
@@ -3776,7 +3777,7 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
       </section>
 
       <details style={{ ...cardStyle("#fff"), minWidth: 0 }}>
-        <summary style={{ cursor: "pointer", fontWeight: 700, padding: "8px 0" }}>Planned materials & pickup list ({neededMaterialDisplayItems.length})</summary>
+        <summary style={{ cursor: "pointer", fontWeight: 700, padding: "8px 0" }}>Materials needed · {(jobWorkspace?.neededMaterials ?? []).length} to pick up</summary>
         <div style={sectionHeadingRow()}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <h3 style={{ margin: 0 }}>Materials Needed</h3>
@@ -3788,7 +3789,7 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
             onClick={() =>
               void handleCopyJobMaterialList(
                 "needed",
-                neededMaterialDisplayItems.map((item) => ({
+                neededMaterialDisplayItems.filter((item) => item.isPersisted).map((item) => ({
                   catalogItemId: item.catalogItemId,
                   materialName: item.materialName,
                   quantity: item.quantity,
@@ -3857,11 +3858,12 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
             </Button>
           </div>
 
-          {neededMaterialDisplayItems.length === 0 ? (
-            <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>No materials needed listed yet.</Card>
+          <p style={{ margin: 0, color: "var(--color-text-soft)", fontSize: 13 }}>Tap Picked up to clear one item from this list. This does not add it to materials used.</p>
+          {(jobWorkspace?.neededMaterials ?? []).length === 0 ? (
+            <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>All clear — no materials waiting for pickup.</Card>
           ) : (
             <div style={{ display: "grid", gap: "10px" }}>
-              {neededMaterialDisplayItems.map((item) => (
+              {neededMaterialDisplayItems.filter((item) => item.isPersisted).map((item) => (
                 <div key={item.key} style={{ ...cardStyle("#fafcff"), padding: "12px", display: "grid", gap: "8px", minWidth: 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap", minWidth: 0 }}>
                     <div>
@@ -3882,10 +3884,13 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
                         variant="secondary"
                         size="sm"
                         onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => void handleRemoveJobMaterial(item.id as string, item.materialName)}
-                        loading={deleteJobMaterial.isPending}
+                        onClick={() => markMaterialPickedUp.mutate(item.id as string)}
+                        disabled={markMaterialPickedUp.isPending || updateJobMaterial.isPending}
+                        loading={markMaterialPickedUp.isPending && markMaterialPickedUp.variables === item.id}
+                        style={{ minHeight: 44 }}
+                        aria-label={`Mark ${item.materialName} picked up`}
                       >
-                        Remove
+                        ✓ Picked up
                       </Button>
                     ) : null}
                   </div>
@@ -3941,6 +3946,11 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
               ))}
             </div>
           )}
+          {estimatedMaterialLines.length > 0 && <details>
+            <summary style={{ cursor: "pointer", padding: "12px 0" }}>Quote estimate · reference only ({estimatedMaterialLines.length})</summary>
+            <p>These are planned quantities, not outstanding pickup requests.</p>
+            {estimatedMaterialLines.map((line, index) => <div key={index} style={{ padding: "8px 0" }}>{line.description} · {line.quantity} {line.unit}</div>)}
+          </details>}
         </div>
       </details>
 
