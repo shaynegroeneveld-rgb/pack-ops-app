@@ -3409,12 +3409,12 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
 
       <section style={cardStyle("#fff")}>
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <h3 style={{ margin: 0 }}>Actual Parts</h3>
+          <h3 style={{ margin: 0 }}>Job parts</h3>
           <InfoHint text="Group actual materials and labour by part of the job, then invoice one part or all parts." />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px", marginTop: "12px", alignItems: "end" }}>
           <label style={{ display: "grid", gap: "6px" }}>
-            <span>New Part</span>
+            <span>Job part name</span>
             <input
               value={newActualPartName}
               onChange={(event) => setNewActualPartName(event.target.value)}
@@ -3422,7 +3422,7 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
             />
           </label>
           <Button variant="secondary" onClick={addActualPart} disabled={!newActualPartName.trim()}>
-            Add Part
+            Add job part
           </Button>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
@@ -3663,6 +3663,14 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
         onComplete={(item) => resolveActionItem.mutateAsync(item)} />
       <section className="job-organizer" aria-label="Job parts overview">
         <h2>Job parts</h2><p>Keep materials and time with the part of the job they belong to.</p>
+        <form onSubmit={(event) => { event.preventDefault(); addActualPart(); }} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end", marginBottom: 16 }}>
+          <label style={{ display: "grid", gap: 6, flex: "1 1 200px" }}>
+            <span>Job part name</span>
+            <input value={newActualPartName} onChange={(event) => setNewActualPartName(event.target.value)} placeholder="e.g. Service, Suite, Garage" style={{ minHeight: 44 }} />
+          </label>
+          <Button type="submit" disabled={!newActualPartName.trim()} style={{ minHeight: 44 }}>+ Add job part</Button>
+        </form>
+
         <div className="job-parts-grid">{actualPartOptions.map(part => {
           const materialCount = (jobWorkspace?.usedMaterials ?? []).filter(row => (row.sectionName?.trim() || "General") === part).length;
           const entries = (jobWorkspace?.timeEntries ?? []).filter(row => (row.sectionName?.trim() || "General") === part && row.status !== "rejected");

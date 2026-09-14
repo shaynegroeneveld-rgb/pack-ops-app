@@ -67,6 +67,7 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
   const [manualHoursInput, setManualHoursInput] = useState("");
   const [isAddingTimePart, setIsAddingTimePart] = useState(false);
   const [newTimePartName, setNewTimePartName] = useState("");
+  const [newJobPartName, setNewJobPartName] = useState("");
   const hoursFocused=useRef(false);
   const noteInputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -415,6 +416,17 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
           canCreate={selectedJobCard.permissions.canCreateActionItem}
           onCreate={(input) => workbench.createActionItem.mutateAsync({...input, jobId})}
           onComplete={(item) => workbench.resolveActionItem.mutateAsync(item)} />
+        <section className="job-organizer job-organizer--field" aria-label="Job parts">
+          <h2>Job parts</h2>
+          <p>Split a bigger job into areas or stages. Small jobs can stay in General.</p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>{jobParts.map(part => <span key={part} style={{ padding: "6px 10px", border: "1px solid currentColor", borderRadius: 8 }}>{part}</span>)}</div>
+          <form onSubmit={(event) => { event.preventDefault(); if (workbench.addActualPart(newJobPartName)) setNewJobPartName(""); }} style={{ display: "grid", gap: 10 }}>
+            <label style={{ display: "grid", gap: 6 }}>Job part name
+              <input value={newJobPartName} onChange={event => setNewJobPartName(event.target.value)} placeholder="e.g. Service, Suite, Garage" style={{ ...inputStyle(), minHeight: 48 }} />
+            </label>
+            <button type="submit" disabled={!newJobPartName.trim()} style={actionButtonStyle()}>+ Add job part</button>
+          </form>
+        </section>
         <nav className="job-organizer job-organizer--field" aria-label="Quick job actions" style={{display: "flex", gap: 8, flexWrap: "wrap"}}>
           {([['materials','Log materials'],['timer','Time'],['notes','Add note']] as const).map(([key,label]) =>
             <button key={key} type="button" onClick={() => {setJobAccordions(current=>({...current,[key]:true})); requestAnimationFrame(()=>document.getElementById(`field-section-${key}`)?.scrollIntoView({behavior:'smooth',block:'start'}));}}>{label}</button>)}
