@@ -1,29 +1,15 @@
+import { readTakeoffLabourLines, buildQuoteLineItems, rollUpTakeoffMaterialLines, isWireLikeLine, parseTakeoffQuantity, roundMoney, roundQuantity, type TakeoffMaterialLine, type MatchedTakeoffMaterialLine, type TakeoffLabourLine } from "../quote-calculations";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import automationPdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 import { useAuthContext } from "@/app/contexts/auth-context";
 import type { CatalogItem } from "@/domain/materials/types";
-import type { QuoteLineItemInput, QuoteView } from "@/domain/quotes/types";
+import type { QuoteView } from "@/domain/quotes/types";
 import { MaterialSearchSelect } from "@/features/materials/components/MaterialSearchSelect";
 import { brand, pageStyle } from "@/features/shared/ui/mobile-styles";
 import { useMaterialsSlice } from "@/features/materials/hooks/use-materials-slice";
 import { useQuotesSlice } from "@/features/quotes/hooks/use-quotes-slice";
 import { DEVICE_CATALOG } from "@/features/takeoff/device-catalog";
-
-interface TakeoffMaterialLine {
-  section: string;
-  item: string;
-  quantity: number;
-}
-
-interface MatchedTakeoffMaterialLine extends TakeoffMaterialLine {
-  match: CatalogItem | null;
-  matchScore: number;
-  lineCost: number | null;
-  source: "takeoff" | "manual";
-  adjustmentKind?: "device" | "material";
-  note?: string;
-}
 
 interface ManualAdjustmentDraft {
   adjustmentKind: "device" | "material";
@@ -40,12 +26,6 @@ interface ManualAdjustment {
   quantity: number;
   catalogItemId: string | null;
   note: string | null;
-}
-
-interface TakeoffLabourLine {
-  phase: string;
-  item: string;
-  hours: number;
 }
 
 interface DeviceRecipeLine {
@@ -534,12 +514,15 @@ const emptyQuoteDraft: QuoteDraft = {
 
 export function ElectricalTakeoffPage() {
   const { currentUser } = useAuthContext();
-  if (!currentUser) {
-    return null;
-  }
+  return currentUser ? <AuthenticatedTakeoffPage /> : null;
+}
+
+function AuthenticatedTakeoffPage() {
+  const { currentUser } = useAuthContext();
 
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [reviewLines, setReviewLines] = useState<MatchedTakeoffMaterialLine[] | null>(null);
+  const [reviewLabour, setReviewLabour] = useState<TakeoffLabourLine[]>([]);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [manualAdjustments, setManualAdjustments] = useState<ManualAdjustment[]>([]);
   const [manualAdjustmentDraft, setManualAdjustmentDraft] = useState<ManualAdjustmentDraft>(emptyAdjustmentDraft);
@@ -557,8 +540,8 @@ export function ElectricalTakeoffPage() {
   const [gangMaterialRules, setGangMaterialRules] = useState<GangMaterialRules>(() => readStoredGangRules());
   const [isDeviceRecipesOpen, setIsDeviceRecipesOpen] = useState(false);
   const [selectedRecipeDeviceId, setSelectedRecipeDeviceId] = useState(DEVICE_CATALOG[0]?.id ?? "");
-  const { catalogQuery } = useMaterialsSlice(currentUser);
-  const { builderResourcesQuery, createQuote } = useQuotesSlice(currentUser);
+  const { catalogQuery } = useMaterialsSlice(currentUser!);
+  const { builderResourcesQuery, createQuote } = useQuotesSlice(currentUser!);
   const catalogItems = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
   const builderResources = builderResourcesQuery.data ?? null;
   const pricedCatalogItems = useMemo(
@@ -588,14 +571,14 @@ export function ElectricalTakeoffPage() {
 
   const reviewDisplayTotals = useMemo(() => {
     const lines = matchedReviewLines;
-    const labourLines = reviewLines ? readTakeoffLabourLines(iframeRef.current) : [];
+    const labourLines = reviewLines ? reviewLabour : [];
     return {
       matched: lines.filter((line) => line.match).length,
       unmatched: lines.filter((line) => !line.match).length,
       totalCost: lines.reduce((total, line) => total + (line.lineCost ?? 0), 0),
       labourHours: labourLines.reduce((total, line) => total + line.hours, 0),
     };
-  }, [matchedReviewLines]);
+  }, [matchedReviewLines, reviewLabour, reviewLines]);
 
   useEffect(() => {
     if (!builderResources) {
@@ -641,6 +624,18 @@ export function ElectricalTakeoffPage() {
     window.localStorage.setItem(TAKEOFF_GANG_RULES_STORAGE_KEY, JSON.stringify(gangMaterialRules));
   }, [gangMaterialRules]);
 
+  useEffect(() => {
+    const invalidate = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow || event.origin !== window.location.origin || event.data?.type !== "packops-takeoff-changed") return;
+      if (reviewLines) setReviewError("The takeoff changed. Review materials again to refresh quantities and labour before quoting.");
+      setReviewLines(null);
+      setReviewLabour([]);
+      setIsQuotePanelOpen(false);
+    };
+    window.addEventListener("message", invalidate);
+    return () => window.removeEventListener("message", invalidate);
+  }, [reviewLines]);
+
   function handleReviewMaterials() {
     const deviceCounts = readTakeoffDeviceCounts(iframeRef.current);
     const gangCounts = readTakeoffGangCounts(iframeRef.current);
@@ -665,7 +660,21 @@ export function ElectricalTakeoffPage() {
       return;
     }
 
-    const lines = buildDeviceRecipeMaterialLines(deviceCounts, deviceRecipes, gangCounts, gangMaterialRules, catalogItems);
+    const missingMaterials = deviceCounts.flatMap(({ deviceId }) => (deviceRecipes[deviceId] ?? []).filter((line) => !catalogItems.some((item) => item.id === line.catalogItemId && item.isActive) || !Number.isFinite(line.quantity) || line.quantity <= 0));
+    const staleGangRules = gangCounts.some(({ gangs }) => (["box", "plate"] as GangRuleKind[]).some((kind) => !catalogItems.some((item) => item.id === gangMaterialRules[gangRuleKey(gangs, kind)] && item.isActive)));
+    if (missingMaterials.length || staleGangRules) {
+      setReviewLines(null);
+      setReviewError("Some saved recipes refer to missing/inactive materials or invalid quantities. Update those recipes before reviewing.");
+      setIsDeviceRecipesOpen(true);
+      return;
+    }
+    const deviceLines = buildDeviceRecipeMaterialLines(deviceCounts, deviceRecipes, gangCounts, gangMaterialRules, catalogItems);
+    const wireLines = readTakeoffMaterialLines(iframeRef.current).filter((line) => line.section.toLowerCase() === "wire" || /wire \(m\)$/i.test(line.item)).map((line) => {
+      // Cable length is metres. A spool/foot cost must never silently be treated as a metre cost.
+      const mapped = catalogItems.find((item) => item.id === catalogMappings[takeoffMaterialMappingKey(line)] && item.isActive && isMetreUnit(item.unit));
+      return { ...line, match: mapped ?? null, matchScore: mapped ? 1 : 0, lineCost: mapped?.costPrice != null ? roundMoney(mapped.costPrice * line.quantity) : null, source: "takeoff" as const, note: "Measured wire including waste; quantity in metres. Select a material priced per metre." };
+    });
+    const lines = [...deviceLines, ...wireLines];
     if (lines.length === 0) {
       setReviewLines(null);
       setReviewError("No placed PDF devices were found. Place devices on the plan first, then review materials.");
@@ -673,11 +682,16 @@ export function ElectricalTakeoffPage() {
     }
 
     setReviewLines(lines);
-    setReviewError(null);
+    setReviewLabour(readTakeoffLabourLines(iframeRef.current));
+    setReviewError(Array.from(iframeRef.current?.contentDocument?.querySelectorAll(".calculation-warning") ?? []).map((node) => node.textContent).filter(Boolean).join(" ") || null);
     setCreatedQuote(null);
   }
 
   function handleCatalogMappingChange(line: MatchedTakeoffMaterialLine, catalogItemId: string) {
+    if (/wire \(m\)$/i.test(line.item) && catalogItemId && !isMetreUnit(catalogItems.find((item) => item.id === catalogItemId)?.unit ?? "")) {
+      setReviewError("This wire quantity is in metres. Select a material priced per metre; a roll or foot price needs conversion first.");
+      return;
+    }
     const mappingKey = takeoffMaterialMappingKey(line);
     setCatalogMappings((current) => {
       const next = { ...current };
@@ -687,12 +701,17 @@ export function ElectricalTakeoffPage() {
     });
     setReviewLines((current) => current?.map((reviewLine) => {
       if (takeoffMaterialMappingKey(reviewLine) !== mappingKey) return reviewLine;
-      return matchTakeoffLine(reviewLine, pricedCatalogItems, catalogItemId || undefined);
+      if (/wire \(m\)$/i.test(reviewLine.item)) {
+        const match = catalogItems.find((item) => item.id === catalogItemId && item.isActive && isMetreUnit(item.unit)) ?? null;
+        return { ...reviewLine, match, matchScore: match ? 1 : 0, lineCost: match?.costPrice != null ? roundMoney(match.costPrice * reviewLine.quantity) : null };
+      }
+      return matchTakeoffLine(reviewLine, catalogItems.filter((item) => item.isActive), catalogItemId || undefined);
     }) ?? null);
     setCreatedQuote(null);
   }
 
   function addDeviceRecipeLine() {
+    setReviewLines(null); setIsQuotePanelOpen(false);
     setDeviceRecipes((current) => ({
       ...current,
       [selectedRecipeDeviceId]: [
@@ -703,6 +722,7 @@ export function ElectricalTakeoffPage() {
   }
 
   function updateDeviceRecipeLine(lineId: string, patch: Partial<DeviceRecipeLine>) {
+    setReviewLines(null); setIsQuotePanelOpen(false);
     setDeviceRecipes((current) => ({
       ...current,
       [selectedRecipeDeviceId]: (current[selectedRecipeDeviceId] ?? []).map((line) =>
@@ -714,6 +734,7 @@ export function ElectricalTakeoffPage() {
   }
 
   function removeDeviceRecipeLine(lineId: string) {
+    setIsQuotePanelOpen(false);
     setDeviceRecipes((current) => ({
       ...current,
       [selectedRecipeDeviceId]: (current[selectedRecipeDeviceId] ?? []).filter((line) => line.id !== lineId),
@@ -792,7 +813,6 @@ export function ElectricalTakeoffPage() {
       customerName: current.customerName || current.companyName || "Takeoff customer",
     }));
     setIsQuotePanelOpen(true);
-    setReviewError(null);
   }
 
   async function handleCreateQuote() {
@@ -816,7 +836,7 @@ export function ElectricalTakeoffPage() {
       return;
     }
 
-    const labourLines = readTakeoffLabourLines(iframeRef.current);
+    const labourLines = reviewLabour;
     const lineItems = buildQuoteLineItems({
       materialLines: matchedReviewLines,
       labourLines,
@@ -1498,7 +1518,7 @@ export function ElectricalTakeoffPage() {
                 }}
               >
                 Quote will include {matchedReviewLines.filter((line) => line.quantity > 0).length} material line(s) and{" "}
-                {readTakeoffLabourLines(iframeRef.current).length} labour line(s). Unmatched materials are included at $0 so you can price them in the quote editor.
+                {reviewLabour.length} labour line(s). Unmatched materials are included at $0 so you can price them in the quote editor.
               </div>
 
               <button
@@ -1596,6 +1616,7 @@ export function ElectricalTakeoffPage() {
                           isPending={catalogQuery.isLoading}
                           placeholder={`Search exact ${gangs}-gang ${kind}...`}
                           onSelect={(catalogItemId) => {
+                            setReviewLines(null); setIsQuotePanelOpen(false);
                             setGangMaterialRules((current) => ({ ...current, [gangRuleKey(gangs, kind)]: catalogItemId }));
                             setReviewLines(null);
                             setCreatedQuote(null);
@@ -2457,34 +2478,6 @@ function buildDeviceRecipeMaterialLines(
   return [...rolledUp.values()].sort((left, right) => left.section.localeCompare(right.section) || left.item.localeCompare(right.item));
 }
 
-function readTakeoffLabourLines(iframe: HTMLIFrameElement | null): TakeoffLabourLine[] {
-  const document = iframe?.contentDocument;
-  if (!document) {
-    return [];
-  }
-
-  return Array.from(document.querySelectorAll(".takeoff.compact > div")).flatMap((row) => {
-    const item = row.querySelector("span")?.textContent?.trim();
-    const quantityText = row.querySelector("strong")?.textContent?.trim() ?? "";
-
-    if (!item || item.toLowerCase().includes("total labour") || !quantityText.toLowerCase().includes("hr")) {
-      return [];
-    }
-
-    const hours = parseTakeoffQuantity(quantityText);
-    if (!Number.isFinite(hours) || hours <= 0) {
-      return [];
-    }
-
-    const [phase, ...rest] = item.split(":");
-    return [{
-      phase: phase?.trim() || "Labour",
-      item: rest.join(":").trim() || item,
-      hours,
-    }];
-  });
-}
-
 function getTakeoffProjectName(iframe: HTMLIFrameElement | null): string | null {
   const document = iframe?.contentDocument;
   if (!document) {
@@ -2620,139 +2613,6 @@ function rollUpReviewLines(lines: MatchedTakeoffMaterialLine[]): MatchedTakeoffM
   return [...rolledUp.values()].filter((line) => line.quantity !== 0);
 }
 
-function buildQuoteLineItems(input: {
-  materialLines: MatchedTakeoffMaterialLine[];
-  labourLines: TakeoffLabourLine[];
-  materialMarkup: number;
-  laborCostRate: number;
-  laborSellRate: number;
-}): QuoteLineItemInput[] {
-  const lineItems: QuoteLineItemInput[] = [];
-
-  input.materialLines
-    .filter((line) => line.quantity > 0)
-    .forEach((line, index) => {
-      const unitCost = line.match?.costPrice ?? 0;
-      lineItems.push({
-        catalogItemId: line.match?.id ?? null,
-        sortOrder: index,
-        description: line.match?.name ?? line.item,
-        sku: line.match?.sku ?? null,
-        note: line.note ?? (line.match ? null : `Unmatched takeoff item: ${line.item}`),
-        sectionName: normalizeQuoteSection(line.section, line.item),
-        sourceType: line.match ? "material" : "manual",
-        lineKind: "item",
-        quantity: roundQuantity(line.quantity),
-        unit: line.match?.unit ?? inferTakeoffUnit(line),
-        unitCost,
-        unitSell: roundMoney(unitCost * (1 + input.materialMarkup / 100)),
-      });
-    });
-
-  rollUpLabourForQuote(input.labourLines)
-    .forEach((line, index) => {
-      lineItems.push({
-        sortOrder: lineItems.length + index,
-        description: `${line.phase} labour`,
-        note: line.item,
-        sectionName: normalizeQuoteSection(line.phase),
-        sourceType: "manual",
-        lineKind: "labor",
-        quantity: roundQuantity(line.hours),
-        unit: "hr",
-        unitCost: roundMoney(input.laborCostRate),
-        unitSell: roundMoney(input.laborSellRate),
-      });
-    });
-
-  return lineItems;
-}
-
-function normalizeQuoteSection(section: string, item = ""): string {
-  const lower = `${section} ${item}`.toLowerCase();
-  if (lower.includes("panel") || lower.includes("subpanel")) {
-    return "Service";
-  }
-  if (lower.includes("breaker") || lower.includes("plate") || lower.includes("device") || lower.includes("fixture")) {
-    return "Finish";
-  }
-  if (
-    lower.includes("box")
-    || lower.includes("wire")
-    || lower.includes("nmd")
-    || lower.includes("cable")
-    || lower.includes("awg")
-    || lower.includes("vapour")
-    || lower.includes("vapor")
-    || lower.includes("boot")
-  ) {
-    return "Rough-in";
-  }
-  if (lower.includes("finish")) {
-    return "Finish";
-  }
-  return "Rough-in";
-}
-
-function rollUpTakeoffMaterialLines(lines: TakeoffMaterialLine[]): TakeoffMaterialLine[] {
-  const rolledUp = new Map<string, TakeoffMaterialLine>();
-  for (const line of lines) {
-    const key = `${line.section.toLowerCase()}::${line.item.toLowerCase()}`;
-    const current = rolledUp.get(key);
-    rolledUp.set(key, current
-      ? { ...current, quantity: roundQuantity(current.quantity + line.quantity) }
-      : line);
-  }
-  return [...rolledUp.values()];
-}
-
-function rollUpLabourForQuote(lines: TakeoffLabourLine[]): TakeoffLabourLine[] {
-  const grouped = new Map<string, TakeoffLabourLine>();
-  for (const line of lines) {
-    if (line.hours <= 0) {
-      continue;
-    }
-    const phase = normalizeQuoteSection(line.phase);
-    const current = grouped.get(phase);
-    grouped.set(phase, current
-      ? {
-          phase,
-          item: [current.item, line.item].filter(Boolean).join("; "),
-          hours: roundQuantity(current.hours + line.hours),
-        }
-      : { phase, item: line.item, hours: roundQuantity(line.hours) });
-  }
-  return ["Service", "Rough-in", "Finish"]
-    .map((phase) => grouped.get(phase))
-    .filter((line): line is TakeoffLabourLine => Boolean(line));
-}
-
-function inferTakeoffUnit(line: TakeoffMaterialLine): string {
-  const lower = `${line.section} ${line.item}`.toLowerCase();
-  if (lower.includes("wire") || lower.includes("nmd") || lower.includes("cable") || lower.includes("awg")) {
-    return "m";
-  }
-  return "each";
-}
-
-function isWireLikeLine(line: TakeoffMaterialLine): boolean {
-  const lower = `${line.section} ${line.item}`.toLowerCase();
-  return lower.includes("wire") || lower.includes("nmd") || lower.includes("cable") || lower.includes("awg");
-}
-
-function parseTakeoffQuantity(value: string): number {
-  const match = value.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
-  return match ? Number(match[0]) : Number.NaN;
-}
-
-function roundMoney(value: number): number {
-  return Math.round(value * 100) / 100;
-}
-
-function roundQuantity(value: number): number {
-  return Math.round(value * 1000) / 1000;
-}
-
 function scoreCatalogMatch(takeoffItem: string, catalogItem: CatalogItem): number {
   const query = normalizeMatchText(takeoffItem);
   const candidates = [
@@ -2760,7 +2620,7 @@ function scoreCatalogMatch(takeoffItem: string, catalogItem: CatalogItem): numbe
     catalogItem.sku ?? "",
     catalogItem.category ?? "",
     catalogItem.notes ?? "",
-    ...catalogItem.aliases,
+    ...(catalogItem.aliases ?? []),
   ].map(normalizeMatchText).filter(Boolean);
 
   if (!query || candidates.length === 0) {
@@ -2838,3 +2698,5 @@ function bigramSet(value: string): Set<string> {
   }
   return result;
 }
+
+function isMetreUnit(unit: string): boolean { return ["m", "metre", "meter", "metres", "meters"].includes(unit.trim().toLowerCase()); }

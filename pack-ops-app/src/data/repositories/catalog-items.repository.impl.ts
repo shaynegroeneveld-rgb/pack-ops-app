@@ -13,24 +13,31 @@ export class CatalogItemsRepositoryImpl implements CatalogItemsRepository {
   ) {}
 
   async list(options?: { filter?: CatalogItemFilter }): Promise<CatalogItem[]> {
-    let query = this.client
-      .from("catalog_items")
-      .select("*")
-      .eq("org_id", this.context.orgId)
-      .is("deleted_at", null)
-      .order("category", { ascending: true, nullsFirst: false })
-      .order("name", { ascending: true });
-
-    if (!options?.filter?.includeInactive) {
-      query = query.eq("is_active", true);
+    const pageSize = 500;
+    const rows: Database["public"]["Tables"]["catalog_items"]["Row"][] = [];
+    let total: number | null = null;
+    // Fetch the whole searchable catalog instead of relying on one capped response.
+    while (true) {
+      let query = this.client.from("catalog_items")
+        .select("*", rows.length === 0 ? { count: "exact" } : {})
+        .eq("org_id", this.context.orgId)
+        .is("deleted_at", null)
+        .order("category", { ascending: true, nullsFirst: false })
+        .order("name", { ascending: true })
+        .order("id", { ascending: true });
+      if (!options?.filter?.includeInactive) query = query.eq("is_active", true);
+      const { data, error, count } = await query.range(rows.length, rows.length + pageSize - 1);
+      if (error) throw error;
+      if (rows.length === 0) total = count;
+      const page = data ?? [];
+      if (page.length === 0) {
+        if (total !== null && rows.length < total) throw new Error("The material catalog changed while loading. Please retry.");
+        break;
+      }
+      rows.push(...page);
+      if (total !== null ? rows.length >= total : page.length < pageSize) break;
     }
-
-    const { data, error } = await query;
-    if (error) {
-      throw error;
-    }
-
-    return (data ?? []).map((row) => catalogItemsMapper.toDomain(row));
+    return rows.map((row) => catalogItemsMapper.toDomain(row));
   }
 
   async getById(id: string): Promise<CatalogItem | null> {

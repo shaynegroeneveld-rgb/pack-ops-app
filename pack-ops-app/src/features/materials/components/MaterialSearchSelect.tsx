@@ -1,236 +1,106 @@
-import {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { forwardRef, useEffect, useImperativeHandle, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { rankCatalogItems, type MaterialSearchItem } from "@/services/materials/material-search";
 
-import type { CatalogItem } from "@/domain/materials/types";
-import { rankCatalogItems } from "@/services/materials/material-search";
-
-export interface MaterialSearchSelectHandle {
-  focus: () => void;
-  clear: () => void;
-}
-
+export interface MaterialSearchSelectHandle { focus: () => void; clear: () => void; }
+export interface MaterialSearchOption extends MaterialSearchItem { id: string; unit?: string; secondaryLabel?: string; }
 interface MaterialSearchSelectProps {
-  catalogItems: CatalogItem[];
+  catalogItems: MaterialSearchOption[];
   selectedMaterialId: string;
   isPending: boolean;
   placeholder?: string;
   autoFocus?: boolean;
+  label?: string;
   onSelect: (materialId: string) => void;
 }
-
-function getMaterialLabel(material: CatalogItem): string {
-  return `${material.category ? `${material.category} · ` : ""}${material.name}${material.sku ? ` (${material.sku})` : ""}`;
-}
-
-export const MaterialSearchSelect = forwardRef<
-  MaterialSearchSelectHandle,
-  MaterialSearchSelectProps
->(function MaterialSearchSelect(
-  {
-    catalogItems,
-    selectedMaterialId,
-    isPending,
-    placeholder = "Search by name or SKU...",
-    autoFocus = false,
-    onSelect,
-  }: MaterialSearchSelectProps,
-  ref,
+export const MaterialSearchSelect = forwardRef<MaterialSearchSelectHandle, MaterialSearchSelectProps>(function MaterialSearchSelect(
+  { catalogItems, selectedMaterialId, isPending, placeholder = 'Search name, SKU, size, or nickname…', autoFocus = false, label = 'Search materials', onSelect }, ref,
 ) {
-  const selectedMaterial =
-    catalogItems.find(
-      (material) => material.id === (selectedMaterialId as CatalogItem["id"]),
-    ) ?? null;
-  const [query, setQuery] = useState("");
-  const [isOpen, setIsOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const listId = useId();
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      focus: () => {
-        inputRef.current?.focus();
-      },
-      clear: () => {
-        setQuery("");
-        setIsOpen(false);
-      },
-    }),
-    [],
-  );
-
-  useEffect(() => {
-    if (autoFocus) {
-      inputRef.current?.focus();
-    }
-  }, [autoFocus]);
-
-  const matchedItems = useMemo(() => {
-    const baseItems = query.trim()
-      ? rankCatalogItems(catalogItems, query)
-      : catalogItems;
-
-    return baseItems;
-  }, [catalogItems, query]);
-
-  const filteredItems = matchedItems.slice(0, 12);
-  useEffect(() => setActiveIndex(-1), [query]);
-  useEffect(() => {
-    if (activeIndex >= 0)
-      document
-        .getElementById(`${listId}-${activeIndex}`)
-        ?.scrollIntoView({ block: "nearest" });
-  }, [activeIndex, listId]);
-  function choose(material: CatalogItem) {
-    onSelect(material.id);
-    setQuery("");
-    setIsOpen(false);
-    setActiveIndex(-1);
-  }
-  return (
-    <div
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) {
-          setIsOpen(false);
-          setQuery("");
+  const supportsPopover = typeof HTMLElement !== 'undefined' && 'showPopover' in HTMLElement.prototype;
+  const selected = catalogItems.find(item => item.id === selectedMaterialId);
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const [limit, setLimit] = useState(12);
+  const [position, setPosition] = useState({ left: 0, top: 0, width: 0, maxHeight: 320 });
+  const inputRef = useRef<HTMLInputElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const id = useId();
+  const matched = useMemo(() => rankCatalogItems(catalogItems, query), [catalogItems, query]);
+  const visible = matched.slice(0, limit);
+  function close() { setOpen(false); setActive(-1); }
+  useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus(), clear: () => { setQuery(''); close(); } }), []);
+  useEffect(() => { if (autoFocus) inputRef.current?.focus(); }, [autoFocus]);
+  useEffect(() => { setLimit(12); setActive(-1); }, [query]);
+  useEffect(() => { if (isPending) close(); }, [isPending]);
+  useEffect(() => { if (active >= visible.length) setActive(-1); }, [active, visible.length]);
+  useEffect(() => { if (active >= 0) document.getElementById(`${id}-${active}`)?.scrollIntoView({ block: 'nearest' }); }, [active, id]);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const reposition = () => {
+      const box = inputRef.current?.getBoundingClientRect();
+      if (!box) return;
+      const viewport = window.visualViewport;
+      const topEdge = viewport?.offsetTop ?? 0;
+      const bottomEdge = topEdge + (viewport?.height ?? window.innerHeight);
+      const below = bottomEdge - box.bottom - 12, above = box.top - topEdge - 12;
+      const upwards = below < 180 && above > below;
+      const maxHeight = Math.max(64, Math.min(320, upwards ? above : below));
+      setPosition({ left: Math.max(8, box.left), top: upwards ? Math.max(topEdge + 8, box.top - maxHeight - 4) : box.bottom + 4, width: Math.min(box.width, window.innerWidth - 16), maxHeight });
+    };
+    if (supportsPopover) popupRef.current?.showPopover();
+    reposition();
+    const outside = (event: PointerEvent) => {
+      if (!inputRef.current?.contains(event.target as Node) && !popupRef.current?.contains(event.target as Node)) close();
+    };
+    // Capturing scroll also follows scrollable job cards and quote sections.
+    const onScroll = (event: Event) => { if (!popupRef.current?.contains(event.target as Node)) reposition(); };
+    window.addEventListener('scroll', onScroll, true); window.addEventListener('resize', reposition);
+    window.visualViewport?.addEventListener('resize', reposition); window.visualViewport?.addEventListener('scroll', reposition);
+    document.addEventListener('pointerdown', outside);
+    return () => { window.removeEventListener('scroll', onScroll, true); window.removeEventListener('resize', reposition); window.visualViewport?.removeEventListener('resize', reposition); window.visualViewport?.removeEventListener('scroll', reposition); document.removeEventListener('pointerdown', outside); };
+  }, [open, supportsPopover]);
+  function choose(item: MaterialSearchOption) { if (isPending) return; onSelect(item.id); inputRef.current?.focus({ preventScroll: true }); setQuery(''); close(); }
+  return <div style={{ position: 'relative', minWidth: 0 }}>
+    <input ref={inputRef} role="combobox" aria-label={label} aria-autocomplete="list" aria-expanded={open} aria-controls={open ? id : undefined}
+      aria-activedescendant={open && active >= 0 && visible[active] ? `${id}-${active}` : undefined}
+      autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false}
+      disabled={isPending} placeholder={placeholder} style={{ fontSize: 16, padding: 12, width: '100%', boxSizing: 'border-box' }}
+      value={open ? query : selected ? `${selected.name}${selected.sku ? ` (${selected.sku})` : ''}` : query}
+      onFocus={() => { if (!open) { setQuery(''); setActive(-1); } setOpen(true); }}
+      onClick={() => setOpen(true)}
+      onChange={event => { setQuery(event.target.value); setOpen(true); }}
+      onBlur={event => { if (!popupRef.current?.contains(event.relatedTarget)) close(); }}
+      onKeyDown={event => {
+        if (event.nativeEvent.isComposing) return;
+        if (event.key === 'Escape' && open) { event.preventDefault(); event.stopPropagation(); close(); }
+        if (event.key === 'Tab') close();
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault(); setOpen(true);
+          const next = event.key === 'ArrowDown' ? Math.min(active + 1, matched.length - 1) : active < 0 ? visible.length - 1 : Math.max(active - 1, 0);
+          if (next >= limit) setLimit(value => value + 12);
+          setActive(next);
         }
-      }}
-      style={{ position: "relative", display: "grid", gap: "6px" }}
-    >
-      <input
-        ref={inputRef}
-        role="combobox"
-        aria-label="Search materials"
-        aria-autocomplete="list"
-        aria-expanded={isOpen}
-        aria-controls={isOpen ? listId : undefined}
-        aria-activedescendant={
-          isOpen && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined
+        if (event.key === 'Enter' && open) {
+          event.preventDefault();
+          const item = visible[active] ?? (matched.length === 1 ? matched[0] : undefined);
+          if (item) choose(item);
         }
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            setIsOpen(false);
-            setActiveIndex(-1);
-            event.preventDefault();
-          }
-          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-            event.preventDefault();
-            setIsOpen(true);
-            setActiveIndex((index) =>
-              event.key === "ArrowDown"
-                ? Math.min(index + 1, filteredItems.length - 1)
-                : Math.max(index - 1, 0),
-            );
-          }
-          if (event.key === "Enter" && isOpen) {
-            event.preventDefault();
-            const item = filteredItems[activeIndex];
-            if (item) choose(item);
-          }
-        }}
-        style={{ fontSize: "16px", padding: "12px" }}
-        value={
-          isOpen
-            ? query
-            : selectedMaterial
-              ? getMaterialLabel(selectedMaterial)
-              : query
-        }
-        placeholder={placeholder.replace(
-          "name or SKU",
-          "name, alias, category, or SKU",
-        )}
-        disabled={isPending}
-        onFocus={() => {
-          setIsOpen(true);
-          setQuery("");
-          setActiveIndex(-1);
-        }}
-        onChange={(event) => {
-          setQuery(event.target.value);
-          setIsOpen(true);
-        }}
-      />
-
-      {isOpen ? (
-        <div
-          id={listId}
-          role="listbox"
-          aria-label="Material matches"
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            right: 0,
-            border: "1px solid #d9dfeb",
-            borderRadius: "12px",
-            background: "#fff",
-            boxShadow: "0 10px 30px rgba(23, 32, 51, 0.12)",
-            maxHeight: "240px",
-            overflow: "auto",
-            zIndex: 10,
-          }}
-        >
-          {filteredItems.length === 0 ? (
-            <div style={{ padding: "10px 12px", color: "#5b6475" }}>
-              No materials match that search.
-            </div>
-          ) : (
-            filteredItems.map((material, index) => (
-              <button
-                key={material.id}
-                id={`${listId}-${index}`}
-                role="option"
-                aria-selected={activeIndex === index}
-                type="button"
-                disabled={isPending}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  choose(material);
-                }}
-                style={{
-                  width: "100%",
-                  textAlign: "left",
-                  border: 0,
-                  borderBottom: "1px solid #eef2f7",
-                  background:
-                    activeIndex === index || material.id === selectedMaterialId
-                      ? "#eef4ff"
-                      : "#fff",
-                  padding: "10px 12px",
-                  display: "grid",
-                  gap: "2px",
-                }}
-              >
-                <strong style={{ color: "#172033" }}>{material.name}</strong>
-                <span style={{ color: "#5b6475", fontSize: "13px" }}>
-                  {material.sku ? `${material.sku} · ` : ""}
-                  {material.category || "Uncategorized"} · {material.unit}
-                </span>
-                {material.aliases.length > 0 ? (
-                  <span
-                    style={{
-                      color: "#7b8698",
-                      fontSize: "12px",
-                      overflowWrap: "anywhere",
-                    }}
-                  >
-                    Also found by: {material.aliases.slice(0, 3).join(", ")}
-                  </span>
-                ) : null}
-              </button>
-            ))
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
+      }} />
+    {open && createPortal(<div ref={popupRef} popover={supportsPopover ? "manual" : undefined} style={{ margin: 0, padding: 0, boxSizing: "border-box", position: 'fixed', ...position, overflowY: 'auto', overscrollBehavior: 'contain', zIndex: 10000, border: '1px solid #cbd5e1', borderRadius: 12, background: '#fff', boxShadow: '0 10px 30px #17203325' }}>
+      <div role="status" style={{ padding: '8px 12px', fontSize: 12, color: '#5b6475', borderBottom: '1px solid #eef2f7' }}>
+        {matched.length ? `${matched.length} ${matched.length === 1 ? 'match' : 'matches'}${query.trim() ? ' · best matches first' : ' · type to narrow the list'}` : 'No matches. Try a shorter name, SKU, or nickname.'}
+      </div>
+      <div id={id} role="listbox" aria-label={label === 'Search materials' ? 'Material matches' : 'Assembly matches'}>
+        {visible.map((item, index) => <button key={item.id} id={`${id}-${index}`} role="option" aria-selected={active === index} tabIndex={-1} type="button"
+          onMouseDown={event => event.preventDefault()} onClick={() => choose(item)}
+          style={{ width: '100%', minHeight: 52, textAlign: 'left', border: 0, borderBottom: '1px solid #eef2f7', background: active === index || selectedMaterialId === item.id ? '#eef4ff' : '#fff', padding: '10px 12px', display: 'grid', gap: 3, cursor: 'pointer' }}>
+          <strong style={{ color: '#172033', overflowWrap: 'anywhere' }}>{item.name}</strong>
+          <span style={{ color: '#5b6475', fontSize: 13 }}>{item.secondaryLabel ?? [item.sku, item.category, item.unit].filter(Boolean).join(' · ')}</span>
+          {!!item.aliases?.length && <span style={{ color: '#64748b', fontSize: 12, overflowWrap: 'anywhere' }}>Also: {item.aliases.slice(0, 3).join(', ')}</span>}
+        </button>)}
+      </div>
+      {matched.length > limit && <button type="button" tabIndex={-1} onMouseDown={event => event.preventDefault()} onClick={() => { setLimit(value => value + 12); inputRef.current?.focus({ preventScroll: true }); }} style={{ width: '100%', padding: 12, minHeight: 44, border: 0, color: '#163fcb', background: '#f3f6fb' }}>Show more ({matched.length - limit} remaining)</button>}
+    </div>, (supportsPopover ? inputRef.current?.closest('[role="dialog"],dialog') : null) ?? document.body)}
+  </div>;
 });

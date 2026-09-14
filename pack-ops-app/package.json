@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "typecheck": "tsc --noEmit",
+    "build": "npm run build:takeoff && vite build",
+    "typecheck": "tsc --noEmit && npm run typecheck --workspace electrical-takeoff-app",
     "lint:domain": "tsc --noEmit",
     "migrations:list": "find ./supabase/migrations -maxdepth 1 -type f | sort",
     "supabase:status": "supabase status",
@@ -16,7 +16,8 @@
     "supabase:types": "supabase gen types typescript --linked --schema public > src/data/supabase/types.ts",
     "deploy": "npm run build && wrangler deploy",
     "preview": "npm run build && wrangler dev",
-    "test": "vitest run --config vitest.config.ts"
+    "test": "vitest run --config vitest.config.ts",
+    "build:takeoff": "npm run build --workspace electrical-takeoff-app && node scripts/build-takeoff.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.58.0",
@@ -43,5 +44,8 @@
     "vite": "^7.1.9",
     "vitest": "^3.2.7",
     "wrangler": "^4.86.0"
-  }
+  },
+  "workspaces": [
+    "takeoff-editor"
+  ]
 }

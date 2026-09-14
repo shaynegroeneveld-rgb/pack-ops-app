@@ -47,7 +47,7 @@ function toMaterialDraft(item: CatalogItem): MaterialEditorDraft {
     itemId: item.id,
     name: item.name,
     sku: item.sku ?? "",
-    aliases: item.aliases.join(", "),
+    aliases: (item.aliases ?? []).join(", "),
     unit: item.unit,
     costPrice: item.costPrice?.toString() ?? "",
     category: item.category ?? "",
@@ -159,6 +159,7 @@ export function MaterialsPage() {
   const { promptText } = useConfirm();
   const [activeTab, setActiveTab] = useState<MaterialsTab>("catalog");
   const [catalogSearch, setCatalogSearch] = useState("");
+  const [catalogResultLimit, setCatalogResultLimit] = useState(75);
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [materialDraft, setMaterialDraft] = useState<MaterialEditorDraft | null>(null);
   const [assemblyDraft, setAssemblyDraft] = useState<AssemblyEditorDraft | null>(null);
@@ -791,8 +792,9 @@ export function MaterialsPage() {
         <section style={{ display: "grid", gap: "12px" }}>
           <input
             value={catalogSearch}
-            onChange={(event) => setCatalogSearch(event.target.value)}
-            placeholder="Search materials by name or SKU..."
+            onChange={(event) => { setCatalogSearch(event.target.value); setCatalogResultLimit(75); }}
+            type="search" aria-label="Search material catalog" autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false}
+            placeholder="Search name, SKU, size, or nickname…"
             style={{
               border: "1px solid #d9dfeb",
               borderRadius: "12px",
@@ -801,6 +803,7 @@ export function MaterialsPage() {
             }}
           />
           {catalogQuery.isLoading ? <p>Loading catalog...</p> : null}
+          {!catalogQuery.isLoading && <div role="status" style={{ color: "#5b6475", fontSize: 13 }}>Showing {Math.min(catalogResultLimit, filteredCatalogItems.length)} of {filteredCatalogItems.length} materials{catalogSearch.trim() ? " · best matches first" : ""}</div>}
           {!catalogQuery.isLoading && filteredCatalogItems.length === 0 ? (
             <div
               style={{
@@ -812,7 +815,7 @@ export function MaterialsPage() {
               }}
             >
               <strong style={{ display: "block", color: "#172033", marginBottom: "6px" }}>
-                No catalog items are available yet.
+                {catalogSearch ? "No matching materials" : "No catalog items are available yet."}
               </strong>
               {catalogSearch
                 ? "No materials match that search."
@@ -820,7 +823,7 @@ export function MaterialsPage() {
             </div>
           ) : null}
 
-          {filteredCatalogItems.map((item) => (
+          {filteredCatalogItems.slice(0, catalogResultLimit).map((item) => (
             <article
               key={item.id}
               style={{
@@ -859,9 +862,9 @@ export function MaterialsPage() {
                 <span>Cost: {formatMoney(item.costPrice)}</span>
               </div>
 
-              {item.aliases.length > 0 ? (
+              {(item.aliases ?? []).length > 0 ? (
                 <div style={{ color: "#5b6475", fontSize: "13px", overflowWrap: "anywhere" }}>
-                  <strong style={{ color: "#172033" }}>Aliases:</strong> {item.aliases.join(", ")}
+                  <strong style={{ color: "#172033" }}>Aliases:</strong> {(item.aliases ?? []).join(", ")}
                 </div>
               ) : null}
 
@@ -874,6 +877,7 @@ export function MaterialsPage() {
               ) : null}
             </article>
           ))}
+          {filteredCatalogItems.length > catalogResultLimit && <button type="button" onClick={() => setCatalogResultLimit(value => value + 75)}>Show more materials ({filteredCatalogItems.length - catalogResultLimit} remaining)</button>}
         </section>
       ) : activeTab === "assemblies" ? (
         <section style={{ display: "grid", gap: "12px" }}>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { JobMaterialView } from "@/domain/jobs/types";
 import type { AssemblyView, CatalogItem } from "@/domain/materials/types";
-import { rankCatalogItems } from "@/services/materials/material-search";
+import { rankCatalogItems, rankAssemblies } from "@/services/materials/material-search";
 import { parseMaterialQuantity } from "@/services/jobs/job-organization";
 import { createId } from "@/lib/create-id";
 import "@/features/jobs/components/job-organization.css";
@@ -134,6 +134,7 @@ function MaterialEntry({
         .map((x) => String(x.catalogItemId)),
     ]),
   ];
+  const matchingAssemblies = useMemo(() => rankAssemblies(assemblies, search), [assemblies, search]);
   const resultItems = (
     search.trim()
       ? rankCatalogItems(catalogItems, search)
@@ -358,6 +359,7 @@ function MaterialEntry({
         Find a material
         <input
           type="search"
+          autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false}
           placeholder="Name, nickname or supplier code"
           value={search}
           disabled={pending}
@@ -376,7 +378,7 @@ function MaterialEntry({
             key={id}
             type="button"
             aria-pressed={tab === id}
-            onClick={() => setTab(id)}
+            onClick={() => { setTab(id); setResultLimit(12); }}
           >
             {label}
           </button>
@@ -423,13 +425,8 @@ function MaterialEntry({
         </div>
       ) : (
         <div className="job-task-list">
-          {assemblies
-            .filter(
-              (a) =>
-                !search.trim() ||
-                a.name.toLowerCase().includes(search.toLowerCase()),
-            )
-            .slice(0, 12)
+          {matchingAssemblies
+            .slice(0, resultLimit)
             .map((a) => (
               <details key={a.id}>
                 <summary>
@@ -459,6 +456,8 @@ function MaterialEntry({
                 })}
               </details>
             ))}
+          {matchingAssemblies.length === 0 && <p className="job-muted">No assemblies match. Search an assembly name or one of its materials.</p>}
+          {matchingAssemblies.length > resultLimit && <button type="button" onClick={() => setResultLimit(value => value + 12)}>Show more assemblies ({matchingAssemblies.length - resultLimit} remaining)</button>}
         </div>
       )}
       <details open className="job-task-form">
