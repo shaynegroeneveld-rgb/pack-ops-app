@@ -2042,7 +2042,7 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
     });
 
     if (kind === "used") {
-      setUsedMaterialDraft(createEmptyJobMaterialDraft());
+      setUsedMaterialDraft((current) => ({ ...createEmptyJobMaterialDraft(), sectionName: current.sectionName }));
       usedMaterialSearchRef.current?.clear();
       usedMaterialSearchRef.current?.focus();
     } else {
