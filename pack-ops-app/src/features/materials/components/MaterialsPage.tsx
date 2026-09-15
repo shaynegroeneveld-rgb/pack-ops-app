@@ -864,7 +864,7 @@ export function MaterialsPage() {
 
               {(item.aliases ?? []).length > 0 ? (
                 <div style={{ color: "#5b6475", fontSize: "13px", overflowWrap: "anywhere" }}>
-                  <strong style={{ color: "#172033" }}>Aliases:</strong> {(item.aliases ?? []).join(", ")}
+                  <strong style={{ color: "#172033" }}>Nicknames:</strong> {(item.aliases ?? []).join(", ")}
                 </div>
               ) : null}
 

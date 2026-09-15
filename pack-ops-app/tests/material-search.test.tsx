@@ -39,3 +39,24 @@ it('renders older catalog rows without aliases and escapes outside clipping cont
 it('closes stale results when a save starts',()=>{const {rerender}=render(<MaterialSearchSelect catalogItems={[box]} selectedMaterialId="" isPending={false} onSelect={()=>{}}/>);fireEvent.focus(screen.getByRole('combobox'));rerender(<MaterialSearchSelect catalogItems={[box]} selectedMaterialId="" isPending={true} onSelect={()=>{}}/>);expect(screen.queryByRole('listbox')).toBeNull();});
 
 it('recognizes low-voltage conductor counts without interpreting them as fractions',()=>{expect(matchesCatalogItemSearch(material('Thermostat cable 5C18','THERM'),'18/5')).toBe(true);expect(matchesCatalogItemSearch(material('Thermostat cable 2C18','THERM2'),'18/5')).toBe(false);});
+
+it('matches joined, spaced and hyphenated gang descriptions in either direction', () => {
+  for (const name of ['1 gang box', '1gang box', '1-gang box']) {
+    const one = material(name, 'ONE'), two = material('2 gang box', 'TWO');
+    for (const query of ['1gang', '1 gang', '1-gang', '1 gangs']) {
+      expect(rankCatalogItems([two, one], query)).toEqual([one]);
+    }
+  }
+});
+it('matches joined trade specifications without confusing their numeric values', () => {
+  const breaker = material('2pole 20amp breaker', 'B20');
+  expect(rankCatalogItems([material('1 pole 20 amp breaker', 'B10'), breaker], '2 pole 20 amps')).toEqual([breaker]);
+  expect(matchesCatalogItemSearch(material('120volt device', 'V120'), '120 volts')).toBe(true);
+});
+
+it('matches attached inch units on fractional sizes without changing the dimension', () => {
+ const half = material('1/2inch EMT connector', 'HALF'), threeQuarter = material('3/4 inch EMT connector', 'THREEQUARTER');
+ for (const query of ['1/2in EMT', '1/2 inch EMT', '.5 EMT']) expect(rankCatalogItems([threeQuarter, half], query)).toEqual([half]);
+ expect(matchesCatalogItemSearch(material('1-1/2inch coupling', 'MIXED'), '1.5 coupling')).toBe(true);
+ expect(matchesCatalogItemSearch(material('12mm fitting', 'METRIC'), '1/2 inch fitting')).toBe(false);
+});

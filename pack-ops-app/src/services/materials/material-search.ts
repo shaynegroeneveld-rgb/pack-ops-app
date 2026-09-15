@@ -27,7 +27,8 @@ const substitutions: Array<[RegExp, string]> = [
 
 export function normalizeMaterialSearch(value: string): string {
   let text = value.toLowerCase().replace(/[¼½¾⅛⅜⅝⅞]/g, c => ` ${{'¼':'1/4','½':'1/2','¾':'3/4','⅛':'1/8','⅜':'3/8','⅝':'5/8','⅞':'7/8'}[c]} `)
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[⁄∕]/g, '/');
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[⁄∕]/g, '/')
+    .replace(/(\d)(inches|inch|in|mm)\b/g, '$1 $2');
   // Cable designations are specifications, not fractions: 14/2 = 2C14.
   text = text.replace(/\b(30|28|26|24|22|20|18|16|14|12|10)\s*\/\s*([2-9])\b/g, '$2c$1')
     .replace(/\b(8|6)\s*\/\s*([234])\b/g, '$2c$1')
@@ -37,6 +38,11 @@ export function normalizeMaterialSearch(value: string): string {
     .replace(/(\d)(?:inches|inch|in)\b/g, '$1 ')
     .replace(/\b(?:inches|inch|in)\b/g, ' ')
     .replace(/\b(\d+)(a|v|w|mm)\b/g, '$1 $2');
+  // Trade descriptions often join a quantity/specification to its word.
+  // Keep cable designations and arbitrary supplier codes intact.
+  text = text.replace(/\b(\d+(?:\.\d+)?)[\s-]*(gangs?|poles?|amps?|amperes?|volts?|watts?|mm)\b/g, '$1 $2')
+    .replace(/\bgangs\b/g, 'gang').replace(/\bpoles\b/g, 'pole')
+    .replace(/\bwatts?\b/g, 'w');
   for (const [pattern, replacement] of substitutions) text = text.replace(pattern, replacement);
   return (text.match(/(?:\d*\.\d+|[a-z0-9]+)/g) ?? []).map(token => /^\d*(?:\.\d+)?$/.test(token) ? String(Number(token)) : token).join(' ');
 }

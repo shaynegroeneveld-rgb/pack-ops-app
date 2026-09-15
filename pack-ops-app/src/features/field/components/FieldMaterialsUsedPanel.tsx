@@ -117,6 +117,10 @@ function MaterialEntry({
     [catalogItems],
   );
   const selected = catalogById.get(draft.materialId);
+  const entryFormRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (draft.materialId) entryFormRef.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }, [draft.materialId]);
   const quantity = parseMaterialQuantity(draft.quantity);
   const allParts = [
     ...new Set([
@@ -272,6 +276,7 @@ function MaterialEntry({
       )}
       {draft.materialId && (
         <form
+          ref={entryFormRef}
           className="job-task-form"
           onSubmit={(e) => {
             e.preventDefault();
@@ -384,6 +389,8 @@ function MaterialEntry({
           </button>
         ))}
       </div>
+      {search.trim() && <p role="status" className="job-muted">{tab === "assemblies" ? `${matchingAssemblies.length} matching assemblies` : `${resultItems.length} matches across all materials`} · best matches first</p>}
+      {!!draft.materialId && <p className="job-muted">Save or discard the selected entry above before choosing another material.</p>}
       {tab !== "assemblies" ? (
         <div className="job-task-list">
           {resultItems.slice(0, resultLimit).map((item) => (
@@ -393,6 +400,7 @@ function MaterialEntry({
                 <p className="job-muted">
                   {item.sku ?? "No SKU"} · {item.unit}
                 </p>
+                {!!item.aliases?.length && <p className="job-muted">Also called: {item.aliases.slice(0, 3).join(", ")}</p>}
               </div>
               <button
                 type="button"
@@ -407,7 +415,7 @@ function MaterialEntry({
           {resultItems.length === 0 && (
             <p className="job-muted">
               {search
-                ? "No matching material. Try a nickname or code; add a job note if the office needs to create it."
+                ? "No matches. Try fewer words, a size, or the supplier code. If it is still missing, add a job note for the office."
                 : "No materials on this job yet. Search or choose All materials."}
             </p>
           )}
