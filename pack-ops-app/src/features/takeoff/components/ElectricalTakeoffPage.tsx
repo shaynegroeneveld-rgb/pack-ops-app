@@ -690,6 +690,7 @@ function AuthenticatedTakeoffPage() {
     setReviewLabour(readTakeoffLabourLines(iframeRef.current));
     setReviewError(Array.from(iframeRef.current?.contentDocument?.querySelectorAll(".calculation-warning") ?? []).map((node) => node.textContent).filter(Boolean).join(" ") || null);
     setCreatedQuote(null);
+    return true;
   }
 
   function handleCatalogMappingChange(line: MatchedTakeoffMaterialLine, catalogItemId: string) {
@@ -806,10 +807,7 @@ function AuthenticatedTakeoffPage() {
   }
 
   function openQuotePanel() {
-    if (!matchedReviewLines.length) {
-      setReviewError("Review the takeoff materials first, then create a quote.");
-      return;
-    }
+    if (!reviewLines && !handleReviewMaterials()) return;
 
     const title = quoteDraft.title.trim() || getTakeoffProjectName(iframeRef.current) || "Electrical takeoff quote";
     setQuoteDraft((current) => ({
@@ -988,10 +986,11 @@ function AuthenticatedTakeoffPage() {
         <div style={{ minWidth: 0 }}>
           <strong style={{ display: "block", color: brand.text }}>Electrical Takeoff</strong>
           <span style={{ color: brand.textSoft, fontSize: "13px" }}>
-            Review the takeoff material summary against your Pack Ops catalog pricing.
+            Place your devices, then Create Quote to bring materials, labour and the customer plan into Pack Ops.
           </span>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button type="button" style={{...toolbarButtonStyle, background: brand.primary, borderColor: brand.primary, color: "#fff"}} onClick={openQuotePanel} disabled={isBuildingQuote || Boolean(createdQuote) || Boolean(pendingPlan)}>Create Quote</button>
           <button type="button" style={toolbarButtonStyle} onClick={() => setIsAutomationOpen(true)}>
             Automation Lab
           </button>
