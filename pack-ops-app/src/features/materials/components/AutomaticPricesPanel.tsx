@@ -39,7 +39,7 @@ export function AutomaticPricesPanel({
   const [rowFeedback, setRowFeedback] = useState<{id: string; error: boolean; message: string} | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState<"recent" | "review">("recent");
+  const [view, setView] = useState<"completed" | "review">("review");
   const [limit, setLimit] = useState(30);
   const [fileError, setFileError] = useState<string | null>(null);
   const db = getSupabaseClient(import.meta.env);
@@ -94,6 +94,7 @@ export function AutomaticPricesPanel({
         .order("id")
         .limit(limit);
       if (view === "review") q = q.eq("status", "review");
+      else q = q.in("status", ["created", "updated", "unchanged", "approved", "dismissed"]);
       const { data, error } = await q;
       if (error) throw error;
       return data;
@@ -251,23 +252,11 @@ export function AutomaticPricesPanel({
               marginBottom: 12,
             }}
           >
-            <button
-              aria-pressed={view === "recent"}
-              onClick={() => {
-                setView("recent");
-                setLimit(30);
-              }}
-            >
-              Recent activity
+            <button aria-pressed={view === "review"} style={{background: view === "review" ? "#fff0d9" : "white", border: "1px solid #cc9b48", borderRadius: 8, padding: "10px 14px", fontWeight: 700}} onClick={() => {setView("review"); setLimit(30); setRowFeedback(null);}}>
+              Needs review ({data.review + data.documents.length})
             </button>
-            <button
-              aria-pressed={view === "review"}
-              onClick={() => {
-                setView("review");
-                setLimit(30);
-              }}
-            >
-              Needs review ({data.review})
+            <button aria-pressed={view === "completed"} style={{background: view === "completed" ? "#e3f3ea" : "white", border: "1px solid #83b298", borderRadius: 8, padding: "10px 14px", fontWeight: 700}} onClick={() => {setView("completed"); setLimit(30); setRowFeedback(null);}}>
+              Completed / updated
             </button>
             <button
               onClick={() => {
@@ -278,6 +267,8 @@ export function AutomaticPricesPanel({
               Refresh
             </button>
           </div>
+          <h3>{view === "review" ? "Needs your review" : "Completed price activity"}</h3>
+          <p>{view === "review" ? "Only unresolved prices and invoices appear here. Completed items move to the other tab." : "These prices have been updated, confirmed or skipped. No action is needed here."}</p>
           {fileError && <p role="alert">{fileError}</p>}
           {view === "review" && rowFeedback && !rowFeedback.error && <p role="status">{rowFeedback.message}</p>}
           {history.error && <p role="alert">Could not load price activity.</p>}
@@ -386,7 +377,7 @@ export function AutomaticPricesPanel({
               Show more price activity
             </button>
           )}
-          {data.documents.length > 0 && (
+          {view === "review" && data.documents.length > 0 && (
             <>
               <h3>Invoices needing a check</h3>
               <p>These invoices were not used to change prices.</p>
