@@ -641,7 +641,7 @@ function AuthenticatedTakeoffPage() {
     return () => window.removeEventListener("message", invalidate);
   }, [reviewLines]);
 
-  function handleReviewMaterials() {
+  function handleReviewMaterials(openSetup = true) {
     const deviceCounts = readTakeoffDeviceCounts(iframeRef.current);
     const gangCounts = readTakeoffGangCounts(iframeRef.current);
     const unconfiguredDevices = deviceCounts.filter(({ deviceId }) =>
@@ -650,27 +650,17 @@ function AuthenticatedTakeoffPage() {
     if (unconfiguredDevices.length > 0) {
       setReviewLines(null);
       setReviewError(`Set exact Pack Ops materials for: ${unconfiguredDevices.map(({ name }) => name).join(", ")}. No guessed materials were added.`);
-      setIsDeviceRecipesOpen(true);
+      if (openSetup) setIsDeviceRecipesOpen(true);
       setSelectedRecipeDeviceId(unconfiguredDevices[0]?.deviceId ?? selectedRecipeDeviceId);
       return;
     }
 
-    const missingGangRules = gangCounts.flatMap(({ gangs }) =>
-      (["box", "plate"] as GangRuleKind[]).filter((kind) => !gangMaterialRules[gangRuleKey(gangs, kind)]).map((kind) => `${gangs}-gang ${kind}`),
-    );
-    if (missingGangRules.length > 0) {
-      setReviewLines(null);
-      setReviewError(`Set exact Pack Ops gang materials for: ${missingGangRules.join(", ")}. No guessed box materials were added.`);
-      setIsDeviceRecipesOpen(true);
-      return;
-    }
-
     const missingMaterials = deviceCounts.flatMap(({ deviceId }) => (deviceRecipes[deviceId] ?? []).filter((line) => !catalogItems.some((item) => item.id === line.catalogItemId && item.isActive) || !Number.isFinite(line.quantity) || line.quantity <= 0));
-    const staleGangRules = gangCounts.some(({ gangs }) => (["box", "plate"] as GangRuleKind[]).some((kind) => !catalogItems.some((item) => item.id === gangMaterialRules[gangRuleKey(gangs, kind)] && item.isActive)));
+    const staleGangRules = gangCounts.some(({ gangs }) => (["box", "plate"] as GangRuleKind[]).some((kind) => Boolean(gangMaterialRules[gangRuleKey(gangs, kind)]) && !catalogItems.some((item) => item.id === gangMaterialRules[gangRuleKey(gangs, kind)] && item.isActive)));
     if (missingMaterials.length || staleGangRules) {
       setReviewLines(null);
       setReviewError("Some saved recipes refer to missing/inactive materials or invalid quantities. Update those recipes before reviewing.");
-      setIsDeviceRecipesOpen(true);
+      if (openSetup) setIsDeviceRecipesOpen(true);
       return;
     }
     const deviceLines = buildDeviceRecipeMaterialLines(deviceCounts, deviceRecipes, gangCounts, gangMaterialRules, catalogItems);
@@ -807,7 +797,8 @@ function AuthenticatedTakeoffPage() {
   }
 
   function openQuotePanel() {
-    if (!reviewLines && !handleReviewMaterials()) return;
+    if (!reviewLines) handleReviewMaterials(false);
+    setIsDeviceRecipesOpen(false);
 
     const title = quoteDraft.title.trim() || getTakeoffProjectName(iframeRef.current) || "Electrical takeoff quote";
     setQuoteDraft((current) => ({
@@ -820,6 +811,7 @@ function AuthenticatedTakeoffPage() {
 
   async function handleCreateQuote() {
     if (quoteBuildLock.current || createdQuote || pendingPlan) return;
+    if (!reviewLines) { setReviewError("Resolve the material review before saving this quote."); return; }
     const materialMarkup = Number(quoteDraft.materialMarkup);
     const laborCostRate = Number(quoteDraft.laborCostRate);
     const laborSellRate = Number(quoteDraft.laborSellRate);
@@ -994,7 +986,7 @@ function AuthenticatedTakeoffPage() {
           <button type="button" style={toolbarButtonStyle} onClick={() => setIsAutomationOpen(true)}>
             Automation Lab
           </button>
-          <button type="button" style={toolbarButtonStyle} onClick={handleReviewMaterials}>
+          <button type="button" style={toolbarButtonStyle} onClick={() => handleReviewMaterials()}>
             Review Takeoff Materials
           </button>
           <button type="button" style={toolbarButtonStyle} onClick={() => setIsDeviceRecipesOpen(true)}>
@@ -1556,6 +1548,11 @@ function AuthenticatedTakeoffPage() {
                 ))}
               </div>
 
+              {reviewError && <p role="alert" style={{margin: 0, color: "#9b4b12"}}>{reviewError}</p>}
+              {!reviewLines && <div style={{display: "flex", gap: 8, flexWrap: "wrap"}}>
+                <button type="button" style={toolbarButtonStyle} onClick={() => {setIsQuotePanelOpen(false); setIsDeviceRecipesOpen(true);}}>Check assigned device materials</button>
+                <button type="button" style={toolbarButtonStyle} onClick={() => handleReviewMaterials(false)}>Refresh material review</button>
+              </div>}
               <div
                 style={{
                   border: `1px solid ${brand.border}`,
@@ -1577,7 +1574,7 @@ function AuthenticatedTakeoffPage() {
                 className="primary"
                 style={{ ...toolbarButtonStyle, background: brand.primary, borderColor: brand.primary, color: "#ffffff", justifySelf: "start" }}
                 onClick={() => void handleCreateQuote()}
-                disabled={isBuildingQuote || Boolean(createdQuote) || Boolean(pendingPlan)}
+                disabled={!reviewLines || isBuildingQuote || Boolean(createdQuote) || Boolean(pendingPlan)}
               >
                 {isBuildingQuote ? "Building quote and plan…" : "Create Draft Quote"}
               </button>
