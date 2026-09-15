@@ -25,6 +25,7 @@ await db.exec(
   ),
 );
 await db.exec(fs.readFileSync("supabase/migrations/0072_ebh_review_create_material.sql", "utf8"));
+await db.exec(fs.readFileSync("supabase/migrations/0074_ebh_review_link_material.sql", "utf8"));
 const org = "00000000-0000-0000-0000-000000000001";
 await db.query(`insert into orgs values($1);`, [org]);
 await db.query(
@@ -262,6 +263,22 @@ await test("create action refuses an exact existing SKU without changing review"
   const h = (await db.query(`insert into ebh_price_history(org_id,invoice_number,invoice_date,line_number,supplier_sku,description,unit,supplier_price,price_basis,new_cost,status,reason) values($1,'REVIEWDUP',current_date,1,'NEWREVIEW','Another description','each',10,1,11.2,'review','possible_existing_material') returning id`, [org])).rows[0];
   await assert.rejects(() => db.query('select ebh_review_create_material($1)',[h.id]), /material_already_exists/);
   assert.equal((await db.query('select status from ebh_price_history where id=$1',[h.id])).rows[0].status,'review');
+});
+await test("linking an unmatched invoice fills an existing blank cost without creating a material", async () => {
+  const c = (await db.query(`insert into catalog_items(org_id,name,sku,unit,cost_price,unit_price) values($1,'Existing unpriced material','LOCAL-SKU','each',NULL,25) returning id`,[org])).rows[0];
+  const h = (await db.query(`insert into ebh_price_history(org_id,invoice_number,invoice_date,line_number,supplier_sku,description,unit,supplier_price,price_basis,new_cost,status,reason) values($1,'LINKINV',current_date,1,'SUPPLIER-SKU','Supplier description','each',10,1,11.2,'review','possible_existing_material') returning id`,[org])).rows[0];
+  const before = (await db.query('select count(*) as n from catalog_items')).rows[0].n;
+  await db.query('select ebh_review_link_material($1,$2,NULL)',[h.id,c.id]);
+  const updated = (await db.query('select * from catalog_items where id=$1',[c.id])).rows[0];
+  assert.equal(Number(updated.cost_price),11.2); assert.equal(Number(updated.unit_price),25); assert.equal(updated.name,'Existing unpriced material');
+  assert.equal((await db.query('select count(*) as n from catalog_items')).rows[0].n,before);
+  assert.equal((await db.query("select catalog_item_id from ebh_price_mappings where supplier_sku='SUPPLIERSKU'")).rows[0].catalog_item_id,c.id);
+});
+await test("a unit mismatch rolls back the attempted link", async () => {
+  const c = (await db.query(`insert into catalog_items(org_id,name,sku,unit,cost_price) values($1,'Wrong unit','WRONGUNIT','m',NULL) returning id`,[org])).rows[0];
+  const h = (await db.query(`insert into ebh_price_history(org_id,invoice_number,invoice_date,line_number,supplier_sku,description,unit,supplier_price,price_basis,new_cost,status,reason) values($1,'WRONGINV',current_date,1,'WRONGSUPPLIER','Each product','each',10,1,11.2,'review','possible_existing_material') returning id`,[org])).rows[0];
+  await assert.rejects(() => db.query('select ebh_review_link_material($1,$2,NULL)',[h.id,c.id]), /material_or_unit_changed/);
+  assert.equal((await db.query('select catalog_item_id from ebh_price_history where id=$1',[h.id])).rows[0].catalog_item_id,null);
 });
 console.log(`${passed} database checks passed`);
 await db.close();

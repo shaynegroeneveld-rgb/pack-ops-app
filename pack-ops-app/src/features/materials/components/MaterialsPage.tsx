@@ -746,7 +746,7 @@ export function MaterialsPage() {
           )
         ) : null}
       </header>
-      {canManage && activeTab === "catalog" && <AutomaticPricesPanel orgId={currentUser.user.orgId} onFind={setCatalogSearch} />}
+      {canManage && activeTab === "catalog" && <AutomaticPricesPanel catalogItems={catalogItems} orgId={currentUser.user.orgId} onFind={setCatalogSearch} />}
 
       {feedback ? (
         <section

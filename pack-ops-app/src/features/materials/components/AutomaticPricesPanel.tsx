@@ -1,3 +1,5 @@
+import type { CatalogItem } from "@/domain/materials/types";
+import { MaterialSearchSelect } from "./MaterialSearchSelect";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getSupabaseClient } from "@/data/supabase/client";
@@ -26,11 +28,15 @@ const money = (v: number | string | null) =>
 export function AutomaticPricesPanel({
   orgId,
   onFind,
+  catalogItems = [],
 }: {
   orgId: string;
+  catalogItems?: CatalogItem[];
   onFind: (sku: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const [selectedMatches, setSelectedMatches] = useState<Record<string, string>>({});
+  const [rowFeedback, setRowFeedback] = useState<{id: string; error: boolean; message: string} | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"recent" | "review">("recent");
@@ -124,8 +130,10 @@ export function AutomaticPricesPanel({
     row: { id: string; catalog_item_id: string | null },
     usePrice: boolean,
     createMaterial = false,
+    selectedMaterialId?: string,
   ) {
     setBusy(row.id);
+    setRowFeedback(null);
     setFileError(null);
     try {
       let cost: number | null = null;
@@ -134,17 +142,18 @@ export function AutomaticPricesPanel({
           .from("catalog_items")
           .select("cost_price")
           .eq("org_id", orgId)
-          .eq("id", row.catalog_item_id)
+          .eq("id", selectedMaterialId ?? row.catalog_item_id)
           .single();
         if (error) throw error;
         cost = data.cost_price;
       }
-      const { error } = createMaterial ? await db.rpc("ebh_review_create_material", { p_id: row.id }) : await db.rpc("ebh_review_price", {
+      const { error } = selectedMaterialId ? await db.rpc("ebh_review_link_material", { p_id: row.id, p_catalog_item_id: selectedMaterialId, p_expected_cost: cost }) : createMaterial ? await db.rpc("ebh_review_create_material", { p_id: row.id }) : await db.rpc("ebh_review_price", {
         p_id: row.id,
         p_use_price: usePrice,
         p_expected_cost: cost,
       });
       if (error) throw error;
+      setRowFeedback({id: row.id, error: false, message: createMaterial ? "Material created and cost saved." : usePrice ? "Material cost updated." : "Price skipped. Existing material unchanged."});
       await Promise.all([
         status.refetch(),
         history.refetch(),
@@ -153,7 +162,7 @@ export function AutomaticPricesPanel({
     } catch (error) {
       const message = error && typeof error === "object" && "message" in error ? String(error.message) : "";
       const explanations: Record<string, string> = {
-        material_already_exists: "This material already exists. Use Find material to check its SKU or aliases; no duplicate was created.",
+        material_already_exists: "This material already exists; no duplicate was created. Choose the existing material below, then click Link material & update cost.",
         material_already_linked: "This invoice line is already linked to a material. Refresh and use its new cost.",
         cost_changed_refresh_first: "The cost changed while you were reviewing. Refresh and check it before trying again.",
         newer_invoice_exists: "A newer invoice exists for this material. Review its price instead.",
@@ -163,7 +172,7 @@ export function AutomaticPricesPanel({
         invalid_invoice_material: "The invoice needs a valid description, unit and price before creating a material.",
         not_allowed: "Only an owner or office user can approve material prices.",
       };
-      setFileError(explanations[message] ?? "Could not save this review. Check your connection and try again.");
+      setRowFeedback({id: row.id, error: true, message: explanations[message] ?? "Could not save this review. Check your connection and try again."});
     } finally {
       setBusy(null);
     }
@@ -270,6 +279,7 @@ export function AutomaticPricesPanel({
             </button>
           </div>
           {fileError && <p role="alert">{fileError}</p>}
+          {view === "review" && rowFeedback && !rowFeedback.error && <p role="status">{rowFeedback.message}</p>}
           {history.error && <p role="alert">Could not load price activity.</p>}
           {history.data?.length === 0 && (
             <p>
@@ -304,7 +314,7 @@ export function AutomaticPricesPanel({
                           : row.status === "unchanged"
                             ? "Cost confirmed"
                             : "Held for review"}{" "}
-                  · {money(row.old_cost)} → {money(row.new_cost)} / {row.unit}
+                  · {row.catalog_item_id ? money(row.old_cost) : "Not matched to catalog"} → {money(row.new_cost)} / {row.unit}
                 </div>
                 <div style={{ color: "#5b6475", fontSize: 13, marginTop: 4 }}>
                   Invoice {row.invoice_number} · {row.invoice_date}
@@ -333,7 +343,7 @@ export function AutomaticPricesPanel({
                   </button>
                   {row.status === "review" && (
                     <>
-                      {!row.catalog_item_id && row.new_cost > 0 && ["each", "m"].includes(row.unit) && <button disabled={busy !== null} onClick={() => void reviewPrice(row, true, true)}>Create material · {money(row.new_cost)} cost</button>}
+                      {!row.catalog_item_id && row.reason !== "duplicate_catalog_sku" && row.new_cost > 0 && ["each", "m"].includes(row.unit) && <button disabled={busy !== null} onClick={() => void reviewPrice(row, true, true)}>Create material · {money(row.new_cost)} cost</button>}
                       {row.catalog_item_id &&
                         ![
                           "unit_mismatch",
@@ -357,6 +367,14 @@ export function AutomaticPricesPanel({
                     </>
                   )}
                 </div>
+                {row.status === "review" && !row.catalog_item_id && <div style={{marginTop: 12, display: "grid", gap: 8}}>
+                  <strong>Already in your catalog? Choose the material to update.</strong>
+                  <MaterialSearchSelect catalogItems={catalogItems.filter((item) => item.isActive && (item.unit === row.unit || item.unit === "ea" && row.unit === "each")).map((item) => ({...item, secondaryLabel: `${money(item.costPrice)} / ${item.unit}`}))} selectedMaterialId={selectedMatches[row.id] ?? ""} isPending={busy !== null} label={`Match existing material for ${row.supplier_sku}`} onSelect={(id) => setSelectedMatches((current) => ({...current, [row.id]: id}))} />
+                  <button disabled={busy !== null || !selectedMatches[row.id]} onClick={() => void reviewPrice(row, true, false, selectedMatches[row.id])}>Link material &amp; update cost to {money(row.new_cost)}</button>
+                  <small>Only materials with matching units are shown. Keeps your existing name and selling price.</small>
+                </div>}
+                {busy === row.id && <p role="status">Saving this material…</p>}
+                {rowFeedback && rowFeedback.id === row.id && <p role={rowFeedback.error ? "alert" : "status"} style={{color: rowFeedback.error ? "#a12622" : "#12684b", fontWeight: 600}}>{rowFeedback.message}</p>}
               </article>
             ))}
           </div>
