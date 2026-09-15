@@ -18,6 +18,12 @@ await db.exec(
 await db.exec(
   fs.readFileSync("supabase/migrations/0069_ebh_sku_comparison.sql", "utf8"),
 );
+await db.exec(
+  fs.readFileSync(
+    "supabase/migrations/0071_ebh_newest_invoice_guard.sql",
+    "utf8",
+  ),
+);
 const org = "00000000-0000-0000-0000-000000000001";
 await db.query(`insert into orgs values($1);`, [org]);
 await db.query(
@@ -207,6 +213,34 @@ await test("price review rejects an unexpected current cost", async () => {
     (await db.query("select status from ebh_price_history where id=$1", [h.id]))
       .rows[0].status,
     "approved",
+  );
+});
+await test("a newer held invoice prevents an older automatic price", async () => {
+  await db.query(
+    `insert into catalog_items(org_id,name,sku,unit,cost_price,updated_at) values($1,'Newest guard','LATEST','each',30,'2026-01-01')`,
+    [org],
+  );
+  const newer = invoice("LATEST", 50);
+  newer.lines[0].description = "Newest guard";
+  assert.equal(
+    (await apply(newer)).lines[0].reason,
+    "price_change_over_20_percent",
+  );
+  const older = invoice("LATEST", 28);
+  older.lines[0].description = "Newest guard";
+  older.invoiceDate = new Date(Date.parse(date + "T00:00:00Z") - 86400000)
+    .toISOString()
+    .slice(0, 10);
+  assert.equal((await apply(older)).lines[0].reason, "older_invoice");
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "select cost_price from catalog_items where sku='LATEST'",
+        )
+      ).rows[0].cost_price,
+    ),
+    30,
   );
 });
 console.log(`${passed} database checks passed`);

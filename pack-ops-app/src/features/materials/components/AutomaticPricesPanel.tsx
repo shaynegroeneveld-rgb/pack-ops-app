@@ -223,7 +223,14 @@ export function AutomaticPricesPanel({
             foot before the 12% addition. Review items have not changed your
             costs.
           </p>
-          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              marginBottom: 12,
+            }}
+          >
             <button
               aria-pressed={view === "recent"}
               onClick={() => {
@@ -294,7 +301,14 @@ export function AutomaticPricesPanel({
                     ? ` · ${reasons[row.reason] ?? "Check the invoice and catalog before changing this price."}`
                     : ""}
                 </div>
-                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    marginTop: 8,
+                  }}
+                >
                   <button
                     onClick={() => {
                       setOpen(false);
