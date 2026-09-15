@@ -150,7 +150,13 @@ export function parseEbhInvoice(
   if (
     lines.length !== Number(footer[1]) ||
     !lines.length ||
-    lines.some((l, i) => l.lineNumber !== i + 1 || !l.description)
+    lines.some(
+      (l, i) =>
+        !Number.isSafeInteger(l.lineNumber) ||
+        l.lineNumber <= 0 ||
+        (i > 0 && l.lineNumber <= lines[i - 1]!.lineNumber) ||
+        !l.description,
+    )
   )
     throw new Error("incomplete_lines");
   if (

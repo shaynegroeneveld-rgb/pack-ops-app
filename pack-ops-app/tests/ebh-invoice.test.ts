@@ -59,4 +59,19 @@ describe("E.B. invoice ingestion", () => {
     expect(
       parse(invoice.replace("Ordered As: BOX100\n", "")).lines[0]?.description,
     ).toBe("STEEL DEVICE BOX"));
+  it("allows gaps in supplier order line numbers when counts and totals reconcile", () =>
+    expect(parse(invoice.replace("(001)", "(004)")).lines[0]?.lineNumber).toBe(
+      4,
+    ));
+  it("rejects duplicate supplier line numbers", () => {
+    const extra =
+      "1 1 0 EA (001) BOX-200 C100 505.3845 5.05\nSECOND BOX\nOrdered As: BOX200\n";
+    expect(() =>
+      parse(
+        invoice
+          .replace("Total Lines: 1", extra + "Total Lines: 2")
+          .replace("SUB-TOTAL: 5.05", "SUB-TOTAL: 10.10"),
+      ),
+    ).toThrow("incomplete_lines");
+  });
 });
