@@ -26,6 +26,7 @@ await db.exec(
 );
 await db.exec(fs.readFileSync("supabase/migrations/0072_ebh_review_create_material.sql", "utf8"));
 await db.exec(fs.readFileSync("supabase/migrations/0074_ebh_review_link_material.sql", "utf8"));
+await db.exec(fs.readFileSync("supabase/migrations/0075_ebh_review_archived_duplicate.sql", "utf8"));
 const org = "00000000-0000-0000-0000-000000000001";
 await db.query(`insert into orgs values($1);`, [org]);
 await db.query(
@@ -279,6 +280,12 @@ await test("a unit mismatch rolls back the attempted link", async () => {
   const h = (await db.query(`insert into ebh_price_history(org_id,invoice_number,invoice_date,line_number,supplier_sku,description,unit,supplier_price,price_basis,new_cost,status,reason) values($1,'WRONGINV',current_date,1,'WRONGSUPPLIER','Each product','each',10,1,11.2,'review','possible_existing_material') returning id`,[org])).rows[0];
   await assert.rejects(() => db.query('select ebh_review_link_material($1,$2,NULL)',[h.id,c.id]), /material_or_unit_changed/);
   assert.equal((await db.query('select catalog_item_id from ebh_price_history where id=$1',[h.id])).rows[0].catalog_item_id,null);
+});
+await test("an archived material does not block explicit creation of an active replacement", async () => {
+  await db.query(`insert into catalog_items(org_id,name,sku,unit,cost_price,deleted_at) values($1,'Archived product','ARCHIVEDSKU','each',9,now())`,[org]);
+  const h = (await db.query(`insert into ebh_price_history(org_id,invoice_number,invoice_date,line_number,supplier_sku,description,unit,supplier_price,price_basis,new_cost,status,reason) values($1,'ARCHINV',current_date,1,'ARCHIVEDSKU','Archived product','each',10,1,11.2,'review','possible_existing_material') returning id`,[org])).rows[0];
+  await db.query('select ebh_review_create_material($1)',[h.id]);
+  assert.equal((await db.query("select count(*) as n from catalog_items where sku='ARCHIVEDSKU' and deleted_at is null")).rows[0].n,1);
 });
 console.log(`${passed} database checks passed`);
 await db.close();
