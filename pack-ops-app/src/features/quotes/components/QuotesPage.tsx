@@ -651,6 +651,7 @@ export function QuotesPage() {
       />
       <CustomerQuotePreviewPanel
         preview={customerPreview}
+        onOpenAttachment={handleOpenQuoteAttachment}
         isPending={previewCustomerQuote.isPending}
         onClose={() => setCustomerPreview(null)}
       />

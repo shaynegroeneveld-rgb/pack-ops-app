@@ -64,6 +64,7 @@ interface ElectricalDevice {
   pdfPageNumber: number;
   roomId?: string;
   catalogItemId: string;
+  heaterWattage?: number;
   feedFromPanelId?: string;
   riserDropMeters?: number;
   linkedRiserId?: string;
@@ -280,6 +281,7 @@ const DEVICE_CATALOG: DeviceCatalogItem[] = [
   { id: "freezer", name: "Freezer", category: "Dedicated circuits", symbol: "FZ", defaultCircuitType: "2c14" },
   { id: "counter-receptacle", name: "Counter receptacle circuit", category: "Dedicated circuits", symbol: "CR", defaultCircuitType: "2c12" },
   { id: "baseboard-thermostat", name: "Baseboard thermostat", category: "Dedicated circuits", symbol: "T", defaultCircuitType: "2c12" },
+  { id: "wall-fan-heater", name: "Wall fan heater", category: "Dedicated circuits", symbol: "WF", defaultCircuitType: "2c12" },
   { id: "baseboard-heater", name: "Baseboard heater", category: "Dedicated circuits", symbol: "BB", defaultCircuitType: "2c12" },
   { id: "electric-fireplace", name: "Electric fireplace", category: "Dedicated circuits", symbol: "EFP", defaultCircuitType: "2c12" },
   { id: "heat-pump", name: "Heat pump", category: "Dedicated circuits", symbol: "HP", defaultCircuitType: "2c10" },
@@ -316,6 +318,7 @@ const CIRCUIT_WIRE_RULES: Array<{ catalogItemId: string; wireType: string; devic
   { catalogItemId: "freezer", wireType: "2c14" },
   { catalogItemId: "counter-receptacle", wireType: "2c12", devicesPerCircuit: 2, interconnect: true },
   { catalogItemId: "baseboard-thermostat", wireType: "2c12" },
+  { catalogItemId: "wall-fan-heater", wireType: "2c12" },
   { catalogItemId: "baseboard-heater", wireType: "2c12" },
   { catalogItemId: "electric-fireplace", wireType: "2c12" },
   { catalogItemId: "heat-pump", wireType: "2c10" },
@@ -326,59 +329,6 @@ const CIRCUIT_WIRE_RULES: Array<{ catalogItemId: string; wireType: string; devic
   { catalogItemId: "ev-charger", wireType: "3c8" },
   { catalogItemId: "100a-subpanel", wireType: "2c1 NMD" },
 ];
-
-const DEVICE_ONLY_MATERIALS: Record<string, string> = {
-  "15a-receptacle": "15A duplex receptacle",
-  "20a-receptacle": "20A receptacle",
-  "gfci-receptacle": "GFCI receptacle",
-  "exterior-weather-rated-gfci-receptacle": "Weatherproof GFCI receptacle",
-  "switch": "Single-pole switch",
-  "3-way-switch": "3-way switch",
-  "4-way-switch": "4-way switch",
-  "dimmer": "Dimmer switch",
-  "motion-switch": "Motion switch",
-  "ceiling-light": "Ceiling light outlet box",
-  "pot-light": "Pot light",
-  "smoke-alarm": "Smoke alarm",
-  "co-alarm": "CO alarm",
-  "bathroom-fan": "Bath fan",
-  "data-jack": "Data jack",
-  "tv-coax-outlet": "TV/coax jack",
-  "panel": "Panel placeholder",
-  "100a-subpanel": "100A subpanel",
-  "subpanel": "Subpanel placeholder",
-};
-
-const CIRCUIT_MATERIAL_RULES: Record<string, { loadMaterial: string; breaker: string; box?: string; plate?: string; extras?: string[] }> = {
-  "15a-receptacle": { loadMaterial: "15A duplex receptacle", breaker: "15A 1-pole AFCI breaker", box: "1-gang box", plate: "1-gang plate" },
-  "gfci-receptacle": { loadMaterial: "GFCI receptacle", breaker: "15A 1-pole AFCI breaker", box: "1-gang box", plate: "1-gang plate" },
-  "20a-receptacle": { loadMaterial: "20A receptacle", breaker: "20A 1-pole AFCI breaker", box: "1-gang box", plate: "1-gang plate" },
-  "exterior-weather-rated-gfci-receptacle": { loadMaterial: "Weatherproof GFCI receptacle", breaker: "15A 1-pole AFCI breaker", box: "Exterior weatherproof box", plate: "In-use weatherproof cover" },
-  "hrv": { loadMaterial: "15A receptacle", breaker: "15A 1-pole AFCI breaker", box: "1-gang box", plate: "1-gang plate" },
-  "dishwasher": { loadMaterial: "Dishwasher receptacle/disconnect point", breaker: "15A 1-pole breaker", box: "1-gang box", plate: "1-gang plate" },
-  "outdoor-receptacle": { loadMaterial: "Weatherproof GFCI receptacle", breaker: "15A 1-pole AFCI breaker", box: "Exterior weatherproof box", plate: "In-use weatherproof cover" },
-  "furnace": { loadMaterial: "Furnace service switch", breaker: "15A 1-pole breaker", box: "1-gang box", plate: "1-gang plate", extras: ["Furnace flex whip", "Flex connector"] },
-  "gas-hwt": { loadMaterial: "Gas HWT receptacle", breaker: "15A 1-pole breaker", box: "1-gang box", plate: "1-gang plate" },
-  "gas-range": { loadMaterial: "Gas range receptacle", breaker: "15A 1-pole AFCI breaker", box: "1-gang box", plate: "1-gang plate" },
-  "fridge": { loadMaterial: "15A receptacle", breaker: "15A 1-pole breaker", box: "1-gang box", plate: "1-gang plate" },
-  "heat-trace": { loadMaterial: "15A GFCI receptacle", breaker: "15A 1-pole AFCI breaker", box: "1-gang box", plate: "1-gang plate" },
-  "radon": { loadMaterial: "Radon receptacle", breaker: "15A 1-pole AFCI breaker", box: "1-gang box", plate: "1-gang plate" },
-  "microwave": { loadMaterial: "Microwave receptacle", breaker: "15A 1-pole AFCI breaker", box: "1-gang box", plate: "1-gang plate" },
-  "garage-receptacle": { loadMaterial: "Garage GFCI receptacle", breaker: "15A 1-pole GFCI breaker", box: "1-gang box", plate: "1-gang plate" },
-  "washer": { loadMaterial: "Washer receptacle", breaker: "15A 1-pole AFCI breaker", box: "1-gang box", plate: "1-gang plate" },
-  "freezer": { loadMaterial: "Freezer receptacle", breaker: "15A 1-pole AFCI breaker", box: "1-gang box", plate: "1-gang plate" },
-  "counter-receptacle": { loadMaterial: "20A counter receptacle", breaker: "20A 1-pole breaker", box: "1-gang box", plate: "1-gang plate" },
-  "baseboard-thermostat": { loadMaterial: "Line-voltage thermostat", breaker: "20A 2-pole breaker", box: "1-gang box", plate: "1-gang plate" },
-  "baseboard-heater": { loadMaterial: "Baseboard heater connection", breaker: "20A 2-pole breaker" },
-  "electric-fireplace": { loadMaterial: "Electric fireplace connection", breaker: "20A 2-pole breaker", box: "1-gang box", plate: "1-gang plate" },
-  "heat-pump": { loadMaterial: "Heat pump connection", breaker: "30A 2-pole breaker" },
-  "heat-pump-disconnect": { loadMaterial: "Heat pump disconnect", breaker: "30A 2-pole breaker" },
-  "electric-hwt": { loadMaterial: "Electric HWT connection", breaker: "30A 2-pole breaker", extras: ["HWT flex whip", "Flex connector"] },
-  "dryer-outlet": { loadMaterial: "Dryer receptacle", breaker: "30A 2-pole breaker", box: "Dryer/range box", plate: "Dryer receptacle plate" },
-  "range-outlet": { loadMaterial: "Range receptacle", breaker: "40A 2-pole breaker", box: "Dryer/range box", plate: "Range receptacle plate" },
-  "ev-charger": { loadMaterial: "Range receptacle", breaker: "50A 2-pole breaker", box: "Dryer/range box", plate: "Range receptacle plate" },
-  "100a-subpanel": { loadMaterial: "100A subpanel", breaker: "100A 2-pole breaker", extras: ["1-1/4 connector", "1-1/4 connector"] },
-};
 
 function App() {
   const [pdfUrl, setPdfUrl] = React.useState<string | null>(null);
@@ -740,6 +690,18 @@ function App() {
     }
   }
 
+  React.useEffect(() => {
+    const host = window as Window & { packOpsCustomerPlan?: () => Promise<Blob> };
+    host.packOpsCustomerPlan = async () => {
+      if (!pdfDocument) throw new Error("Load your plan PDF before attaching the customer plan.");
+      const includedIds = new Set(devices.filter((device) => device.inclusionStatus === "included").map((device) => device.id));
+      return createCustomerPlanPdf({ projectName, pdfDocument, rooms, devices,
+        connections: connections.filter((line) => includedIds.has(line.sourceDeviceId) && includedIds.has(line.targetDeviceId)),
+      }, false);
+    };
+    return () => { delete host.packOpsCustomerPlan; };
+  }, [pdfDocument, projectName, rooms, devices, connections]);
+
   async function loadProject(file: File | undefined) {
     if (!file) return;
     try {
@@ -826,6 +788,14 @@ function App() {
     if (!connectFromDeviceId || targetDevice.id === connectFromDeviceId) return;
     const source = devices.find((device) => device.id === connectFromDeviceId);
     if (!source || !canConnectDevices(source.catalogItemId, targetDevice.catalogItemId)) return;
+    if (isHeatingControlDevice(source.catalogItemId)) {
+      const heater = isHeaterDevice(source.catalogItemId) ? source : targetDevice;
+      const thermostat = isHeaterDevice(source.catalogItemId) ? targetDevice : source;
+      setConnections((current) => assignHeaterThermostat(current, heater, thermostat.id));
+      setConnectFromDeviceId(thermostat.id);
+      setSelectedDeviceId(thermostat.id);
+      return;
+    }
     const alreadyConnected = connections.some((connection) =>
       (connection.sourceDeviceId === source.id && connection.targetDeviceId === targetDevice.id) ||
       (connection.sourceDeviceId === targetDevice.id && connection.targetDeviceId === source.id),
@@ -1050,16 +1020,16 @@ function App() {
           <h2>Tools</h2>
           <div className="segmented">
             {(["pan", "room", "device", "connect", "box", "scale"] as Tool[]).map((item) => (
-              <button key={item} className={tool === item ? "active" : ""} onClick={() => changeTool(item)}>{item}</button>
+              <button key={item} className={tool === item ? "active" : ""} onClick={() => changeTool(item)}>{{ pan: "Move", room: "Rooms", device: "Devices", connect: "Connect", box: "Group box", scale: "Set scale" }[item]}</button>
             ))}
           </div>
-          <div className="button-grid">
+          {tool === "room" && <><div className="button-grid">
             <button onClick={() => void detectRooms()} disabled={!pdfDocument}>Detect Rooms</button>
             <button onClick={() => setRooms((current) => current.map((room) => room.planPageId === currentPlanPageId && room.status === "suggested" ? { ...room, status: "approved" } : room))}>Approve all</button>
             <button onClick={completeRoom} disabled={draftPolygon.length < 3}>Complete room</button>
             <button onClick={() => setDraftPolygon([])} disabled={draftPolygon.length === 0}>Clear draft</button>
           </div>
-          {detectStatus ? <p className="hint">{detectStatus}</p> : <p className="hint">Detect Rooms creates suggested pins from PDF text labels. Manual tracing stays available.</p>}
+          {detectStatus ? <p className="hint">{detectStatus}</p> : <p className="hint">Detect Rooms creates suggested pins from PDF text labels. Manual tracing stays available.</p>}</>}
           {quickConnectActive ? (
             <div className="connect-hint">
               <p>Quick connect: keep holding C and click devices to connect them.</p>
@@ -1072,7 +1042,7 @@ function App() {
           ) : null}
           {connectFromDeviceId ? (
             <div className="connect-hint">
-              <p>Connection mode is on. Click lights or switches. Multiple switches on the same light become S3/S4 automatically.</p>
+              <p>{devices.find((device) => device.id === connectFromDeviceId)?.catalogItemId === "baseboard-thermostat" ? "Click each heater this thermostat controls. The thermostat stays selected until you finish." : "Click compatible devices to connect them. Choose Finish connecting when done."}</p>
               <button onClick={finishConnecting}>Finish connecting</button>
             </div>
           ) : null}
@@ -1095,14 +1065,13 @@ function App() {
           <label>Zoom {Math.round(zoom * 100)}%
             <input type="range" min={MIN_ZOOM} max={MAX_ZOOM} step={0.05} value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
           </label>
-          <button onClick={() => {
-            setZoom(1);
-            setPan({ x: 0, y: 0 });
-          }}>Fit plan</button>
+          <button onClick={fitPlan}>Fit plan</button>
           <button onClick={() => setPan({ x: 0, y: 0 })}>Center plan</button>
-          <p className="hint">Two-finger scroll moves the plan. Pinch or hold Ctrl/Shift and scroll to zoom where you point. Drag with the hand tool, Space, or the middle mouse button. Arrow keys move; Shift moves faster.</p>
+          <details><summary>Moving around & shortcuts</summary><p className="hint">Two-finger scroll moves the plan. Pinch or hold Ctrl/Shift and scroll to zoom where you point. Drag with the hand tool, Space, or the middle mouse button. Arrow keys move; Shift moves faster.</p>
           <p className="hint">Shortcuts: hold C and click devices to connect; hold G and click devices to group them in the same box.</p>
-          <h2>Scale</h2>
+          </details>
+          <h2>Scale {currentPlanScale ? "✓" : "— needed for wire"}</h2>
+          {tool === "scale" ? <>
           <p className="hint">Use the Scale tool, click both ends of a known dimension, enter the real length, then save it.</p>
           <label>Known length, feet
             <input type="number" min={0.1} step={0.1} value={knownScaleLengthFeet} onChange={(event) => setKnownScaleLengthFeet(Math.max(0.1, Number(event.target.value) || 0.1))} />
@@ -1112,9 +1081,10 @@ function App() {
             {currentPlanScale ? `Scale set: ${currentPlanScale.knownLengthFeet} ft = ${Math.round(distance(currentPlanScale.points[0], currentPlanScale.points[1]))} plan units.` : `${scaleDraft.length}/2 scale points selected.`}
           </p>
 
-          <h2>Device Catalog</h2>
+          </> : <button onClick={() => changeTool("scale")}>{currentPlanScale ? "Change page scale" : "Set page scale"}</button>}
+          <details><summary>Devices & floor risers</summary>
           <p className="hint">Pick devices from the floating tray over the plan. Symbols are estimating symbols, not legally official code symbols.</p>
-          <p className="hint">Place two Floor risers, select one and start a riser link, then select the matching riser and link it. The pair defaults to one 3m floor jump.</p>
+          <p className="hint">Place two Floor risers, select one and start a riser link, then select the matching riser and link it. The pair defaults to one 3m floor jump.</p></details>
         </aside>
 
         <section ref={viewerRef} className={`viewer ${tool === "pan" || spacePanActive ? "pan-ready" : ""} ${isPanning ? "panning" : ""}`} {...navigation} tabIndex={0} aria-label="Plan viewer">
@@ -1291,7 +1261,10 @@ function App() {
                   {pageDevices.filter((device) => !collapsedBoxDeviceIds.has(device.id)).map((device) => <g key={device.id} transform={`translate(${device.position.x} ${device.position.y}) scale(${symbolScale * DEVICE_SYMBOL_SCALE})`} onClick={(event) => {
                     event.stopPropagation();
                     clickDevice(device);
-                  }}><PlanSymbol id={device.catalogItemId} selected={device.id === selectedDeviceId} /></g>)}
+                  }}><PlanSymbol id={device.catalogItemId} selected={device.id === selectedDeviceId} />
+                    {isHeaterDevice(device.catalogItemId) && <text y={29} textAnchor="middle" fontSize={10} fill="#0a4f45" stroke="white" strokeWidth={3} paintOrder="stroke">{device.heaterWattage ? `${device.heaterWattage} W` : "Set watts"}</text>}
+                    {device.catalogItemId === "baseboard-thermostat" && <text y={29} textAnchor="middle" fontSize={10} fill="#0a4f45">T{devices.filter((item) => item.catalogItemId === "baseboard-thermostat").findIndex((item) => item.id === device.id) + 1}</text>}
+                  </g>)}
                 </svg>
               </div>
             </div>
@@ -1326,7 +1299,39 @@ function App() {
             </div>
           ) : selectedDevice ? (
             <div className="form">
-              <label>Device type<select value={selectedDevice.catalogItemId} onChange={(event) => setDevices((current) => current.map((device) => device.id === selectedDevice.id ? { ...device, catalogItemId: event.target.value } : device))}>{DEVICE_CATALOG.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+              <label>Device type<select value={selectedDevice.catalogItemId} onChange={(event) => {
+                const nextType = event.target.value;
+                setDevices((current) => current.map((device) => device.id === selectedDevice.id ? { ...device, catalogItemId: nextType } : device));
+                setConnections((current) => current.filter((line) => {
+                  const otherId = line.sourceDeviceId === selectedDevice.id ? line.targetDeviceId : line.targetDeviceId === selectedDevice.id ? line.sourceDeviceId : null;
+                  const other = devices.find((device) => device.id === otherId);
+                  return !otherId || Boolean(other && canConnectDevices(nextType, other.catalogItemId));
+                }));
+              }}>{DEVICE_CATALOG.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+              {isHeaterDevice(selectedDevice.catalogItemId) && <>
+                <label>Heater wattage (W, up to 2,000)<input type="number" min={1} max={2000} step={1} placeholder="Set wattage" value={selectedDevice.heaterWattage ?? ""} onChange={(event) => {
+                  const value = event.target.value;
+                  setDevices((current) => current.map((device) => {
+                    if (device.id !== selectedDevice.id) return device;
+                    const { heaterWattage, ...rest } = device;
+                    return value === "" ? rest : { ...rest, heaterWattage: clamp(Math.round(Number(value)) || 1, 1, 2000) };
+                  }));
+                }} /></label>
+                <label>Controlled by thermostat<select value={connections.flatMap((line) => line.sourceDeviceId === selectedDevice.id ? [line.targetDeviceId] : line.targetDeviceId === selectedDevice.id ? [line.sourceDeviceId] : []).find((id) => devices.some((device) => device.id === id && device.catalogItemId === "baseboard-thermostat")) ?? ""} onChange={(event) => setConnections((current) => assignHeaterThermostat(current, selectedDevice, event.target.value))}>
+                  <option value="">Not connected</option>
+                  {devices.filter((device) => device.catalogItemId === "baseboard-thermostat").map((device, index) => <option key={device.id} value={device.id}>Thermostat {index + 1} · page {device.pdfPageNumber}{device.notes ? ` · ${device.notes}` : ""}{device.inclusionStatus === "excluded" ? " (excluded)" : ""}</option>)}
+                </select></label>
+                <p className="hint">Changing BBH to wall fan keeps its thermostat and wattage. Set the matching materials in Device materials.</p>
+              </>}
+              {selectedDevice.catalogItemId === "baseboard-thermostat" && <div className="device-material-card">
+                <strong>Connected heaters</strong>
+                {connectedBaseboardHeaters(selectedDevice, devices, connections).map((heater) => <div key={heater.id}>
+                  <button onClick={() => setSelectedDeviceId(heater.id)}>{isHeaterDevice(heater.catalogItemId) && heater.catalogItemId === "wall-fan-heater" ? "Wall fan" : "BBH"} · {heater.heaterWattage ? `${heater.heaterWattage} W` : "Wattage not set"}{heater.notes ? ` · ${heater.notes}` : ""}</button>
+                  <button onClick={() => setConnections((current) => assignHeaterThermostat(current, heater, ""))}>Disconnect</button>
+                </div>)}
+                <p className="hint">{connectedBaseboardHeaters(selectedDevice, devices, connections).length} heaters · {connectedBaseboardHeaters(selectedDevice, devices, connections).reduce((sum, heater) => sum + (heater.heaterWattage ?? 0), 0)} W entered. Wattage is for tracking; cable estimates keep the existing settings.</p>
+              </div>}
+
               <label>Status<select value={selectedDevice.inclusionStatus} onChange={(event) => setDevices((current) => current.map((device) => device.id === selectedDevice.id ? { ...device, inclusionStatus: event.target.value as DeviceInclusionStatus } : device))}><option value="included">Included</option><option value="optional">Optional</option><option value="excluded">Excluded</option></select></label>
               {selectedDevice.catalogItemId === "floor-riser" ? (
                 <>
@@ -1357,7 +1362,7 @@ function App() {
               <label>Notes<textarea value={selectedDevice.notes ?? ""} onChange={(event) => setDevices((current) => current.map((device) => device.id === selectedDevice.id ? { ...device, notes: event.target.value } : device))} /></label>
               {canStartConnection(selectedDevice.catalogItemId) ? (
                 <button onClick={startDeviceConnection}>
-                  {isSwitchDevice(selectedDevice.catalogItemId) ? "Connect to light" : "Connect lighting/switches"}
+                  {selectedDevice.catalogItemId === "baseboard-thermostat" ? "Connect heaters on plan" : isHeaterDevice(selectedDevice.catalogItemId) ? "Connect to thermostat" : isSwitchDevice(selectedDevice.catalogItemId) ? "Connect to light" : "Connect lighting/switches"}
                 </button>
               ) : null}
               {isBoxDevice(selectedDevice.catalogItemId) ? (
@@ -1384,7 +1389,7 @@ function App() {
           ) : <p className="hint">Select a room pin, room polygon, or device symbol.</p>}
 
           <h2>Takeoff</h2>
-          <p className="hint">Lighting connections: {connections.length}</p>
+          <p className="hint">Device connections: {connections.length}</p>
           <p className="hint">Box groups: {boxGroups.filter((group) => group.deviceIds.length > 1).length}</p>
           <div className="wire-card">
             <strong>Wire Needed</strong>
@@ -1447,7 +1452,7 @@ function App() {
             {DEVICE_CATALOG.map((item) => ({ item, count: devices.filter((device) => device.catalogItemId === item.id && device.inclusionStatus !== "excluded").length })).filter((row) => row.count > 0).map((row) => <div key={row.item.id}><span>{row.item.name}</span><strong>{row.count}</strong></div>)}
           </div>
 
-          <h2>Materials</h2>
+          <h2>Calculated wire</h2><p className="hint">All other materials come from your saved Pack Ops assignments.</p>
           {materialGroups.length ? materialGroups.map((group) => (
             <section key={group.title} className="material-section">
               <h3>{group.title}</h3>
@@ -1477,7 +1482,7 @@ const PDF_DARK = [23, 32, 51] as const;
 const PDF_MUTED = [93, 105, 120] as const;
 const PDF_LINE = [216, 226, 223] as const;
 
-async function createCustomerPlanPdf(input: CustomerPlanPdfInput) {
+async function createCustomerPlanPdf(input: CustomerPlanPdfInput, download = true): Promise<Blob> {
   const doc = new jsPDF({ unit: "pt", format: "letter", orientation: "portrait", compress: true });
   const includedDevices = input.devices.filter(
     (device) => device.inclusionStatus === "included" && device.catalogItemId !== "floor-riser",
@@ -1580,7 +1585,7 @@ async function createCustomerPlanPdf(input: CustomerPlanPdfInput) {
     subject: "Customer electrical plan overview",
     creator: "Pack Ops",
   });
-  if (window.location.hostname === "localhost") {
+  if (download && window.location.hostname === "localhost") {
     document.querySelector("#customer-pdf-preview")?.remove();
     const previewLink = document.createElement("a");
     previewLink.id = "customer-pdf-preview";
@@ -1598,7 +1603,8 @@ async function createCustomerPlanPdf(input: CustomerPlanPdfInput) {
     previewLink.style.fontWeight = "700";
     document.body.append(previewLink);
   }
-  doc.save(`${safeFileBaseName(input.projectName || "electrical-plan")}.customer-plan.pdf`);
+  if (download) doc.save(`${safeFileBaseName(input.projectName || "electrical-plan")}.customer-plan.pdf`);
+  return doc.output("blob");
 }
 
 function drawCustomerPdfHeader(doc: jsPDF, projectName: string, title: string, preparedDate: string): number {
@@ -2205,14 +2211,14 @@ function canConnectDevices(sourceCatalogItemId: string, targetCatalogItemId: str
     (sourceIsLight && targetIsLight) ||
     (sourceIsLightingReceptacle && (targetIsLight || targetIsSwitch || targetIsLightingReceptacle)) ||
     (targetIsLightingReceptacle && (sourceIsLight || sourceIsSwitch || sourceIsLightingReceptacle)) ||
-    (sourceIsHeatingControl && targetIsHeatingControl && sourceCatalogItemId !== targetCatalogItemId)
+    (sourceIsHeatingControl && targetIsHeatingControl && (sourceCatalogItemId === "baseboard-thermostat") !== (targetCatalogItemId === "baseboard-thermostat"))
   );
 }
 
 function nextConnectionAnchorId(source: ElectricalDevice, target: ElectricalDevice): string {
   if (isLightOrFanDevice(source.catalogItemId) && isAutoSwitchDevice(target.catalogItemId)) return source.id;
-  if (source.catalogItemId === "baseboard-thermostat" && target.catalogItemId === "baseboard-heater") return source.id;
-  if (target.catalogItemId === "baseboard-thermostat" && source.catalogItemId === "baseboard-heater") return target.id;
+  if (source.catalogItemId === "baseboard-thermostat" && isHeaterDevice(target.catalogItemId)) return source.id;
+  if (target.catalogItemId === "baseboard-thermostat" && isHeaterDevice(source.catalogItemId)) return target.id;
   return target.id;
 }
 
@@ -2232,12 +2238,21 @@ function isLightingCircuitDevice(catalogItemId: string): boolean {
   return isSwitchDevice(catalogItemId) || isLightOrFanDevice(catalogItemId) || isLightingCircuitReceptacle(catalogItemId);
 }
 
+function isHeaterDevice(id: string): boolean {
+  return id === "baseboard-heater" || id === "wall-fan-heater";
+}
+
+function assignHeaterThermostat(connections: DeviceConnection[], heater: ElectricalDevice, thermostatId: string): DeviceConnection[] {
+  const remaining = connections.filter((line) => line.sourceDeviceId !== heater.id && line.targetDeviceId !== heater.id);
+  return thermostatId ? [...remaining, { id: crypto.randomUUID(), planPageId: heater.planPageId, pdfPageNumber: heater.pdfPageNumber, sourceDeviceId: thermostatId, targetDeviceId: heater.id }] : remaining;
+}
+
 function isHeatingControlDevice(catalogItemId: string): boolean {
-  return catalogItemId === "baseboard-thermostat" || catalogItemId === "baseboard-heater";
+  return catalogItemId === "baseboard-thermostat" || isHeaterDevice(catalogItemId);
 }
 
 function isBaseboardHeatingDevice(catalogItemId: string): boolean {
-  return catalogItemId === "baseboard-thermostat" || catalogItemId === "baseboard-heater";
+  return catalogItemId === "baseboard-thermostat" || isHeaterDevice(catalogItemId);
 }
 
 function isDeviceFedByLightingCircuit(device: ElectricalDevice, devices: ElectricalDevice[], connections: DeviceConnection[]): boolean {
@@ -2606,75 +2621,11 @@ function materialSummaryForDevice(
   circuitRuns: CircuitRun[],
   wireBreakdown: WireBreakdownLine[],
 ): DeviceMaterialSummary {
-  const catalogItem = DEVICE_CATALOG.find((item) => item.id === device.catalogItemId);
-  const materials: MaterialLine[] = [];
-  const details: string[] = [];
-  const add = (item: string | undefined, quantity = 1) => {
-    if (!item || quantity <= 0) return;
-    const existing = materials.find((line) => line.item === item);
-    if (existing) existing.quantity += quantity;
-    else materials.push({ item, quantity });
-  };
-  const boxGroup = boxGroups.find((group) => group.deviceIds.includes(device.id) && group.deviceIds.length > 1);
-  const circuitRule = CIRCUIT_MATERIAL_RULES[device.catalogItemId];
-
-  if (circuitRule) {
-    add(circuitRule.loadMaterial);
-    if (boxGroup && isBoxDevice(device.catalogItemId)) {
-      add(`${boxGroup.deviceIds.length}-gang box`);
-      add(`${boxGroup.deviceIds.length}-gang plate`);
-    } else {
-      add(circuitRule.box);
-      add(circuitRule.plate);
-    }
-    circuitRule.extras?.forEach((extra) => add(extra));
-  } else {
-    add(DEVICE_ONLY_MATERIALS[device.catalogItemId]);
-    if (boxGroup && isBoxDevice(device.catalogItemId)) {
-      add(`${boxGroup.deviceIds.length}-gang box`);
-      add(`${boxGroup.deviceIds.length}-gang plate`);
-    } else if (isBoxDevice(device.catalogItemId)) {
-      add("1-gang box");
-      add("1-gang plate");
-    }
-  }
-
-  const lightingFed = isLightingCircuitDevice(device.catalogItemId) || isDeviceFedByLightingCircuit(device, devices, connections);
-  const circuitRun = circuitRuns.find((run) => run.deviceIds.includes(device.id));
-  const wireLine = wireBreakdown.find((line) => line.deviceIds.includes(device.id));
-  if (lightingFed) {
-    add("2c14 wire (lighting circuit)", 1);
-    add("15A 1-pole AFCI breaker - lighting", 1);
-    details.push(`Circuit: lighting branch, ${lightingLoadAmps(device.catalogItemId).toFixed(1)}A fixture load.`);
-  } else if (circuitRun) {
-    add(`${normalizeWireType(circuitRun.wireType)} wire run`, 1);
-    const sourcePanel = devices.find((item) => item.id === circuitRun.deviceIds[0]);
-    if (sourcePanel) details.push(`Fed from: ${panelName(sourcePanel)}.`);
-    details.push(`Circuit: ${circuitRun.label}, ${normalizeWireType(circuitRun.wireType)}.`);
-  }
-
-  if (wireLine) {
-    details.push(`Wire source: ${wireLine.source}, ${wireLine.wireType}.`);
-    details.push(`Run: ${formatMeters(wireLine.planFeet)} + vertical/allowance ${formatMeters(wireLine.allowanceFeet)} = ${formatMeters(wireLine.totalFeet, true)} with waste.`);
-  }
-
-  if (circuitRule && !lightingFed) {
-    add(circuitRule.breaker);
-  }
-
-  const connectedDevices = connections
-    .map((connection) => connection.sourceDeviceId === device.id ? connection.targetDeviceId : connection.targetDeviceId === device.id ? connection.sourceDeviceId : null)
-    .filter((id): id is string => Boolean(id))
-    .map((id) => devices.find((item) => item.id === id))
-    .filter((item): item is ElectricalDevice => Boolean(item));
-  if (connectedDevices.length) {
-    details.push(`Connected to: ${connectedDevices.map((item) => DEVICE_CATALOG.find((catalogItem) => catalogItem.id === item.catalogItemId)?.name ?? item.catalogItemId).join(", ")}.`);
-  }
-
+  const run = circuitRuns.find((item) => item.deviceIds.includes(device.id));
   return {
-    title: `${catalogItem?.name ?? "Device"} materials`,
-    details: details.length ? details : ["No circuit connection assigned yet."],
-    materials: materials.sort((a, b) => materialCategoryRank(a.item) - materialCategoryRank(b.item) || a.item.localeCompare(b.item)),
+    title: "Material source",
+    details: ["Uses your saved Pack Ops device materials. Review materials in Pack Ops to see quantities.", ...(run ? [`Estimated cable: ${run.wireType}.`] : [])],
+    materials: [],
   };
 }
 
@@ -2792,60 +2743,9 @@ function normalizeWireType(wireType: string): string {
 }
 
 function calculateMaterialTakeoff(devices: ElectricalDevice[], boxGroups: ElectricalBoxGroup[], connections: DeviceConnection[], lightingBreakerCount: number): MaterialLine[] {
-  const quantities = new Map<string, number>();
-  const includedDevices = devices.filter((device) => device.inclusionStatus !== "excluded");
-  const groupedBoxDeviceIds = new Set<string>();
-
-  const add = (item: string | undefined, quantity = 1) => {
-    if (!item || quantity <= 0) return;
-    quantities.set(item, (quantities.get(item) ?? 0) + quantity);
-  };
-
-  for (const group of boxGroups.filter((boxGroup) => boxGroup.deviceIds.length > 1)) {
-    const groupDevices = group.deviceIds
-      .map((id) => includedDevices.find((device) => device.id === id))
-      .filter((device): device is ElectricalDevice => Boolean(device))
-      .filter((device) => isBoxDevice(device.catalogItemId));
-    if (groupDevices.length < 2) continue;
-    groupDevices.forEach((device) => groupedBoxDeviceIds.add(device.id));
-    add(`${groupDevices.length}-gang box`);
-    add(`${groupDevices.length}-gang plate`);
-  }
-
-  for (const device of includedDevices) {
-    const circuitRule = CIRCUIT_MATERIAL_RULES[device.catalogItemId];
-    if (circuitRule) {
-      add(circuitRule.loadMaterial);
-      if (!groupedBoxDeviceIds.has(device.id)) {
-        add(circuitRule.box);
-        add(circuitRule.plate);
-      }
-      circuitRule.extras?.forEach((extra) => add(extra));
-      continue;
-    }
-
-    add(DEVICE_ONLY_MATERIALS[device.catalogItemId]);
-    if (isBoxDevice(device.catalogItemId) && !groupedBoxDeviceIds.has(device.id)) {
-      add("1-gang box");
-      add("1-gang plate");
-    }
-  }
-
-  for (const rule of CIRCUIT_WIRE_RULES) {
-    const circuitRule = CIRCUIT_MATERIAL_RULES[rule.catalogItemId];
-    if (!circuitRule) continue;
-    add(circuitRule.breaker, countBreakersForRule(includedDevices, connections, rule));
-  }
-
-  add("15A 1-pole AFCI breaker - lighting", lightingBreakerCount);
-
-  if (includedDevices.some((device) => isLifeSafetyInterconnectDevice(device.catalogItemId))) {
-    add("15A 1-pole AFCI breaker");
-  }
-
-  return [...quantities.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([item, quantity]) => ({ item, quantity }));
+  // Device materials belong to the user's saved Pack Ops recipes. The editor
+  // contributes measured wire only; never manufacture catalog materials here.
+  return [];
 }
 
 function verticalAllowanceForDevice(catalogItemId: string): number {
@@ -2919,7 +2819,7 @@ function countBreakersForRule(
   }
   if (rule.catalogItemId === "baseboard-heater") {
     return devices.filter((device) =>
-      device.catalogItemId === "baseboard-heater" &&
+      isHeaterDevice(device.catalogItemId) &&
       device.inclusionStatus !== "excluded" &&
       !hasConnectedBaseboardThermostat(device, devices, connections),
     ).length;
@@ -2998,7 +2898,7 @@ function buildBaseboardHeatingRuns(devices: ElectricalDevice[], connections: Dev
   const runs: CircuitRun[] = [];
 
   thermostats.forEach((thermostat, index) => {
-    const heaters = connectedBaseboardHeaters(thermostat, includedDevices, connections);
+    const heaters = connectedBaseboardHeaters(thermostat, includedDevices, connections).filter((heater) => !connectedHeaterIds.has(heater.id));
     heaters.forEach((heater) => connectedHeaterIds.add(heater.id));
     const panel = sourcePanelForLoad(thermostat, panels);
     if (!panel) return;
@@ -3015,7 +2915,7 @@ function buildBaseboardHeatingRuns(devices: ElectricalDevice[], connections: Dev
   });
 
   includedDevices
-    .filter((device) => device.catalogItemId === "baseboard-heater" && !connectedHeaterIds.has(device.id))
+    .filter((device) => isHeaterDevice(device.catalogItemId) && !connectedHeaterIds.has(device.id))
     .forEach((heater, index) => {
       const panel = sourcePanelForLoad(heater, panels);
       if (!panel) return;
@@ -3038,7 +2938,7 @@ function connectedBaseboardHeaters(thermostat: ElectricalDevice, devices: Electr
     .map((connection) => connection.sourceDeviceId === thermostat.id ? connection.targetDeviceId : connection.targetDeviceId === thermostat.id ? connection.sourceDeviceId : null)
     .filter((id): id is string => Boolean(id))
     .map((id) => devices.find((device) => device.id === id))
-    .filter((device): device is ElectricalDevice => device !== undefined && device.catalogItemId === "baseboard-heater" && device.inclusionStatus !== "excluded");
+    .filter((device): device is ElectricalDevice => device !== undefined && isHeaterDevice(device.catalogItemId) && device.inclusionStatus !== "excluded");
 }
 
 function hasConnectedBaseboardThermostat(heater: ElectricalDevice, devices: ElectricalDevice[], connections: DeviceConnection[]): boolean {
@@ -3411,7 +3311,10 @@ function parseSavedProject(value: unknown): SavedProjectFile {
       pan: { x: 0, y: 0 },
     },
     rooms: Array.isArray(value.rooms) ? value.rooms as Room[] : [],
-    devices: Array.isArray(value.devices) ? value.devices as ElectricalDevice[] : [],
+    devices: Array.isArray(value.devices) ? (value.devices as ElectricalDevice[]).map((device) => {
+      const { heaterWattage, ...rest } = device;
+      return Number.isFinite(heaterWattage) && Number(heaterWattage) > 0 ? { ...rest, heaterWattage: clamp(Math.round(Number(heaterWattage)), 1, 2000) } : rest;
+    }) : [],
     connections: Array.isArray(value.connections) ? value.connections as DeviceConnection[] : [],
     boxGroups: Array.isArray(value.boxGroups) ? value.boxGroups as ElectricalBoxGroup[] : [],
     planScales: Array.isArray(value.planScales) ? value.planScales as PlanScale[] : [],
@@ -3479,5 +3382,5 @@ if (root) ReactDOM.createRoot(root).render(
   </React.StrictMode>
 );
 
-export { parseSavedProject, App, feetPerPlanUnitForPage, rightAngleDistance, estimateLightingWire, estimateCircuitRunWire, buildCircuitRuns, buildWireBreakdown, summarizeWireBreakdown, withWireMaterialLines, calculateMaterialTakeoff, estimateLabour, isDifficultWireType, boxTakeoff };
+export { canConnectDevices, assignHeaterThermostat, nextConnectionAnchorId, parseSavedProject, App, feetPerPlanUnitForPage, rightAngleDistance, estimateLightingWire, estimateCircuitRunWire, buildCircuitRuns, buildWireBreakdown, summarizeWireBreakdown, withWireMaterialLines, calculateMaterialTakeoff, estimateLabour, isDifficultWireType, boxTakeoff };
 export type { ElectricalDevice, DeviceConnection, PlanScale, CircuitRun, WireBreakdownLine };

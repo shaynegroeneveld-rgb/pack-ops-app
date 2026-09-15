@@ -24,6 +24,7 @@ await db.exec(
     "utf8",
   ),
 );
+await db.exec(fs.readFileSync("supabase/migrations/0072_ebh_review_create_material.sql", "utf8"));
 const org = "00000000-0000-0000-0000-000000000001";
 await db.query(`insert into orgs values($1);`, [org]);
 await db.query(
@@ -242,6 +243,25 @@ await test("a newer held invoice prevents an older automatic price", async () =>
     ),
     30,
   );
+});
+await test("review fills a missing catalog cost", async () => {
+  await db.query(`insert into catalog_items(org_id,name,sku,unit,cost_price) values($1,'Missing cost','NULLCOST','each',NULL)`, [org]);
+  const h = (await db.query(`insert into ebh_price_history(org_id,invoice_number,invoice_date,line_number,supplier_sku,description,unit,supplier_price,price_basis,new_cost,catalog_item_id,status,reason) select $1,'NULLINV',current_date,1,'NULLCOST','Missing cost','each',10,1,11.2,id,'review','manual_price_change' from catalog_items where sku='NULLCOST' returning id`,[org])).rows[0];
+  await db.query('select ebh_review_price($1,true,NULL)', [h.id]);
+  assert.equal(Number((await db.query("select cost_price from catalog_items where sku='NULLCOST'")).rows[0].cost_price), 11.2);
+});
+await test("explicit create action creates a priced material once and audits the review", async () => {
+  const h = (await db.query(`insert into ebh_price_history(org_id,invoice_number,invoice_date,line_number,supplier_sku,description,unit,supplier_price,price_basis,new_cost,status,reason) values($1,'REVIEWNEW',current_date,1,'NEWREVIEW','Distinct reviewed material','each',10,1,11.2,'review','possible_existing_material') returning id`, [org])).rows[0];
+  const id = (await db.query('select ebh_review_create_material($1) as id',[h.id])).rows[0].id;
+  const c = (await db.query('select * from catalog_items where id=$1',[id])).rows[0];
+  assert.equal(Number(c.cost_price),11.2); assert.equal(c.unit_price,null);
+  assert.equal((await db.query('select status from ebh_price_history where id=$1',[h.id])).rows[0].status,'approved');
+  await assert.rejects(() => db.query('select ebh_review_create_material($1)',[h.id]), /already_reviewed/);
+});
+await test("create action refuses an exact existing SKU without changing review", async () => {
+  const h = (await db.query(`insert into ebh_price_history(org_id,invoice_number,invoice_date,line_number,supplier_sku,description,unit,supplier_price,price_basis,new_cost,status,reason) values($1,'REVIEWDUP',current_date,1,'NEWREVIEW','Another description','each',10,1,11.2,'review','possible_existing_material') returning id`, [org])).rows[0];
+  await assert.rejects(() => db.query('select ebh_review_create_material($1)',[h.id]), /material_already_exists/);
+  assert.equal((await db.query('select status from ebh_price_history where id=$1',[h.id])).rows[0].status,'review');
 });
 console.log(`${passed} database checks passed`);
 await db.close();

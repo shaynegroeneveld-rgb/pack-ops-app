@@ -123,12 +123,13 @@ export function AutomaticPricesPanel({
   async function reviewPrice(
     row: { id: string; catalog_item_id: string | null },
     usePrice: boolean,
+    createMaterial = false,
   ) {
     setBusy(row.id);
     setFileError(null);
     try {
       let cost: number | null = null;
-      if (usePrice) {
+      if (usePrice && !createMaterial) {
         const { data, error } = await db
           .from("catalog_items")
           .select("cost_price")
@@ -138,7 +139,7 @@ export function AutomaticPricesPanel({
         if (error) throw error;
         cost = data.cost_price;
       }
-      const { error } = await db.rpc("ebh_review_price", {
+      const { error } = createMaterial ? await db.rpc("ebh_review_create_material", { p_id: row.id }) : await db.rpc("ebh_review_price", {
         p_id: row.id,
         p_use_price: usePrice,
         p_expected_cost: cost,
@@ -149,10 +150,20 @@ export function AutomaticPricesPanel({
         history.refetch(),
         queryClient.invalidateQueries({ queryKey: ["materials", "catalog"] }),
       ]);
-    } catch {
-      setFileError(
-        "Could not apply this review. Refresh and check the material and invoice again.",
-      );
+    } catch (error) {
+      const message = error && typeof error === "object" && "message" in error ? String(error.message) : "";
+      const explanations: Record<string, string> = {
+        material_already_exists: "This material already exists. Use Find material to check its SKU or aliases; no duplicate was created.",
+        material_already_linked: "This invoice line is already linked to a material. Refresh and use its new cost.",
+        cost_changed_refresh_first: "The cost changed while you were reviewing. Refresh and check it before trying again.",
+        newer_invoice_exists: "A newer invoice exists for this material. Review its price instead.",
+        invoice_too_old: "This invoice is more than 30 days old. Use a newer invoice price.",
+        material_or_unit_changed: "The material is inactive or its unit differs from the invoice. Check the material before applying the price.",
+        already_reviewed: "This line has already been reviewed. Refresh to see its current status.",
+        invalid_invoice_material: "The invoice needs a valid description, unit and price before creating a material.",
+        not_allowed: "Only an owner or office user can approve material prices.",
+      };
+      setFileError(explanations[message] ?? "Could not save this review. Check your connection and try again.");
     } finally {
       setBusy(null);
     }
@@ -169,7 +180,7 @@ export function AutomaticPricesPanel({
   const cfg = data.cfg;
   const stale =
     cfg.last_completed_at &&
-    Date.now() - Date.parse(cfg.last_completed_at) > 2 * 3600000;
+    Date.now() - Date.parse(cfg.last_completed_at) > 36 * 3600000;
   const state = cfg.last_error?.includes("gmail_reconnect")
     ? "Reconnect Gmail in Finance → Review → Document Inbox"
     : cfg.last_error
@@ -178,7 +189,7 @@ export function AutomaticPricesPanel({
         ? "Automatic prices paused"
         : stale
           ? "Price checks are overdue"
-          : "E.B. invoice prices · Automatic";
+          : "E.B. invoice prices · Daily";
   return (
     <section
       aria-label="Automatic material prices"
@@ -202,7 +213,7 @@ export function AutomaticPricesPanel({
         <div>
           <strong>{state}</strong>
           <div style={{ fontSize: 13, color: "#5b6475", marginTop: 4 }}>
-            Supplier cost + 12% · Checks every 15 minutes ·{" "}
+            Supplier cost + 12% · Checks once daily ·{" "}
             {cfg.last_completed_at
               ? `Last checked ${new Date(cfg.last_completed_at).toLocaleString()}`
               : "First check pending"}
@@ -322,6 +333,7 @@ export function AutomaticPricesPanel({
                   </button>
                   {row.status === "review" && (
                     <>
+                      {!row.catalog_item_id && row.new_cost > 0 && ["each", "m"].includes(row.unit) && <button disabled={busy !== null} onClick={() => void reviewPrice(row, true, true)}>Create material · {money(row.new_cost)} cost</button>}
                       {row.catalog_item_id &&
                         ![
                           "unit_mismatch",
@@ -333,14 +345,14 @@ export function AutomaticPricesPanel({
                             disabled={busy !== null}
                             onClick={() => void reviewPrice(row, true)}
                           >
-                            Use {money(row.new_cost)} cost
+                            {row.old_cost === null ? "Set missing cost to " : "Update cost to "}{money(row.new_cost)}
                           </button>
                         )}
                       <button
                         disabled={busy !== null}
                         onClick={() => void reviewPrice(row, false)}
                       >
-                        Keep existing cost
+                        {row.catalog_item_id ? "Keep existing cost" : "Skip this price"}
                       </button>
                     </>
                   )}

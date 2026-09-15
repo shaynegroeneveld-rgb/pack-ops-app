@@ -530,6 +530,11 @@ function AuthenticatedTakeoffPage() {
   const [isQuotePanelOpen, setIsQuotePanelOpen] = useState(false);
   const [quoteDraft, setQuoteDraft] = useState<QuoteDraft>(emptyQuoteDraft);
   const [createdQuote, setCreatedQuote] = useState<QuoteView | null>(null);
+  const [includeCustomerPlan, setIncludeCustomerPlan] = useState(true);
+  const [isBuildingQuote, setIsBuildingQuote] = useState(false);
+  const quoteBuildLock = useRef(false);
+  const [pendingPlan, setPendingPlan] = useState<{quoteId: QuoteView["id"]; file: File} | null>(null);
+
   const [isAutomationOpen, setIsAutomationOpen] = useState(false);
   const [automationFile, setAutomationFile] = useState<File | null>(null);
   const [automationResult, setAutomationResult] = useState<AutomationAnalysisResult | null>(null);
@@ -541,7 +546,7 @@ function AuthenticatedTakeoffPage() {
   const [isDeviceRecipesOpen, setIsDeviceRecipesOpen] = useState(false);
   const [selectedRecipeDeviceId, setSelectedRecipeDeviceId] = useState(DEVICE_CATALOG[0]?.id ?? "");
   const { catalogQuery } = useMaterialsSlice(currentUser!);
-  const { builderResourcesQuery, createQuote } = useQuotesSlice(currentUser!);
+  const { builderResourcesQuery, createQuote, uploadQuoteAttachment } = useQuotesSlice(currentUser!);
   const catalogItems = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
   const builderResources = builderResourcesQuery.data ?? null;
   const pricedCatalogItems = useMemo(
@@ -810,12 +815,13 @@ function AuthenticatedTakeoffPage() {
     setQuoteDraft((current) => ({
       ...current,
       title,
-      customerName: current.customerName || current.companyName || "Takeoff customer",
+      customerName: current.customerName || current.companyName,
     }));
     setIsQuotePanelOpen(true);
   }
 
   async function handleCreateQuote() {
+    if (quoteBuildLock.current || createdQuote || pendingPlan) return;
     const materialMarkup = Number(quoteDraft.materialMarkup);
     const laborCostRate = Number(quoteDraft.laborCostRate);
     const laborSellRate = Number(quoteDraft.laborSellRate);
@@ -831,11 +837,15 @@ function AuthenticatedTakeoffPage() {
       return;
     }
 
-    if (![materialMarkup, laborCostRate, laborSellRate, taxRate].every(Number.isFinite)) {
+    if (![materialMarkup, laborCostRate, laborSellRate, taxRate].every((value) => Number.isFinite(value) && value >= 0)) {
       setReviewError("Markup, labour rates, and tax rate must be valid numbers.");
       return;
     }
 
+    if (matchedReviewLines.some((line) => line.quantity > 0 && (!line.match || line.match.costPrice === null))) {
+      setReviewError("Match and price every material before building the quote.");
+      return;
+    }
     const labourLines = reviewLabour;
     const lineItems = buildQuoteLineItems({
       materialLines: matchedReviewLines,
@@ -850,7 +860,16 @@ function AuthenticatedTakeoffPage() {
       return;
     }
 
+    quoteBuildLock.current = true;
+    setIsBuildingQuote(true);
     try {
+      let planFile: File | null = null;
+      if (includeCustomerPlan) {
+        const editor = iframeRef.current?.contentWindow as (Window & {packOpsCustomerPlan?: () => Promise<Blob>}) | null;
+        if (!editor?.packOpsCustomerPlan) throw new Error("The takeoff plan is still loading. Try again shortly.");
+        const pdf = await editor.packOpsCustomerPlan();
+        planFile = new File([pdf], `${slugifyFileName(quoteDraft.title) || "takeoff"}.customer-plan.pdf`, {type: "application/pdf"});
+      }
       const quote = await createQuote.mutateAsync({
         customerName: quoteDraft.customerName,
         companyName: quoteDraft.companyName || null,
@@ -860,7 +879,7 @@ function AuthenticatedTakeoffPage() {
         siteAddress: quoteDraft.siteAddress || null,
         title: quoteDraft.title,
         description: "Generated from the electrical takeoff material and labour review.",
-        notes: "Created from Electrical Takeoff. Review unmatched/zero-dollar lines before sending.",
+        notes: "Created from the reviewed Electrical Takeoff materials and labour. Customer plan attachment is a snapshot at quote creation.",
         laborCostRate,
         laborSellRate,
         taxRate,
@@ -868,10 +887,40 @@ function AuthenticatedTakeoffPage() {
         lineItems,
       });
       setCreatedQuote(quote);
-      setReviewError(`Created draft quote ${quote.number}. Open Quotes to review pricing and customer PDF.`);
+      if (planFile) {
+        setPendingPlan({quoteId: quote.id, file: planFile});
+        try {
+          await uploadQuoteAttachment.mutateAsync({quoteId: quote.id, file: planFile});
+          setPendingPlan(null);
+        } catch {
+          setReviewError(`Quote ${quote.number} was saved, but its customer plan upload failed. Use Retry plan attachment below; do not create another quote.`);
+          setIsQuotePanelOpen(false);
+          return;
+        }
+      }
+      setReviewError(`Created draft quote ${quote.number} with materials and labour${planFile ? " and its customer plan PDF" : ""}. Find it in Quotes.`);
       setIsQuotePanelOpen(false);
     } catch (error) {
       setReviewError(error instanceof Error ? error.message : "Quote creation failed.");
+    } finally {
+      quoteBuildLock.current = false;
+      setIsBuildingQuote(false);
+    }
+  }
+
+  async function retryPlanAttachment() {
+    if (!pendingPlan || quoteBuildLock.current) return;
+    quoteBuildLock.current = true;
+    setIsBuildingQuote(true);
+    try {
+      await uploadQuoteAttachment.mutateAsync(pendingPlan);
+      setPendingPlan(null);
+      setReviewError("Customer plan PDF attached to the saved quote. Open Quotes to view it.");
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : "Plan upload failed. You can retry without creating another quote.");
+    } finally {
+      quoteBuildLock.current = false;
+      setIsBuildingQuote(false);
     }
   }
 
@@ -1056,14 +1105,15 @@ function AuthenticatedTakeoffPage() {
               }}
             >
               <div>
-                <strong style={{ display: "block", color: brand.text }}>Quote prep</strong>
+                <strong style={{ display: "block", color: brand.text }}>Build your Pack Ops quote</strong>
                 <span style={{ color: brand.textSoft, fontSize: "13px" }}>
-                  Builds a new draft quote with grouped material lines and takeoff labour lines.
+                  Uses your reviewed materials, labour hours, rates and markup. Saves the customer plan PDF with the quote.
                 </span>
               </div>
-              <button type="button" style={{ ...toolbarButtonStyle, justifySelf: "start" }} onClick={openQuotePanel}>
-                Create Quote
+              <button type="button" style={{ ...toolbarButtonStyle, justifySelf: "start" }} onClick={openQuotePanel} disabled={isBuildingQuote || Boolean(createdQuote) || Boolean(pendingPlan)}>
+                Build Quote
               </button>
+              {pendingPlan && <button type="button" style={toolbarButtonStyle} disabled={isBuildingQuote} onClick={() => void retryPlanAttachment()}>{isBuildingQuote ? "Attaching plan…" : "Retry plan attachment"}</button>}
               {createdQuote ? (
                 <span style={{ color: brand.primaryDark, fontSize: "13px", fontWeight: 800 }}>
                   Draft quote {createdQuote.number} created.
@@ -1518,17 +1568,19 @@ function AuthenticatedTakeoffPage() {
                 }}
               >
                 Quote will include {matchedReviewLines.filter((line) => line.quantity > 0).length} material line(s) and{" "}
-                {reviewLabour.length} labour line(s). Unmatched materials are included at $0 so you can price them in the quote editor.
+                {reviewLabour.length} labour line(s). Materials must be matched and priced. Review the draft before sending.
               </div>
 
+              <label style={{display: "flex", gap: "8px", alignItems: "center"}}><input type="checkbox" checked={includeCustomerPlan} onChange={(event) => setIncludeCustomerPlan(event.target.checked)} />Attach customer plan PDF to this quote</label>
+              <p style={{color: brand.textSoft, fontSize: "13px"}}>The plan PDF contains the customer overview and annotated drawings. Your priced quote remains available through Quotes → Customer preview → Print / Export.</p>
               <button
                 type="button"
                 className="primary"
                 style={{ ...toolbarButtonStyle, background: brand.primary, borderColor: brand.primary, color: "#ffffff", justifySelf: "start" }}
                 onClick={() => void handleCreateQuote()}
-                disabled={createQuote.isPending}
+                disabled={isBuildingQuote || Boolean(createdQuote) || Boolean(pendingPlan)}
               >
-                {createQuote.isPending ? "Creating..." : "Create Draft Quote"}
+                {isBuildingQuote ? "Building quote and plan…" : "Create Draft Quote"}
               </button>
             </section>
           </div>

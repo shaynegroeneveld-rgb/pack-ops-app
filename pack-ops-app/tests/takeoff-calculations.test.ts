@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('react-pdf', () => ({ Document: () => null, Page: () => null, pdfjs: { GlobalWorkerOptions: {} } }));
 vi.mock('jspdf', () => ({ jsPDF: vi.fn() }));
-import { parseSavedProject, feetPerPlanUnitForPage, rightAngleDistance, estimateLightingWire, estimateCircuitRunWire, buildCircuitRuns, buildWireBreakdown, withWireMaterialLines, estimateLabour, isDifficultWireType, boxTakeoff, type ElectricalDevice, type PlanScale, type WireBreakdownLine } from '../takeoff-editor/src/main';
+import { calculateMaterialTakeoff, canConnectDevices, assignHeaterThermostat, nextConnectionAnchorId, parseSavedProject, feetPerPlanUnitForPage, rightAngleDistance, estimateLightingWire, estimateCircuitRunWire, buildCircuitRuns, buildWireBreakdown, withWireMaterialLines, estimateLabour, isDifficultWireType, boxTakeoff, type ElectricalDevice, type PlanScale, type WireBreakdownLine } from '../takeoff-editor/src/main';
 const device = (id: string, catalogItemId: string, x = 0, y = 0, page = 1): ElectricalDevice => ({ id, catalogItemId, position: { x, y }, planPageId: `pdf-page-${page}`, pdfPageNumber: page, inclusionStatus: 'included' });
 const scale: PlanScale = { planPageId: 'pdf-page-1', pdfPageNumber: 1, points: [{ x: 0, y: 0 }, { x: 100, y: 0 }], knownLengthFeet: 10 };
 const wire = (wireType: string, totalFeet: number): WireBreakdownLine => ({ id: wireType, source: 'test', wireType, totalFeet, planFeet: totalFeet, allowanceFeet: 0, deviceIds: [], routeDeviceIdsList: [] });
@@ -63,4 +63,43 @@ describe('takeoff calculations', () => {
 it('preserves zero waste and zero setup hours when reopening a saved project', () => {
   const project = parseSavedProject({ app: 'electrical-takeoff', version: 1, wireSettings: { wastePercent: 0 }, labourSettings: { setupHours: 0 } });
   expect(project.wireSettings.wastePercent).toBe(0); expect(project.labourSettings!.setupHours).toBe(0);
+});
+
+describe('assigned materials and heating controls', () => {
+  it('never invents device materials, boxes or breakers, but retains measured wire', () => {
+    const materials = calculateMaterialTakeoff([device('s', 'switch'), device('h', 'baseboard-heater')], [], [], 2);
+    expect(materials).toEqual([]);
+    expect(withWireMaterialLines(materials, [wire('2c12', 100)])).toEqual([{ item: '2c12 wire (m)', quantity: 31 }]);
+  });
+  it('only connects thermostats to heaters and keeps the thermostat as anchor', () => {
+    for (const kind of ['baseboard-heater', 'wall-fan-heater']) {
+      expect(canConnectDevices('baseboard-thermostat', kind)).toBe(true);
+      expect(nextConnectionAnchorId(device('t', 'baseboard-thermostat'), device('h', kind))).toBe('t');
+      expect(nextConnectionAnchorId(device('h', kind), device('t', 'baseboard-thermostat'))).toBe('t');
+    }
+    expect(canConnectDevices('baseboard-heater', 'wall-fan-heater')).toBe(false);
+  });
+  it('reassigns a heater without losing other connections and disconnects cleanly', () => {
+    const h = device('h', 'wall-fan-heater');
+    const other = { id: 'other', sourceDeviceId: 's', targetDeviceId: 'l', planPageId: 'pdf-page-1', pdfPageNumber: 1 };
+    const original = assignHeaterThermostat([other], h, 't1');
+    const moved = assignHeaterThermostat(original, h, 't2');
+    expect(moved).toHaveLength(2);
+    expect(moved[0]).toEqual(other);
+    expect(moved[1]?.sourceDeviceId).toBe('t2');
+    expect(assignHeaterThermostat(moved, h, '')).toEqual([other]);
+  });
+  it('counts both heater types in one run, with no extra standalone heater run', () => {
+    const devices = [device('p', 'panel'), device('t', 'baseboard-thermostat', 10), device('b', 'baseboard-heater', 20), device('w', 'wall-fan-heater', 30)];
+    const connections = assignHeaterThermostat(assignHeaterThermostat([], devices[2]!, 't'), devices[3]!, 't');
+    const runs = buildCircuitRuns(devices, connections);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]?.deviceIds).toEqual(['p', 't', 'b', 'w']);
+    expect(buildCircuitRuns(devices.map(d => d.id === 'w' ? {...d, inclusionStatus: 'excluded'} : d), connections)[0]?.deviceIds).not.toContain('w');
+  });
+  it('preserves saved heater settings and bounds wattage without inventing a default', () => {
+    const result = parseSavedProject({ devices: [{...device('w', 'wall-fan-heater'), heaterWattage: 1750}, {...device('b', 'baseboard-heater'), heaterWattage: 2500}, device('u', 'baseboard-heater')] });
+    expect(result.devices.map(d => d.heaterWattage)).toEqual([1750, 2000, undefined]);
+    expect(result.devices[0]?.catalogItemId).toBe('wall-fan-heater');
+  });
 });

@@ -7,6 +7,7 @@ interface CustomerQuotePreviewPanelProps {
   preview: CustomerQuotePreview | null;
   isPending: boolean;
   onClose: () => void;
+  onOpenAttachment?: (attachment: CustomerQuotePreview["quote"]["attachments"][number]) => Promise<void>;
 }
 
 type QuotePreviewSection = ReturnType<typeof groupQuotePreviewSections>[number];
@@ -282,6 +283,7 @@ export function CustomerQuotePreviewPanel({
   preview,
   isPending,
   onClose,
+  onOpenAttachment,
 }: CustomerQuotePreviewPanelProps) {
   const [showMaterials, setShowMaterials] = useState(true);
   const [showItemPrices, setShowItemPrices] = useState(false);
@@ -344,6 +346,10 @@ export function CustomerQuotePreviewPanel({
     >
       {quote ? (
         <>
+        {quote.attachments.filter((file) => file.fileName.endsWith(".customer-plan.pdf")).map((file) => <div key={file.id} style={{padding: "12px", border: "1px solid #d8e2df", borderRadius: "10px", marginBottom: "12px"}}>
+          <strong>Customer electrical plan</strong><p style={{margin: "6px 0"}}>Saved plan overview and annotated drawings. Opens separately from the priced quote.</p>
+          <button type="button" onClick={() => void onOpenAttachment?.(file)} disabled={!onOpenAttachment}>Open customer plan PDF</button>
+        </div>)}
         <p style={{ margin: 0, color: "#5b6475" }}>
           Clean customer-facing output with no internal costs or raw estimating detail.
         </p>

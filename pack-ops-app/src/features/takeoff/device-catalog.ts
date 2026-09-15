@@ -51,6 +51,7 @@ export const DEVICE_CATALOG: DeviceCatalogItem[] = [
   pdfDevice("freezer", "Freezer", "Dedicated circuits", "FZ", "2c14"),
   pdfDevice("counter-receptacle", "Counter receptacle circuit", "Dedicated circuits", "CR", "2c12"),
   pdfDevice("baseboard-thermostat", "Baseboard thermostat", "Dedicated circuits", "T", "2c12"),
+  pdfDevice("wall-fan-heater", "Wall fan heater", "Dedicated circuits", "WF", "2c12"),
   pdfDevice("baseboard-heater", "Baseboard heater", "Dedicated circuits", "BB", "2c12"),
   pdfDevice("electric-fireplace", "Electric fireplace", "Dedicated circuits", "EFP", "2c12"),
   pdfDevice("heat-pump", "Heat pump", "Dedicated circuits", "HP", "2c10"),

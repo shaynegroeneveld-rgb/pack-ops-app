@@ -251,7 +251,7 @@ Deno.serve(async (req) => {
         .in("status", ["pending", "retry"])
         .order("received_at", { ascending: false })
         .order("id")
-        .limit(4),
+        .limit(20),
     );
     const results = [];
     for (const item of pending) {
