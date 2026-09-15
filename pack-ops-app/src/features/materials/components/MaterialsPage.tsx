@@ -1,3 +1,4 @@
+import { AutomaticPricesPanel } from "./AutomaticPricesPanel";
 import { type ChangeEvent, useMemo, useState } from "react";
 
 import { useAuthContext } from "@/app/contexts/auth-context";
@@ -745,6 +746,7 @@ export function MaterialsPage() {
           )
         ) : null}
       </header>
+      {canManage && activeTab === "catalog" && <AutomaticPricesPanel orgId={currentUser.user.orgId} onFind={setCatalogSearch} />}
 
       {feedback ? (
         <section

@@ -16,3 +16,5 @@ port = 54323
 
 [functions.gmail-finance-import]
 verify_jwt = false
+[functions.ebh-price-import]
+verify_jwt = false
