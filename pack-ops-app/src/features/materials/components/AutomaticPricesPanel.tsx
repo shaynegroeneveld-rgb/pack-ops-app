@@ -336,8 +336,8 @@ export function AutomaticPricesPanel({
                     <>
                       {!row.catalog_item_id && row.reason !== "duplicate_catalog_sku" && row.new_cost > 0 && ["each", "m"].includes(row.unit) && <button disabled={busy !== null} onClick={() => void reviewPrice(row, true, true)}>Create material · {money(row.new_cost)} cost</button>}
                       {row.catalog_item_id &&
+                        (row.reason !== "unit_mismatch" || catalogItems.some((item) => item.id === row.catalog_item_id && (item.unit === row.unit || item.unit === "ea" && row.unit === "each"))) &&
                         ![
-                          "unit_mismatch",
                           "inactive_material",
                           "older_invoice",
                           "catalog_mapping_changed",
