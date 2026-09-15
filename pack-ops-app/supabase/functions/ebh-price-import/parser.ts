@@ -134,7 +134,7 @@ export function parseEbhInvoice(
       continue;
     }
     if (
-      /^\s*(?:ORIGINAL|Total Lines:|SUB-TOTAL:|INVOICE|Customer PO Number|Qty Ordered|Carrier:|Lot Number:)|\f/.test(
+      /^\s*(?:ORIGINAL|Total Lines:|SUB-TOTAL:|INVOICE|Customer PO Number|Qty Ordered|Carrier:|Lot Number:|ECO Fee:|Serial Number:)|\f/.test(
         row,
       )
     )

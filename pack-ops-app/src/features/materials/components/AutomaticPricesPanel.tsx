@@ -295,7 +295,12 @@ export function AutomaticPricesPanel({
                     : ""}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                  <button onClick={() => onFind(row.supplier_sku)}>
+                  <button
+                    onClick={() => {
+                      setOpen(false);
+                      onFind(row.supplier_sku);
+                    }}
+                  >
                     Find material
                   </button>
                   <button onClick={() => void source(row.invoice_number)}>
