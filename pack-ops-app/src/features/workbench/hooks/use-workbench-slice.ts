@@ -190,7 +190,7 @@ export function useWorkbenchSlice(
 
   const actualPartOptions = useMemo(() => {
     const ordered = new Set<string>(["General"]);
-    for (const row of [...(jobWorkspaceQuery.data?.estimatedMaterials ?? []),...(jobWorkspaceQuery.data?.neededMaterials ?? [])]) {
+    for (const row of [...(jobWorkspaceQuery.data?.estimatedMaterials ?? []),...(jobWorkspaceQuery.data?.estimatedLabor ?? []),...(jobWorkspaceQuery.data?.neededMaterials ?? [])]) {
       if(row.sectionName?.trim())ordered.add(row.sectionName.trim());
     }
     const card=(jobsQuery.data??[]).find(card=>card.job.id===selectedJobIdForParts);

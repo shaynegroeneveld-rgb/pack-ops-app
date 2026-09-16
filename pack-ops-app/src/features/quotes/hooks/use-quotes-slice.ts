@@ -108,7 +108,9 @@ export function useQuotesSlice(
 
   const createJobFromQuote = useMutation({
     mutationFn: (quoteId: QuoteView["id"]) => service.createJobFromQuote(quoteId),
-    onSuccess: invalidate,
+    onSuccess: async () => {
+      await Promise.all([invalidate(), queryClient.invalidateQueries({queryKey: ["workbench"]})]);
+    },
   });
 
   const archiveQuote = useMutation({

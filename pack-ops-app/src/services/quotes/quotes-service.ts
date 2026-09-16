@@ -1445,6 +1445,7 @@ export class QuotesService {
       sourceQuoteNumber: quote.number,
       generatedAt: new Date().toISOString(),
       laborHours,
+      laborLines: lineItems.filter((line) => line.lineKind === "labor").map(({description, sectionName, quantity, unit}) => ({description, sectionName, quantity, unit})),
       materials: quoteLineItemsToEstimateMaterialSnapshot(lineItems),
     };
 

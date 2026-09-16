@@ -1113,6 +1113,9 @@ export class WorkbenchService {
       assemblyOptions,
       jobTypeOptions,
       estimatedMaterials,
+      estimatedLabor: linkedQuoteLineItems.length > 0
+        ? linkedQuoteLineItems.filter((line) => line.lineKind === "labor").map(({description, sectionName, quantity, unit}) => ({description, sectionName, quantity, unit}))
+        : job.estimateSnapshot?.laborLines ?? [],
       usedMaterials,
       neededMaterials,
       manualActualCostLines,

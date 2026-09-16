@@ -1,3 +1,4 @@
+import { JobQuotePlan } from "./JobQuotePlan";
 import type {WorkbenchJobCard} from "@/services/workbench/workbench-service";
 import { JobTaskBoard } from "@/features/jobs/components/JobTaskBoard";
 import { readTaskContext, jobTasks, isTaskOpen } from "@/services/jobs/job-organization";
@@ -3656,6 +3657,7 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
         </div>
       </div>
 
+      <JobQuotePlan materials={estimatedMaterialLines} labour={jobWorkspace?.estimatedLabor ?? selectedJob.job.estimateSnapshot?.laborLines ?? []} hours={selectedJob.job.estimatedHours ?? selectedJob.job.estimateSnapshot?.laborHours ?? 0} />
       <JobTaskBoard key={selectedJob.job.id} jobId={selectedJob.job.id}
         items={selectedJob.actionItems} parts={actualPartOptions} currentUser={currentUser.user}
         crew={actualsWorkerOptions} canCreate={selectedJob.permissions.canCreateActionItem}
@@ -3674,7 +3676,7 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
         <div className="job-parts-grid">{actualPartOptions.map(part => {
           const materialCount = (jobWorkspace?.usedMaterials ?? []).filter(row => (row.sectionName?.trim() || "General") === part).length;
           const entries = (jobWorkspace?.timeEntries ?? []).filter(row => (row.sectionName?.trim() || "General") === part && row.status !== "rejected");
-          return <div className="job-part-card" key={part}><strong>{part}</strong><p>{materialCount} material entries · {entries.length} time entries</p>
+          return <div className="job-part-card" key={part}><strong>{part}</strong><p>{estimatedMaterialLines.filter(row => (row.sectionName?.trim() || "General") === part).length} planned material lines · {(jobWorkspace?.estimatedLabor ?? []).filter(row => (row.sectionName?.trim() || "General") === part).reduce((total, row) => total + row.quantity, 0)} planned hours</p><p>Actual: {materialCount} material entries · {entries.length} time entries</p>
             <button type="button" onClick={() => setJobScreen("actuals")}>View materials & time</button></div>;
         })}</div>
       </section>

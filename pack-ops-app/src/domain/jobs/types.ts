@@ -69,11 +69,19 @@ export interface JobManualActualCostLine extends AuditedEntity {
   updatedBy: UserId | null;
 }
 
+export interface JobEstimateLaborSnapshot {
+  description: string;
+  sectionName: string | null;
+  quantity: number;
+  unit: string;
+}
+
 export interface JobEstimateSnapshot {
   sourceQuoteId: QuoteId | null;
   sourceQuoteNumber: string | null;
   generatedAt: string;
   laborHours: number;
+  laborLines?: JobEstimateLaborSnapshot[];
   materials: JobEstimateMaterialSnapshot[];
 }
 
@@ -249,6 +257,7 @@ export interface JobWorkspaceData {
   assemblyOptions: AssemblyView[];
   jobTypeOptions: JobType[];
   estimatedMaterials: JobEstimateMaterialSnapshot[];
+  estimatedLabor: JobEstimateLaborSnapshot[];
   usedMaterials: JobMaterialView[];
   neededMaterials: JobMaterialView[];
   manualActualCostLines: JobManualActualCostLine[];
