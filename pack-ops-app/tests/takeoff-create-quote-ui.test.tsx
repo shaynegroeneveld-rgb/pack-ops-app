@@ -5,7 +5,7 @@ vi.mock('@/app/contexts/auth-context', () => ({useAuthContext: () => ({currentUs
 vi.mock('@/features/materials/hooks/use-materials-slice', () => ({useMaterialsSlice: () => ({catalogQuery: {data: state.catalog, isLoading: false}})}));
 vi.mock('@/features/quotes/hooks/use-quotes-slice', () => ({useQuotesSlice: () => ({builderResourcesQuery: {data: null}, createQuote: {isPending: false}, uploadQuoteAttachment: {isPending: false}})}));
 import {useUiStore} from '../src/app/store/ui-store';
-beforeEach(() => useUiStore.setState({takeoffQuote: null, activeRoute: '/electrical-takeoff'}));
+beforeEach(() => { localStorage.clear(); useUiStore.setState({takeoffQuote: null, activeRoute: '/electrical-takeoff'}); });
 import {ElectricalTakeoffPage} from '../src/features/takeoff/components/ElectricalTakeoffPage';
 function loadDeviceCount() {
  const frame = screen.getByTitle('Residential Electrical Takeoff') as HTMLIFrameElement;
@@ -28,4 +28,22 @@ it('opens Quotes with actual recipe materials and labour on the first click, wit
  expect(lines).toHaveLength(2);
  expect(lines[0]).toMatchObject({catalogItemId: 'material', description: 'Assigned material', quantity: 3, unitCost: 10, lineKind: 'item'});
  expect(lines[1]).toMatchObject({lineKind: 'labor', quantity: 2.5, unit: 'hr', unitSell: 95});
+});
+
+it('ignores unused extra recipe rows and opens Quotes while the customer PDF is still rendering', () => {
+ localStorage.setItem('packops-takeoff-device-recipes-v1', JSON.stringify({'baseboard-heater': [{id:'saved',catalogItemId:'material',quantity:3},{id:'empty',catalogItemId:'',quantity:1}]}));
+ render(<ElectricalTakeoffPage />); loadDeviceCount();
+ const frame = screen.getByTitle('Residential Electrical Takeoff') as HTMLIFrameElement;
+ Object.defineProperty(frame, 'contentWindow', {value: {packOpsCustomerPlan: () => new Promise(() => {})}});
+ fireEvent.click(screen.getByRole('button', {name:'Create Quote',exact:true}));
+ expect(useUiStore.getState().activeRoute).toBe('/quotes');
+ expect(useUiStore.getState().takeoffQuote!.draft.lineItems[0]).toMatchObject({catalogItemId:'material',quantity:3});
+ expect(useUiStore.getState().takeoffQuote!.planPreparation).toBeInstanceOf(Promise);
+});
+it('names a genuinely broken assignment rather than silently dropping it', () => {
+ localStorage.setItem('packops-takeoff-device-recipes-v1', JSON.stringify({'baseboard-heater': [{id:'saved',catalogItemId:'missing-id',quantity:1}]}));
+ render(<ElectricalTakeoffPage />); loadDeviceCount();
+ fireEvent.click(screen.getByRole('button', {name:'Create Quote',exact:true}));
+ expect(useUiStore.getState().activeRoute).toBe('/electrical-takeoff');
+ expect(screen.getByRole('status').textContent).toContain('Baseboard heater, row 1');
 });

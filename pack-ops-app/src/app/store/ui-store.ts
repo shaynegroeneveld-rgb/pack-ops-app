@@ -4,8 +4,8 @@ import { create } from "zustand";
 import { APP_ROUTES } from "@/app/router/routes";
 
 export interface UiStoreState {
-  takeoffQuote: {draft: QuoteEditorDraft; plan: File | null} | null;
-  setTakeoffQuote: (value: {draft: QuoteEditorDraft; plan: File | null} | null) => void;
+  takeoffQuote: {draft: QuoteEditorDraft; plan: File | null; planPreparation?: Promise<File> | undefined} | null;
+  setTakeoffQuote: (value: {draft: QuoteEditorDraft; plan: File | null; planPreparation?: Promise<File> | undefined} | null) => void;
   isCommandBarOpen: boolean;
   activeRoute: string;
   selectedWorkbenchJobId: string | null;

@@ -161,13 +161,29 @@ export function QuotesPage() {
   const [editorDraft, setEditorDraft] = useState<QuoteEditorDraft | null>(null);
   const takeoffQuote = useUiStore((state) => state.takeoffQuote);
   const [takeoffPlan, setTakeoffPlan] = useState<File | null>(null);
+  const [planPreparation, setPlanPreparation] = useState<Promise<File> | null>(null);
   useEffect(() => {
     if (!takeoffQuote) return;
     setEditorDraft(takeoffQuote.draft);
     setTakeoffPlan(takeoffQuote.plan);
+    setPlanPreparation(takeoffQuote.planPreparation ?? null);
     setFeedback({tone: "success", text: `Takeoff imported: ${takeoffQuote.draft.lineItems.filter((line) => line.lineKind !== "labor").length} material lines and ${takeoffQuote.draft.lineItems.filter((line) => line.lineKind === "labor").length} labour lines. Save the quote to attach its customer plan PDF.`});
     useUiStore.getState().setTakeoffQuote(null);
   }, [takeoffQuote]);
+
+  useEffect(() => {
+    if (!planPreparation) return;
+    let active = true;
+    planPreparation.then(file => {
+      if (active) {
+        setTakeoffPlan(file);
+        setFeedback({tone: "success", text: "Materials and labour imported. Customer plan PDF is ready to attach when you save."});
+      }
+    }).catch(error => {
+      if (active) setFeedback({tone: "error", text: `Materials and labour imported, but the plan PDF could not be prepared: ${error instanceof Error ? error.message : "Try downloading it from Takeoff."} You can still save this quote.`});
+    }).finally(() => { if (active) setPlanPreparation(null); });
+    return () => { active = false; };
+  }, [planPreparation]);
 
   const [customerPreview, setCustomerPreview] = useState<CustomerQuotePreview | null>(null);
 
@@ -207,6 +223,7 @@ export function QuotesPage() {
   };
   const canManage = currentUser.user.role === "owner" || currentUser.user.role === "office";
   const isPending =
+    Boolean(planPreparation) ||
     createQuote.isPending ||
     createAssemblyFromQuote.isPending ||
     updateQuote.isPending ||
@@ -660,7 +677,7 @@ export function QuotesPage() {
               },
             }
           : {})}
-        onClose={() => {setEditorDraft(null); setTakeoffPlan(null);}}
+        onClose={() => {setEditorDraft(null); setTakeoffPlan(null); setPlanPreparation(null);}}
       />
       <CustomerQuotePreviewPanel
         preview={customerPreview}

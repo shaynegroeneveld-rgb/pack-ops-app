@@ -657,11 +657,21 @@ function AuthenticatedTakeoffPage() {
       return;
     }
 
-    const missingMaterials = deviceCounts.flatMap(({ deviceId }) => (deviceRecipes[deviceId] ?? []).filter((line) => !catalogItems.some((item) => item.id === line.catalogItemId && item.isActive) || !Number.isFinite(line.quantity) || line.quantity <= 0));
-    const staleGangRules = gangCounts.some(({ gangs }) => (["box", "plate"] as GangRuleKind[]).some((kind) => Boolean(gangMaterialRules[gangRuleKey(gangs, kind)]) && !catalogItems.some((item) => item.id === gangMaterialRules[gangRuleKey(gangs, kind)] && item.isActive)));
-    if (missingMaterials.length || staleGangRules) {
+    const recipeProblems = deviceCounts.flatMap(({ deviceId, name }) => (deviceRecipes[deviceId] ?? []).flatMap((line, index) => {
+      // An unused "Add material" row is not an assigned material.
+      if (!line.catalogItemId?.trim()) return [];
+      const material = catalogItems.find(item => item.id === line.catalogItemId);
+      if (!material || !material.isActive) return [`${name}, row ${index + 1}: ${material?.name ?? "saved material"} is missing or inactive`];
+      if (!Number.isFinite(line.quantity) || line.quantity <= 0) return [`${name}, row ${index + 1}: enter a quantity greater than zero for ${material.name}`];
+      return [];
+    }));
+    const gangProblems = gangCounts.flatMap(({ gangs }) => (["box", "plate"] as GangRuleKind[]).flatMap(kind => {
+      const id = gangMaterialRules[gangRuleKey(gangs, kind)];
+      return id && !catalogItems.some(item => item.id === id && item.isActive) ? [`${gangs}-gang ${kind}: saved material is missing or inactive`] : [];
+    }));
+    if (recipeProblems.length || gangProblems.length) {
       setReviewLines(null);
-      setReviewError("Some saved recipes refer to missing/inactive materials or invalid quantities. Update those recipes before reviewing.");
+      setReviewError(`Fix these saved assignments: ${[...recipeProblems, ...gangProblems].join("; ")}. Open Device Material Setup to replace or remove the listed rows.`);
       if (openSetup) setIsDeviceRecipesOpen(true);
       return;
     }
@@ -812,12 +822,12 @@ function AuthenticatedTakeoffPage() {
     try {
       const title = quoteDraft.title.trim() || getTakeoffProjectName(iframeRef.current) || "Electrical takeoff quote";
       const editor = iframeRef.current?.contentWindow as (Window & {packOpsCustomerPlan?: () => Promise<Blob>}) | null;
-      let plan: File | null = null;
-      if (editor?.packOpsCustomerPlan) {
-        const pdf = await editor.packOpsCustomerPlan();
-        plan = new File([pdf], `${slugifyFileName(title)}.customer-plan.pdf`, {type: "application/pdf"});
-      }
-      useUiStore.getState().setTakeoffQuote({plan, draft: {
+      const planPreparation = editor?.packOpsCustomerPlan?.().then(pdf =>
+        new File([pdf], `${slugifyFileName(title)}.customer-plan.pdf`, {type: "application/pdf"}));
+      // Quotes owns the PDF result; opening the estimate must not wait for PDF rendering.
+      void planPreparation?.catch(() => {});
+      useUiStore.getState().setSelectedQuoteId(null);
+      useUiStore.getState().setTakeoffQuote({plan: null, planPreparation, draft: {
         ...quoteDraft, title, markup: quoteDraft.materialMarkup, linkedLeadId: "", linkedLeadLabel: null,
         jobTypeId: "", description: "Electrical installation based on the takeoff plan.",
         notes: "Imported from Takeoff. Review material prices and labour before sending.", status: "draft", expiresAt: "",
