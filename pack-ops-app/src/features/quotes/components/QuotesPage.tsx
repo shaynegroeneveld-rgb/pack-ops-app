@@ -220,6 +220,7 @@ export function QuotesPage() {
     defaultTaxRate: 0,
     leadOptions: [],
     jobTypeOptions: [],
+    customerOptions: [],
   };
   const canManage = currentUser.user.role === "owner" || currentUser.user.role === "office";
   const isPending =
@@ -247,6 +248,7 @@ export function QuotesPage() {
   async function handleSubmit(draft: QuoteEditorDraft) {
     try {
       const quoteInput = {
+        ...(draft.existingContactId ? {existingContactId: draft.existingContactId} : {}),
         customerName: draft.customerName,
         companyName: draft.companyName || null,
         contactName: draft.contactName || null,
@@ -635,6 +637,7 @@ export function QuotesPage() {
         catalogItems={builderResources.catalogItems}
         assemblies={builderResources.assemblies}
         leadOptions={builderResources.leadOptions}
+        customerOptions={builderResources.customerOptions}
         jobTypeOptions={builderResources.jobTypeOptions}
         onAddJobType={(input) => createJobType.mutateAsync(input)}
         isPending={isPending}

@@ -678,7 +678,7 @@ function AuthenticatedTakeoffPage() {
     const deviceLines = buildDeviceRecipeMaterialLines(deviceCounts, deviceRecipes, gangCounts, gangMaterialRules, catalogItems);
     const wireLines = readTakeoffMaterialLines(iframeRef.current).filter((line) => line.section.toLowerCase() === "wire" || /wire \(m\)$/i.test(line.item)).map((line) => {
       // Cable length is metres. A spool/foot cost must never silently be treated as a metre cost.
-      const mapped = catalogItems.find((item) => item.id === catalogMappings[takeoffMaterialMappingKey(line)] && item.isActive && isMetreUnit(item.unit));
+      const mapped = catalogItems.find((item) => item.id === catalogMappings[takeoffMaterialMappingKey(line)] && item.isActive && isMetreUnit(item.unit)) ?? findExactWireMaterial(line.item, catalogItems);
       return { ...line, match: mapped ?? null, matchScore: mapped ? 1 : 0, lineCost: mapped?.costPrice != null ? roundMoney(mapped.costPrice * line.quantity) : null, source: "takeoff" as const, note: "Measured wire including waste; quantity in metres. Select a material priced per metre." };
     });
     const lines = [...deviceLines, ...wireLines];
@@ -2499,7 +2499,7 @@ function readTakeoffGangCounts(iframe: HTMLIFrameElement | null): PlacedGangCoun
   });
 }
 
-function buildDeviceRecipeMaterialLines(
+export function buildDeviceRecipeMaterialLines(
   deviceCounts: PlacedDeviceCount[],
   recipes: DeviceRecipes,
   gangCounts: PlacedGangCount[],
@@ -2509,11 +2509,20 @@ function buildDeviceRecipeMaterialLines(
   const catalogById = new Map<string, CatalogItem>(catalogItems.map((item) => [String(item.id), item]));
   const rolledUp = new Map<string, MatchedTakeoffMaterialLine>();
 
+  const replacementKinds = new Set((["box", "plate"] as GangRuleKind[]).filter(kind =>
+    gangCounts.length > 0 && gangCounts.every(({gangs}) => catalogById.has(gangRules[gangRuleKey(gangs, kind)] ?? ""))));
   deviceCounts.forEach((device) => {
+    const category = DEVICE_CATALOG.find(item => item.id === device.deviceId)?.category;
+    const usesGangBox = category === "Receptacles" || category === "Controls";
     (recipes[device.deviceId] ?? []).forEach((recipeLine) => {
       const material = catalogById.get(recipeLine.catalogItemId);
       const quantity = Math.round(device.quantity * recipeLine.quantity * 100) / 100;
-      if (!material || quantity <= 0) return;
+      if (!material || !Number.isFinite(quantity) || quantity <= 0) return;
+      const label = `${material.name} ${material.sku ?? ""}`.toLowerCase();
+      const singleGang = /1[ -]*gang|single[ -]*gang/.test(label);
+      const isRecipeBox = material.id === gangRules[gangRuleKey(1, "box")] || (/box/.test(label) && (singleGang || /switch box/.test(label)));
+      const isRecipePlate = material.id === gangRules[gangRuleKey(1, "plate")] || (singleGang && /plate|cover/.test(label));
+      if (usesGangBox && ((replacementKinds.has("box") && isRecipeBox) || (replacementKinds.has("plate") && isRecipePlate))) return;
       const current = rolledUp.get(material.id);
       if (current) {
         current.quantity = Math.round((current.quantity + quantity) * 100) / 100;
@@ -2535,6 +2544,7 @@ function buildDeviceRecipeMaterialLines(
 
   gangCounts.forEach(({ gangs, quantity }) => {
     (["box", "plate"] as GangRuleKind[]).forEach((kind) => {
+      if (!replacementKinds.has(kind)) return;
       const material = catalogById.get(gangRules[gangRuleKey(gangs, kind)] ?? "");
       if (!material) return;
       const current = rolledUp.get(material.id);
@@ -2781,3 +2791,16 @@ function bigramSet(value: string): Set<string> {
 }
 
 function isMetreUnit(unit: string): boolean { return ["m", "metre", "meter", "metres", "meters"].includes(unit.trim().toLowerCase()); }
+
+// Automatic wire matches require an exact conductor/gauge label and metre pricing.
+// Ambiguous products stay unmapped so the user can choose the intended cable.
+export function findExactWireMaterial(label: string, catalog: CatalogItem[]): CatalogItem | null {
+  const normalize = (value: string) => value.toLowerCase().replace(/\b(\d+)\s*\/\s*([234])\b/g, "$2c$1").replace(/\s+/g, "");
+  const query = normalize(label.replace(/wire\s*\(m\)$/i, "").trim());
+  const eligible = catalog.filter(item => item.isActive && isMetreUnit(item.unit));
+  const exact = eligible.filter(item => [item.name, item.sku ?? "", ...(item.aliases ?? [])].some(value => normalize(value) === query));
+  if (exact.length === 1) return exact[0]!;
+  if (exact.length > 1) return null;
+  const nmd = eligible.filter(item => [item.name, item.sku ?? "", ...(item.aliases ?? [])].some(value => normalize(value).replace(/^nmd90|^nmd/, "") === query));
+  return nmd.length === 1 ? nmd[0]! : null;
+}

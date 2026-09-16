@@ -231,6 +231,7 @@ interface QuoteLineTotals {
 }
 
 export interface QuoteBuilderResources {
+  customerOptions: Contact[];
   catalogItems: CatalogItem[];
   assemblies: AssemblyView[];
   defaultMaterialMarkup: number;
@@ -290,6 +291,7 @@ export interface AcceptQuoteInput {
 }
 
 export interface CreateStandaloneQuoteInput {
+  existingContactId?: string;
   customerName: string;
   companyName?: string | null;
   contactName?: string | null;
@@ -433,18 +435,20 @@ export class QuotesService {
 
   async getQuoteBuilderResources(): Promise<QuoteBuilderResources> {
     this.assertCanManageQuotes();
-    const [catalogItems, assemblies, leadOptions, orgResponse, jobTypeOptions] = await Promise.all([
+    const [catalogItems, assemblies, leadOptions, orgResponse, jobTypeOptions, customerOptions] = await Promise.all([
       this.catalogItems.list({ filter: { includeInactive: false } }),
       this.buildAssemblyViews(),
       this.buildLeadOptions(),
       this.client.from("orgs").select("settings").eq("id", this.context.orgId).single(),
       this.jobTypes.list({ filter: { includeInactive: true } }),
+      this.contacts.list(),
     ]);
     if (orgResponse.error) {
       throw orgResponse.error;
     }
     const settings = readOrgBusinessSettings(orgResponse.data.settings);
     return {
+      customerOptions,
       catalogItems,
       assemblies,
       defaultMaterialMarkup: settings.defaultMaterialMarkup,
@@ -842,7 +846,9 @@ export class QuotesService {
 
     let contact: Contact;
     try {
-      contact = await this.contacts.create({
+      const selectedContact = input.existingContactId ? await this.contacts.getById(input.existingContactId) : null;
+      if (input.existingContactId && !selectedContact) throw new Error("The selected customer is no longer available.");
+      contact = selectedContact ?? await this.contacts.create({
         type: "company",
         displayName: contactName,
         companyName,

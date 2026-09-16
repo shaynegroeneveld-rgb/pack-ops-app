@@ -21,3 +21,12 @@ it('quote conversion preserves planned materials and fractional labour with thei
  expect(input.estimateSnapshot.laborLines).toEqual([{description:'Install',unit:'hr',quantity:2.5,sectionName:'Garage'}]);
  expect(seed).toHaveBeenCalledWith('job',input.estimateSnapshot.materials);
 });
+it('uses the chosen existing customer without creating a duplicate contact',async()=>{
+ const createContact=vi.fn();const createQuote=vi.fn().mockResolvedValue({id:'quote'});
+ const view={id:'quote',contactId:'existing'};
+ await QuotesService.prototype.createStandaloneQuote.call({assertCanManageQuotes:()=>{},validateCustomerName:(s:string)=>s,
+ contacts:{getById:async()=>({id:'existing'}),create:createContact},createQuote,loadQuoteViews:async()=>[view],
+ } as any,{customerName:'Customer',existingContactId:'existing',title:'Takeoff quote'});
+ expect(createContact).not.toHaveBeenCalled();
+ expect(createQuote).toHaveBeenCalledWith(expect.objectContaining({contactId:'existing'}));
+});

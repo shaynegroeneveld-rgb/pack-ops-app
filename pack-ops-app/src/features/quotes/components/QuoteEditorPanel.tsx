@@ -1,3 +1,4 @@
+import type { Contact } from "@/domain/contacts/types";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { AssemblyView, CatalogItem } from "@/domain/materials/types";
@@ -17,6 +18,7 @@ export interface QuoteEditorDraftLine extends QuoteLineItemInput {
 }
 
 export interface QuoteEditorDraft {
+  existingContactId?: string;
   quoteId?: QuoteView["id"];
   hasLinkedInvoice?: boolean;
   title: string;
@@ -41,6 +43,7 @@ export interface QuoteEditorDraft {
 }
 
 interface QuoteEditorPanelProps {
+  customerOptions?: Contact[];
   initialDraft: QuoteEditorDraft | null;
   catalogItems: CatalogItem[];
   assemblies: AssemblyView[];
@@ -206,6 +209,7 @@ export function QuoteEditorPanel({
   initialDraft,
   catalogItems,
   assemblies,
+  customerOptions = [],
   leadOptions,
   jobTypeOptions,
   onAddJobType,
@@ -833,6 +837,17 @@ export function QuoteEditorPanel({
           )}
         </div>
 
+        {!currentDraft.quoteId && <label style={{display: "grid", gap: "6px", marginBottom: "16px"}}>
+          <span>Existing customer</span>
+          <select aria-label="Existing customer" value={currentDraft.existingContactId ?? ""} disabled={isPending} onChange={event => {
+            const contact = customerOptions.find(item => item.id === event.target.value);
+            setDraft(current => current ? {...current, existingContactId: contact?.id ?? "", linkedLeadId: "", linkedLeadLabel: null,
+              ...(contact ? {customerName: contact.companyName || contact.displayName, companyName: contact.companyName || "", contactName: contact.displayName, phone: contact.phone || "", email: contact.email || ""} : {})} : current);
+          }}>
+            <option value="">New customer / enter details below</option>
+            {[...customerOptions].sort((a,b) => (a.companyName || a.displayName).localeCompare(b.companyName || b.displayName)).map(contact => <option key={contact.id} value={contact.id}>{contact.companyName || contact.displayName}{contact.companyName && contact.displayName !== contact.companyName ? ` — ${contact.displayName}` : ""}{contact.phone ? ` · ${contact.phone}` : ""}</option>)}
+          </select>
+        </label>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
           <label style={{ display: "grid", gap: "6px" }}>
             <span>Customer Name</span>

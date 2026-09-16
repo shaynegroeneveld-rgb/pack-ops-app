@@ -47,3 +47,20 @@ it('names a genuinely broken assignment rather than silently dropping it', () =>
  expect(useUiStore.getState().activeRoute).toBe('/electrical-takeoff');
  expect(screen.getByRole('status').textContent).toContain('Baseboard heater, row 1');
 });
+
+import {buildDeviceRecipeMaterialLines, findExactWireMaterial} from '../src/features/takeoff/components/ElectricalTakeoffPage';
+const materialFixture=(id:string,name:string,unit='each')=>({id,name,unit,isActive:true,costPrice:2,sku:null,category:'Materials',aliases:[]}) as any;
+it('links exact wire names or NMD conductor labels only to unique metre-priced materials',()=>{
+ const wire=materialFixture('wire','2c14','m');
+ expect(findExactWireMaterial('2c14 wire (m)',[wire])?.id).toBe('wire');
+ expect(findExactWireMaterial('14/2 wire (m)',[materialFixture('nmd','NMD90 2c14','m')])?.id).toBe('nmd');
+ expect(findExactWireMaterial('2c14 wire (m)',[materialFixture('spool','2c14','spool')])).toBeNull();
+ expect(findExactWireMaterial('2c14 wire (m)',[wire,materialFixture('other','2c14','m')])).toBeNull();
+});
+it('gang rules replace recipe boxes and plates once, preserving ceiling boxes and device counts',()=>{
+ const catalog=[materialFixture('box','1 gang switch box'),materialFixture('plate','1 gang plate'),materialFixture('double','2 gang box'),materialFixture('doubleplate','2 gang plate'),materialFixture('switch','Switch'),materialFixture('ceiling','Ceiling box')];
+ const result=buildDeviceRecipeMaterialLines([{deviceId:'switch',name:'1-pole switch',quantity:3},{deviceId:'ceiling-light',name:'Ceiling light',quantity:1}],
+ {'switch':[{id:'1',catalogItemId:'box',quantity:1},{id:'2',catalogItemId:'plate',quantity:1},{id:'3',catalogItemId:'switch',quantity:1}], 'ceiling-light':[{id:'4',catalogItemId:'ceiling',quantity:1}]},
+ [{gangs:1,quantity:1},{gangs:2,quantity:1}],{'1-box':'box','1-plate':'plate','2-box':'double','2-plate':'doubleplate'},catalog);
+ expect(Object.fromEntries(result.map(line=>[line.match!.id,line.quantity]))).toEqual({box:1,plate:1,double:1,doubleplate:1,switch:3,ceiling:1});
+});
