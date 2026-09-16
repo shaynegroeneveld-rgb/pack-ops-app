@@ -154,6 +154,8 @@ export function AppShell() {
   const { showToast } = useToast();
   const { confirm } = useConfirm();
   const activeRoute = useUiStore((state) => state.activeRoute);
+  const [takeoffVisited, setTakeoffVisited] = useState(false);
+  useEffect(() => {if (activeRoute === APP_ROUTES.electricalTakeoff) setTakeoffVisited(true);}, [activeRoute]);
   const setActiveRoute = useUiStore((state) => state.setActiveRoute);
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState("Pack Electric");
@@ -620,6 +622,7 @@ export function AppShell() {
       </nav>
       ) : null}
 
+        {(takeoffVisited || activeRoute === APP_ROUTES.electricalTakeoff) && <div hidden={activeRoute !== APP_ROUTES.electricalTakeoff}><ElectricalTakeoffPage /></div>}
         {activeRoute.startsWith(fieldJobRoutePrefix) ? (
           <FieldJobPage jobId={activeRoute.slice(fieldJobRoutePrefix.length)} />
         ) : activeRoute === APP_ROUTES.leads ? (
@@ -627,7 +630,7 @@ export function AppShell() {
       ) : activeRoute === APP_ROUTES.materials ? (
         <MaterialsPage />
       ) : activeRoute === APP_ROUTES.electricalTakeoff ? (
-        <ElectricalTakeoffPage />
+        null
       ) : activeRoute === APP_ROUTES.financeReview ? (
         <FinanceReviewPage />
       ) : activeRoute === APP_ROUTES.financeImports ? (

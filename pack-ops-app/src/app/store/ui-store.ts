@@ -1,8 +1,11 @@
+import type { QuoteEditorDraft } from "@/features/quotes/components/QuoteEditorPanel";
 import { create } from "zustand";
 
 import { APP_ROUTES } from "@/app/router/routes";
 
 export interface UiStoreState {
+  takeoffQuote: {draft: QuoteEditorDraft; plan: File | null} | null;
+  setTakeoffQuote: (value: {draft: QuoteEditorDraft; plan: File | null} | null) => void;
   isCommandBarOpen: boolean;
   activeRoute: string;
   selectedWorkbenchJobId: string | null;
@@ -14,6 +17,8 @@ export interface UiStoreState {
 }
 
 export const useUiStore = create<UiStoreState>((set) => ({
+  takeoffQuote: null,
+  setTakeoffQuote: (value) => set({takeoffQuote: value}),
   isCommandBarOpen: false,
   activeRoute: APP_ROUTES.workbench,
   selectedWorkbenchJobId: null,

@@ -1,3 +1,5 @@
+import { useUiStore } from "@/app/store/ui-store";
+import { APP_ROUTES } from "@/app/router/routes";
 import { readTakeoffLabourLines, buildQuoteLineItems, rollUpTakeoffMaterialLines, isWireLikeLine, parseTakeoffQuantity, roundMoney, roundQuantity, type TakeoffMaterialLine, type MatchedTakeoffMaterialLine, type TakeoffLabourLine } from "../quote-calculations";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import automationPdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -677,10 +679,11 @@ function AuthenticatedTakeoffPage() {
     }
 
     setReviewLines(lines);
-    setReviewLabour(readTakeoffLabourLines(iframeRef.current));
+    const labour = readTakeoffLabourLines(iframeRef.current);
+    setReviewLabour(labour);
     setReviewError(Array.from(iframeRef.current?.contentDocument?.querySelectorAll(".calculation-warning") ?? []).map((node) => node.textContent).filter(Boolean).join(" ") || null);
     setCreatedQuote(null);
-    return true;
+    return {lines, labour};
   }
 
   function handleCatalogMappingChange(line: MatchedTakeoffMaterialLine, catalogItemId: string) {
@@ -796,17 +799,37 @@ function AuthenticatedTakeoffPage() {
     setReviewError("Copied matched material CSV to your clipboard.");
   }
 
-  function openQuotePanel() {
-    if (!reviewLines) handleReviewMaterials(false);
-    setIsDeviceRecipesOpen(false);
-
-    const title = quoteDraft.title.trim() || getTakeoffProjectName(iframeRef.current) || "Electrical takeoff quote";
-    setQuoteDraft((current) => ({
-      ...current,
-      title,
-      customerName: current.customerName || current.companyName,
-    }));
-    setIsQuotePanelOpen(true);
+  async function openQuotePanel() {
+    if (quoteBuildLock.current) return;
+    const prepared = reviewLines ? {lines: reviewLines, labour: reviewLabour} : handleReviewMaterials(false);
+    if (!prepared) return;
+    const materials = buildReviewLines(prepared.lines, manualAdjustments, pricedCatalogItems);
+    const lineItems = buildQuoteLineItems({materialLines: materials, labourLines: prepared.labour,
+      materialMarkup: Number(quoteDraft.materialMarkup), laborCostRate: Number(quoteDraft.laborCostRate), laborSellRate: Number(quoteDraft.laborSellRate)});
+    if (!lineItems.length) {setReviewError("Place devices and assign materials before creating a quote."); return;}
+    quoteBuildLock.current = true;
+    setIsBuildingQuote(true);
+    try {
+      const title = quoteDraft.title.trim() || getTakeoffProjectName(iframeRef.current) || "Electrical takeoff quote";
+      const editor = iframeRef.current?.contentWindow as (Window & {packOpsCustomerPlan?: () => Promise<Blob>}) | null;
+      let plan: File | null = null;
+      if (editor?.packOpsCustomerPlan) {
+        const pdf = await editor.packOpsCustomerPlan();
+        plan = new File([pdf], `${slugifyFileName(title)}.customer-plan.pdf`, {type: "application/pdf"});
+      }
+      useUiStore.getState().setTakeoffQuote({plan, draft: {
+        ...quoteDraft, title, markup: quoteDraft.materialMarkup, linkedLeadId: "", linkedLeadLabel: null,
+        jobTypeId: "", description: "Electrical installation based on the takeoff plan.",
+        notes: "Imported from Takeoff. Review material prices and labour before sending.", status: "draft", expiresAt: "",
+        lineItems: lineItems.map((line) => ({...line, localId: crypto.randomUUID()})),
+      }});
+      useUiStore.getState().setActiveRoute(APP_ROUTES.quotes);
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : "Could not prepare the quote and customer plan.");
+    } finally {
+      quoteBuildLock.current = false;
+      setIsBuildingQuote(false);
+    }
   }
 
   async function handleCreateQuote() {

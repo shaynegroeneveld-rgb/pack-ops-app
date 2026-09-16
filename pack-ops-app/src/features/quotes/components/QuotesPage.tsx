@@ -159,6 +159,16 @@ export function QuotesPage() {
   const [activeStatus, setActiveStatus] = useState<QuoteView["status"] | "all">("all");
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [editorDraft, setEditorDraft] = useState<QuoteEditorDraft | null>(null);
+  const takeoffQuote = useUiStore((state) => state.takeoffQuote);
+  const [takeoffPlan, setTakeoffPlan] = useState<File | null>(null);
+  useEffect(() => {
+    if (!takeoffQuote) return;
+    setEditorDraft(takeoffQuote.draft);
+    setTakeoffPlan(takeoffQuote.plan);
+    setFeedback({tone: "success", text: `Takeoff imported: ${takeoffQuote.draft.lineItems.filter((line) => line.lineKind !== "labor").length} material lines and ${takeoffQuote.draft.lineItems.filter((line) => line.lineKind === "labor").length} labour lines. Save the quote to attach its customer plan PDF.`});
+    useUiStore.getState().setTakeoffQuote(null);
+  }, [takeoffQuote]);
+
   const [customerPreview, setCustomerPreview] = useState<CustomerQuotePreview | null>(null);
 
   if (!currentUser) {
@@ -253,16 +263,19 @@ export function QuotesPage() {
         })),
       };
 
+      let saved: QuoteView;
       if (draft.quoteId) {
-        await updateQuote.mutateAsync({
-          quoteId: draft.quoteId,
-          ...quoteInput,
-        });
-        setFeedback({ tone: "success", text: "Quote updated." });
+        saved = await updateQuote.mutateAsync({quoteId: draft.quoteId, ...quoteInput});
       } else {
-        await createQuote.mutateAsync(quoteInput);
-        setFeedback({ tone: "success", text: "Standalone quote created." });
+        saved = await createQuote.mutateAsync(quoteInput);
       }
+      if (takeoffPlan) {
+        // Keep the saved id on failure so retry updates this quote, never creates a duplicate.
+        setEditorDraft({...draft, quoteId: saved.id});
+        await uploadQuoteAttachment.mutateAsync({quoteId: saved.id, file: takeoffPlan});
+        setTakeoffPlan(null);
+      }
+      setFeedback({tone: "success", text: draft.quoteId ? "Quote updated." : "Quote created from materials and labour."});
       setEditorDraft(null);
     } catch (error) {
       setFeedback({
@@ -647,7 +660,7 @@ export function QuotesPage() {
               },
             }
           : {})}
-        onClose={() => setEditorDraft(null)}
+        onClose={() => {setEditorDraft(null); setTakeoffPlan(null);}}
       />
       <CustomerQuotePreviewPanel
         preview={customerPreview}
