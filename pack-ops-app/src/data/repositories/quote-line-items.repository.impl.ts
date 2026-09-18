@@ -17,19 +17,25 @@ export class QuoteLineItemsRepositoryImpl implements QuoteLineItemsRepository {
       return [];
     }
 
-    const { data, error } = await this.client
-      .from("quote_line_items")
-      .select("*")
-      .eq("org_id", this.context.orgId)
-      .in("quote_id", quoteIds)
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      throw error;
+    const rows: Database["public"]["Tables"]["quote_line_items"]["Row"][] = [];
+    let total: number | null = null;
+    while (true) {
+      const {data, error, count} = await this.client.from("quote_line_items")
+        .select("*", rows.length === 0 ? {count: "exact"} : {})
+        .eq("org_id", this.context.orgId).in("quote_id", quoteIds)
+        .order("sort_order", {ascending: true}).order("created_at", {ascending: true}).order("id", {ascending: true})
+        .range(rows.length, rows.length + 499);
+      if (error) throw error;
+      if (rows.length === 0) total = count;
+      const page = data ?? [];
+      if (!page.length) {
+        if (total !== null && rows.length < total) throw new Error("Quote lines changed while loading. Please retry.");
+        break;
+      }
+      rows.push(...page);
+      if (total !== null ? rows.length >= total : page.length < 500) break;
     }
-
-    return (data ?? []).map((row) => quoteLineItemsMapper.toDomain(row));
+    return rows.map(row => quoteLineItemsMapper.toDomain(row));
   }
 
   async create(quoteId: string, input: QuoteLineItemInput): Promise<QuoteLineItem> {

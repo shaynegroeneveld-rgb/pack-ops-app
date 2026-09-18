@@ -26,6 +26,8 @@ const DRIVER_DOMINANCE_THRESHOLD = 0.6;
 const MIN_MEANINGFUL_MONEY = 50;
 
 export interface JobPerformanceQuoteInputs {
+  estimatedHours?: number;
+  estimatedLaborCost?: number;
   subtotal: number | null;
   total: number | null;
   laborCostRate: number | null;
@@ -289,7 +291,7 @@ export function computeJobPerformanceSummary(input: {
       .reduce((total, entry) => total + entry.hours, 0),
   );
 
-  const estimatedHours = input.job.estimateSnapshot?.laborHours ?? input.job.estimatedHours ?? null;
+  const estimatedHours = input.linkedQuote?.estimatedHours ?? input.job.estimateSnapshot?.laborHours ?? input.job.estimatedHours ?? null;
   const estimatedMaterialLines = normalizeEstimateMaterialSnapshotLines(
     input.estimatedMaterialLines ?? input.job.estimateSnapshot?.materials ?? [],
   );
@@ -297,8 +299,8 @@ export function computeJobPerformanceSummary(input: {
     typeof input.linkedQuote?.laborCostRate === "number"
       ? input.linkedQuote.laborCostRate
       : input.settingsDefaults?.laborCostRate ?? null;
-  const estimatedLaborCost =
-    estimatedHours !== null && laborCostRate !== null ? roundMoney(estimatedHours * laborCostRate) : null;
+  const estimatedLaborCost = input.linkedQuote?.estimatedLaborCost ?? (
+    estimatedHours !== null && laborCostRate !== null ? roundMoney(estimatedHours * laborCostRate) : null);
   const manualLaborCost = roundMoney(
     input.manualActualCostLines
       .filter((entry) => entry.category === "labor")
@@ -323,7 +325,7 @@ export function computeJobPerformanceSummary(input: {
           return total + unitCost * item.quantity;
         }, 0),
       )
-    : null;
+    : input.linkedQuote?.estimatedLaborCost !== undefined ? 0 : null;
 
   const actualMaterialCost = roundMoney(
     usedMaterials.reduce((total, item) => {

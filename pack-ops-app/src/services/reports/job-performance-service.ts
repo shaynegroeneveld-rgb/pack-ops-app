@@ -277,7 +277,13 @@ export class JobPerformanceService {
           job.quoteId && quoteLineItemsByQuoteId.has(String(job.quoteId))
             ? quoteLineItemsToEstimateMaterialSnapshot(quoteLineItemsByQuoteId.get(String(job.quoteId)) ?? [])
             : normalizeEstimateMaterialSnapshotLines(job.estimateSnapshot?.materials ?? []),
-        linkedQuote: job.quoteId ? quotesById.get(String(job.quoteId)) ?? null : null,
+        linkedQuote: job.quoteId && quotesById.has(String(job.quoteId)) ? {
+          ...quotesById.get(String(job.quoteId))!,
+          ...(quoteLineItemsByQuoteId.has(String(job.quoteId)) ? {
+            estimatedHours: (quoteLineItemsByQuoteId.get(String(job.quoteId)) ?? []).filter(line => line.lineKind === "labor").reduce((sum, line) => sum + line.quantity, 0),
+            estimatedLaborCost: roundMoney((quoteLineItemsByQuoteId.get(String(job.quoteId)) ?? []).filter(line => line.lineKind === "labor").reduce((sum, line) => sum + line.quantity * (line.unitCost ?? quotesById.get(String(job.quoteId))!.laborCostRate ?? settings.defaultLaborCostRate), 0)),
+          } : {}),
+        } : null,
         savedInvoiceSell: invoiceSellByJobId.get(String(job.id)) ?? null,
         settingsDefaults: {
           laborCostRate: settings.defaultLaborCostRate,

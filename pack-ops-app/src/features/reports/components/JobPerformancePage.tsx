@@ -368,6 +368,7 @@ function renderPerformance(performance: JobPerformanceSummary | null) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px" }}>
         {metricCard("Quoted Value", formatMoney(coreMoney.quotedValue), "Expected charge from quote")}
+        {metricCard("Estimated Total Cost", formatMoney(estimateAccuracy.estimatedTotalCost), `Materials ${formatMoney(estimateAccuracy.estimatedMaterialCost)} + labour ${formatMoney(estimateAccuracy.estimatedLabourCost)} · before tax`)}
         {metricCard(
           "Invoiced Revenue",
           formatMoney(coreMoney.invoicedRevenue),
