@@ -19,27 +19,31 @@ export class JobMaterialsRepositoryImpl implements JobMaterialsRepository {
   ) {}
 
   async list(options?: { filter?: JobMaterialFilter }): Promise<JobMaterialEntry[]> {
-    let query = this.client
-      .from("job_materials")
-      .select("*")
-      .eq("org_id", this.context.orgId)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: true });
-
-    if (options?.filter?.jobId) {
-      query = query.eq("job_id", options.filter.jobId);
+    const rows: Database["public"]["Tables"]["job_materials"]["Row"][] = [];
+    let total: number | null = null;
+    while (true) {
+      let query = this.client.from("job_materials")
+        .select("*", rows.length === 0 ? { count: "exact" } : {})
+        .eq("org_id", this.context.orgId)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true });
+      if (options?.filter?.jobId) query = query.eq("job_id", options.filter.jobId);
+      if (options?.filter?.kind) query = query.eq("kind", options.filter.kind);
+      const { data, error, count } = await query.range(rows.length, rows.length + 499);
+      if (error) throw error;
+      if (rows.length === 0) total = count ?? null;
+      const page = data ?? [];
+      if (!page.length) {
+        if (total !== null && rows.length < total) {
+          throw new Error("Job materials changed while loading. Please retry.");
+        }
+        break;
+      }
+      rows.push(...page);
+      if (total !== null ? rows.length >= total : page.length < 500) break;
     }
-
-    if (options?.filter?.kind) {
-      query = query.eq("kind", options.filter.kind);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      throw error;
-    }
-
-    return (data ?? []).map((row) => jobMaterialsMapper.toDomain(row));
+    return rows.map((row) => jobMaterialsMapper.toDomain(row));
   }
 
   async create(input: CreateJobMaterialInput): Promise<JobMaterialEntry> {
