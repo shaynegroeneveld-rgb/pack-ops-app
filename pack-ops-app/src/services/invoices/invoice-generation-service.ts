@@ -137,26 +137,36 @@ function collapseLaborLines(lines: InvoicePreviewLine[], sectionName: string | n
     return nonLaborLines;
   }
 
-  const quantity = roundQuantity(laborLines.reduce((total, line) => total + line.quantity, 0));
-  const subtotal = roundMoney(laborLines.reduce((total, line) => total + line.subtotal, 0));
+  const groups = new Map<string, InvoicePreviewLine[]>();
+  for (const line of laborLines) {
+    const part = sectionName?.trim() || line.sectionName?.trim() || "General";
+    const group = groups.get(part) ?? [];
+    group.push(line);
+    groups.set(part, group);
+  }
 
   return [
     ...nonLaborLines,
-    {
-      id: "labor:summary",
-      description: "Labour",
-      unit: "hours",
-      quantity,
-      unitPrice: quantity > 0 ? roundMoney(subtotal / quantity) : 0,
-      subtotal,
-      sectionName,
-      category: "labor",
-      note: null,
-      sourceKind: "actual-labor",
-      generatedSourceId: "labor:summary",
-      origin: "generated",
-      isEdited: false,
-    },
+    ...Array.from(groups, ([part, group]): InvoicePreviewLine => {
+      const quantity = roundQuantity(group.reduce((total, line) => total + line.quantity, 0));
+      const subtotal = roundMoney(group.reduce((total, line) => total + line.subtotal, 0));
+      const id = `labor:summary:${part}`;
+      return {
+        id,
+        description: "Labour",
+        unit: "hours",
+        quantity,
+        unitPrice: quantity > 0 ? roundMoney(subtotal / quantity) : 0,
+        subtotal,
+        sectionName: part === "General" ? null : part,
+        category: "labor",
+        note: null,
+        sourceKind: "actual-labor",
+        generatedSourceId: id,
+        origin: "generated",
+        isEdited: false,
+      };
+    }),
   ];
 }
 

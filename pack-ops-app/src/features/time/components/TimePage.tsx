@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import { useAuthContext } from "@/app/contexts/auth-context";
 import { getSupabaseClient } from "@/data/supabase/client";
@@ -20,7 +20,6 @@ function sectionHeadingRow() {
 export function TimePage() {
   const { currentUser } = useAuthContext();
   const client = getSupabaseClient(import.meta.env);
-  const queryClient = useQueryClient();
   const [filters, setFilters] = useState({
     periodMode: "range" as "range" | "month",
     month: "",
@@ -60,19 +59,7 @@ export function TimePage() {
       }),
   });
 
-  const approveTimeEntry = useMutation({
-    mutationFn: (timeEntryId: string) => service.approveTimeEntry(timeEntryId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["time-report", currentUser.user.id] });
-    },
-  });
-
   const report = reportQuery.data;
-  const canApproveTime =
-    Boolean(currentUser.user.canApproveTime) ||
-    currentUser.user.role === "owner" ||
-    currentUser.user.role === "office" ||
-    currentUser.user.role === "bookkeeper";
 
   const hoursBreakdownTitle =
     hoursView === "job" ? "Hours by Job" : hoursView === "day" ? "Hours by Day" : "Hours by User";
@@ -261,15 +248,6 @@ export function TimePage() {
                       <strong>{entry.jobNumber} · {entry.jobTitle}</strong>
                       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", justifyContent: "flex-end" }}>
                         <strong>{entry.hours.toFixed(2)}h</strong>
-                        {entry.status === "pending" && canApproveTime ? (
-                          <Button
-                            size="sm"
-                            loading={approveTimeEntry.isPending && approveTimeEntry.variables === entry.id}
-                            onClick={() => void approveTimeEntry.mutateAsync(entry.id)}
-                          >
-                            Approve
-                          </Button>
-                        ) : null}
                       </div>
                     </div>
                     <div style={{ color: "var(--color-text-soft)", fontSize: "14px" }}>
@@ -277,14 +255,9 @@ export function TimePage() {
                       {entry.enteredByName ? ` · Entered by ${entry.enteredByName}` : ""}
                     </div>
                     <div style={{ color: "var(--color-text-soft)", fontSize: "14px" }}>
-                      Source: {entry.sourceLabel ?? "—"} · Status: {entry.status.replaceAll("_", " ")}
+                      Source: {entry.sourceLabel ?? "—"} · Status: {entry.status === "rejected" ? "rejected" : "recorded"}
                     </div>
                     {entry.note ? <div style={{ color: "var(--color-text)" }}>{entry.note}</div> : null}
-                    {approveTimeEntry.isError && approveTimeEntry.variables === entry.id ? (
-                      <div style={{ color: "var(--color-danger-strong)", fontSize: "14px" }}>
-                        Could not approve this time entry.
-                      </div>
-                    ) : null}
                   </Card>
                 ))
               )}

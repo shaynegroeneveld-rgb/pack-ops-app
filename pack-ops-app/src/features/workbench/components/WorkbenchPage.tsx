@@ -1404,7 +1404,6 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
     updateJob,
     updateJobStatus,
     archiveJob,
-    approveTimeEntry,
     createActualTimeEntry,
     updateTimeEntry,
     deleteTimeEntry,
@@ -1505,15 +1504,14 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
     const isRecent = (value: string | null | undefined) => Boolean(value && new Date(value).getTime() >= cutoff);
     const userLabels = new Map(assignableUsers.map((user) => [String(user.id), user.label]));
     userLabels.set(String(currentUser.user.id), currentUser.user.fullName || currentUser.user.email || "Current user");
-    const employees = new Map<string, { userId: string; label: string; hours: number; entries: number; pending: number; jobs: Map<string, { label: string; hours: number }> }>();
+    const employees = new Map<string, { userId: string; label: string; hours: number; entries: number; jobs: Map<string, { label: string; hours: number }> }>();
     const jobRows = jobs.map((item) => {
       const recentTime = item.timeEntries.filter((entry) => isRecent(`${entry.workDate}T12:00:00`) && entry.status !== "rejected");
       for (const entry of recentTime) {
         const userId = String(entry.userId);
-        const employee = employees.get(userId) ?? { userId, label: userLabels.get(userId) ?? "Unknown worker", hours: 0, entries: 0, pending: 0, jobs: new Map() };
+        const employee = employees.get(userId) ?? { userId, label: userLabels.get(userId) ?? "Unknown worker", hours: 0, entries: 0, jobs: new Map() };
         employee.hours += entry.hours;
         employee.entries += 1;
-        if (entry.status === "pending") employee.pending += 1;
         const job = employee.jobs.get(String(item.job.id)) ?? { label: `${item.job.number} · ${item.job.title}`, hours: 0 };
         job.hours += entry.hours;
         employee.jobs.set(String(item.job.id), job);
@@ -1528,7 +1526,6 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
       const invoiceCount = recent(item.paperworkActivity.invoiceTimestamps).length;
       const permitCount = recent(item.paperworkActivity.permitTimestamps).length;
       const taskCount = item.actionItems.filter((entry) => isRecent(entry.updatedAt)).length;
-      const pendingTime = item.timeEntries.filter((entry) => entry.status === "pending").length;
       const hours = recentTime.reduce((total, entry) => total + entry.hours, 0);
       const workerNames = Array.from(new Set(recentTime.map((entry) => userLabels.get(String(entry.userId)) ?? "Unknown worker")));
       const timestamps = [
@@ -1539,8 +1536,8 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
       ].sort().reverse();
       const activityCount = recentTime.length + materialCount + costCount + noteCount + uploadCount + invoiceCount + taskCount;
       const needsBilling = ["work_complete", "ready_to_invoice"].includes(item.job.status);
-      return { item, hours, timeEntries: recentTime.length, workerNames, materialCount, costCount, noteCount, uploadCount, invoiceCount, permitCount, taskCount, pendingTime, activityCount, needsBilling, lastActivityAt: timestamps[0] ?? null };
-    }).filter((row) => row.activityCount > 0 || row.pendingTime > 0 || row.needsBilling)
+      return { item, hours, timeEntries: recentTime.length, workerNames, materialCount, costCount, noteCount, uploadCount, invoiceCount, permitCount, taskCount, activityCount, needsBilling, lastActivityAt: timestamps[0] ?? null };
+    }).filter((row) => row.activityCount > 0 || row.needsBilling)
       .sort((left, right) => (right.lastActivityAt ?? "").localeCompare(left.lastActivityAt ?? ""));
 
     return {
@@ -1548,7 +1545,6 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
       jobRows,
       totalHours: Array.from(employees.values()).reduce((total, employee) => total + employee.hours, 0),
       totalEntries: Array.from(employees.values()).reduce((total, employee) => total + employee.entries, 0),
-      pendingTime: jobs.reduce((total, item) => total + item.timeEntries.filter((entry) => entry.status === "pending").length, 0),
     };
   }, [activitySummaryDays, assignableUsers, currentUser.user.email, currentUser.user.fullName, currentUser.user.id, jobs]);
   const neededMaterialDisplayItems = useMemo<
@@ -1676,14 +1672,13 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
     const jobEvents = (jobWorkspace?.activity ?? []).filter((entry) => entry.type === "job_event" && isRecent(entry.createdAt));
     const invoices = (jobWorkspace?.invoices ?? []).filter((entry) => isRecent(entry.createdAt));
     const hours = timeEntries.filter((entry) => entry.status !== "rejected").reduce((total, entry) => total + entry.hours, 0);
-    const pendingTime = (jobWorkspace?.timeEntries ?? []).filter((entry) => entry.status === "pending").length;
     const timestamps = [
       ...(jobWorkspace?.activity ?? []).map((entry) => entry.createdAt),
       ...(jobWorkspace?.usedMaterials ?? []).map((entry) => entry.updatedAt || entry.createdAt),
       ...(jobWorkspace?.manualActualCostLines ?? []).map((entry) => entry.updatedAt || entry.createdAt),
       ...(jobWorkspace?.invoices ?? []).map((entry) => entry.createdAt),
     ].filter(Boolean).sort().reverse();
-    return { timeEntries: timeEntries.length, hours, materials: materials.length, costs: costs.length, notes: notes.length, uploads: uploads.length, jobEvents: jobEvents.length, invoices: invoices.length, pendingTime, lastActivityAt: timestamps[0] ?? null };
+    return { timeEntries: timeEntries.length, hours, materials: materials.length, costs: costs.length, notes: notes.length, uploads: uploads.length, jobEvents: jobEvents.length, invoices: invoices.length, lastActivityAt: timestamps[0] ?? null };
   }, [activitySummaryDays, jobWorkspace]);
   const labourByPart = useMemo(
     () =>
@@ -2757,7 +2752,6 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px" }}>
             <div style={{ ...cardStyle("#fafcff"), padding: "12px" }}><div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Total employee time</div><strong style={{ fontSize: "20px" }}>{companyActivitySummary.totalHours.toFixed(2)}h</strong></div>
             <div style={{ ...cardStyle("#fafcff"), padding: "12px" }}><div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Time entries</div><strong style={{ fontSize: "20px" }}>{companyActivitySummary.totalEntries}</strong></div>
-            <div style={{ ...cardStyle(companyActivitySummary.pendingTime > 0 ? "#fff7ed" : "#f0fdf4"), padding: "12px" }}><div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Pending approval</div><strong style={{ fontSize: "20px", color: companyActivitySummary.pendingTime > 0 ? "#9a3412" : "#166534" }}>{companyActivitySummary.pendingTime}</strong></div>
             <div style={{ ...cardStyle("#fafcff"), padding: "12px" }}><div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Jobs with activity/flags</div><strong style={{ fontSize: "20px" }}>{companyActivitySummary.jobRows.length}</strong></div>
           </div>
 
@@ -2772,7 +2766,7 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
                     {companyActivitySummary.employees.map((employee) => (
                       <div key={employee.userId} style={{ ...cardStyle("#fafcff"), padding: "12px", display: "grid", gap: "8px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", gap: "10px" }}><strong>{employee.label}</strong><strong>{employee.hours.toFixed(2)}h</strong></div>
-                        <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>{employee.entries} entr{employee.entries === 1 ? "y" : "ies"}{employee.pending > 0 ? ` · ${employee.pending} pending` : ""}</div>
+                        <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>{employee.entries} entr{employee.entries === 1 ? "y" : "ies"}</div>
                         <div style={{ display: "grid", gap: "4px", fontSize: "13px" }}>
                           {employee.jobs.map((job) => <div key={job.label} style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}><span style={{ overflowWrap: "anywhere" }}>{job.label}</span><strong>{job.hours.toFixed(2)}h</strong></div>)}
                         </div>
@@ -2805,7 +2799,7 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
                         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", fontSize: "12px" }}>
                           <span>{row.materialCount} materials</span><span>{row.costCount} costs</span><span>{row.noteCount} notes</span><span>{row.uploadCount} uploads</span><span>{row.taskCount} task updates</span><span>{row.invoiceCount} invoices</span>{row.permitCount > 0 ? <span>{row.permitCount} permit updates</span> : null}
                         </div>
-                        {(row.pendingTime > 0 || row.needsBilling) ? <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>{row.pendingTime > 0 ? <span style={badgeStyle("#fff7ed", "#9a3412")}>{row.pendingTime} time approval{row.pendingTime === 1 ? "" : "s"}</span> : null}{row.needsBilling ? <span style={badgeStyle("#eef4ff", "#163fcb")}>Review for invoicing</span> : null}</div> : null}
+                        {row.needsBilling ? <span style={badgeStyle("#eef4ff", "#163fcb")}>Review for invoicing</span> : null}
                       </button>
                     ))}
                   </div>
@@ -3584,14 +3578,11 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
                           entry={entry}
                           workedByLabel={userLabelsById.get(String(entry.userId)) ?? "Unknown user"}
                           enteredByLabel={userLabelsById.get(String(entry.createdBy)) ?? userLabelsById.get(String(entry.userId)) ?? "Unknown user"}
-                          canApprove={selectedJob.permissions.canEditTimeEntries}
                           canEdit={selectedJob.permissions.canEditTimeEntries}
                           canDelete={selectedJob.permissions.canDeleteTimeEntries}
-                          isApproving={approveTimeEntry.isPending}
                           isSaving={updateTimeEntry.isPending}
                           isDeleting={deleteTimeEntry.isPending}
                           actualPartOptions={actualPartOptions}
-                          onApprove={() => approveTimeEntry.mutate(entry)}
                           onSave={async (input) => {
                             await updateTimeEntry.mutateAsync({
                               entryId: entry.id,
@@ -4009,11 +4000,10 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
         </div>
         <div style={{ display: "grid", gap: "6px", marginTop: "12px", fontSize: "13px" }}>
           <div><strong>Last update:</strong> {activitySummary.lastActivityAt ? formatDateTimeLabel(activitySummary.lastActivityAt) : "No recorded activity"}</div>
-          {activitySummary.pendingTime > 0 ? <div style={{ color: "#9a3412" }}><strong>Paperwork:</strong> {activitySummary.pendingTime} time entr{activitySummary.pendingTime === 1 ? "y needs" : "ies need"} approval.</div> : null}
           {permitActualSelection && quotedPermitSelection && (permitActualSelection.type !== quotedPermitSelection.type || permitActualSelection.declaredValue !== quotedPermitSelection.declaredValue) ? (
             <div style={{ color: "#9a3412" }}><strong>Permit review:</strong> Actual permit scope/value differs from the quote; confirm the active TSBC permit reflects the final work.</div>
           ) : null}
-          {activitySummary.pendingTime === 0 && !(permitActualSelection && quotedPermitSelection && (permitActualSelection.type !== quotedPermitSelection.type || permitActualSelection.declaredValue !== quotedPermitSelection.declaredValue)) ? (
+          {!(permitActualSelection && quotedPermitSelection && (permitActualSelection.type !== quotedPermitSelection.type || permitActualSelection.declaredValue !== quotedPermitSelection.declaredValue)) ? (
             <div style={{ color: "#166534" }}>No specific paperwork exception is flagged from the recorded data.</div>
           ) : null}
         </div>
@@ -4534,14 +4524,11 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
                     entry={entry}
                     workedByLabel={userLabelsById.get(String(entry.userId)) ?? "Unknown user"}
                     enteredByLabel={userLabelsById.get(String(entry.createdBy)) ?? userLabelsById.get(String(entry.userId)) ?? "Unknown user"}
-                    canApprove={selectedJob.permissions.canEditTimeEntries}
                     canEdit={selectedJob.permissions.canEditTimeEntries}
                     canDelete={selectedJob.permissions.canDeleteTimeEntries}
-                    isApproving={approveTimeEntry.isPending}
                     isSaving={updateTimeEntry.isPending}
                     isDeleting={deleteTimeEntry.isPending}
                     actualPartOptions={actualPartOptions}
-                    onApprove={() => approveTimeEntry.mutate(entry)}
                     onSave={async (input) => {
                       await updateTimeEntry.mutateAsync({
                         entryId: entry.id,

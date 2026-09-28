@@ -7,14 +7,11 @@ interface EditableTimeEntryItemProps {
   entry: TimeEntry;
   workedByLabel: string;
   enteredByLabel: string;
-  canApprove: boolean;
   canEdit: boolean;
   canDelete: boolean;
-  isApproving: boolean;
   isSaving: boolean;
   isDeleting: boolean;
   actualPartOptions: string[];
-  onApprove: () => void;
   onSave: (input: {
     workDate: string;
     startTime: string | null;
@@ -31,14 +28,11 @@ export function EditableTimeEntryItem({
   entry,
   workedByLabel,
   enteredByLabel,
-  canApprove,
   canEdit,
   canDelete,
-  isApproving,
   isSaving,
   isDeleting,
   actualPartOptions,
-  onApprove,
   onSave,
   onDelete,
 }: EditableTimeEntryItemProps) {
@@ -98,7 +92,7 @@ export function EditableTimeEntryItem({
             <span>
             {entry.workDate}
             {entry.startTime && entry.endTime ? ` · ${entry.startTime}-${entry.endTime}` : ""}
-            {` · ${entry.hours}h · ${entry.status.replaceAll("_", " ")}`}
+            {` · ${entry.hours}h · ${entry.status === "rejected" ? "rejected" : "recorded"}`}
             {entry.hourlyRate !== null ? ` · $${entry.hourlyRate.toFixed(2)}/h` : ""}
             {entry.description ? ` · ${entry.description}` : ""}
             </span>
@@ -123,11 +117,6 @@ export function EditableTimeEntryItem({
             </label>
           ) : entry.sectionName ? (
             <span style={{ color: "#5b6475", fontSize: "13px" }}>{entry.sectionName}</span>
-          ) : null}
-          {entry.status === "pending" && canApprove ? (
-            <button style={{ marginLeft: "4px" }} onClick={onApprove} disabled={isApproving}>
-              {isApproving ? "Approving..." : "Approve"}
-            </button>
           ) : null}
           {canEdit ? (
             <button style={{ marginLeft: "4px" }} onClick={() => setIsEditing(true)}>
