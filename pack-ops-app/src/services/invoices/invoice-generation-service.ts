@@ -19,6 +19,7 @@ import type {
   InvoicePreviewLine,
 } from "@/domain/invoices/types";
 import type { QuoteLineItem } from "@/domain/quotes/types";
+import { isTsbcPermitLine } from "@/domain/permits/tsbc-electrical-fees";
 import type { User } from "@/domain/users/types";
 import { readOrgBusinessSettings } from "@/services/settings/org-settings";
 
@@ -265,7 +266,7 @@ export function buildInvoicePreviewFromActuals(
         subtotal: roundMoney(entry.totalCost),
         sectionName: entry.sectionName ?? null,
         category: invoiceCategory,
-        note: entry.note,
+        note: isTsbcPermitLine(entry) ? null : entry.note,
         unitCost: roundMoney(entry.unitCost),
         markupPercent: null,
         sourceKind: "actual-manual",
@@ -586,7 +587,7 @@ export class InvoiceGenerationService {
         subtotal: roundMoney(line.lineTotalSell),
         sectionName: line.sectionName ?? null,
         category: line.lineKind === "labor" ? "labor" : "material",
-        note: line.note ?? null,
+        note: isTsbcPermitLine(line) ? null : line.note ?? null,
         unitCost: roundMoney(line.unitCost),
         markupPercent:
           line.lineKind === "labor" || line.unitCost <= 0

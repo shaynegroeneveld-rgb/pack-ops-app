@@ -15,6 +15,7 @@ import {
   titleStyle,
 } from "@/features/shared/ui/mobile-styles";
 import type { CustomerQuotePreview, QuoteView } from "@/domain/quotes/types";
+import { isTsbcPermitLine } from "@/domain/permits/tsbc-electrical-fees";
 import { Button, Card, Chip, useConfirm } from "@/ui";
 
 function actionRowStyle(): React.CSSProperties {
@@ -62,7 +63,7 @@ function getQuoteStatusTone(status: QuoteView["status"]): { background: string; 
 
 function deriveDraftMarkup(quote: QuoteView, fallbackMarkup: number): string {
   const materialLines = quote.lineItems.filter(
-    (line) => line.lineKind !== "labor" && (line.unitCost ?? 0) > 0,
+    (line) => line.lineKind !== "labor" && !isTsbcPermitLine(line) && (line.unitCost ?? 0) > 0,
   );
 
   if (materialLines.length === 0) {

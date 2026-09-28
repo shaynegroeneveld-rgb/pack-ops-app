@@ -47,6 +47,17 @@ import type { Job, JobAssignment, JobMaterialView } from "@/domain/jobs/types";
 import type { TimeEntry } from "@/domain/time-entries/types";
 import type { JobManualActualCategory, JobManualActualCostLine } from "@/domain/jobs/types";
 import {
+  calculateTsbcElectricalPermitFee,
+  currentTsbcFeeScheduleYear,
+  isTsbcPermitLine,
+  parseTsbcPermitSelection,
+  serializeTsbcPermitSelection,
+  TSBC_PERMIT_DESCRIPTION,
+  TSBC_PERMIT_SECTION,
+  TSBC_PERMIT_TYPE_OPTIONS,
+  type TsbcPermitSelection,
+} from "@/domain/permits/tsbc-electrical-fees";
+import {
   getSelectableJobStatuses,
   getWorkbenchJobPhaseLabel,
   getWorkbenchWaitingReasonLabel,
@@ -1294,6 +1305,7 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
   const [jobSearch, setJobSearch] = useState("");
   const [jobFocus,setJobFocus]=useState<"all"|"tasks"|"materials"|"billing">("all");
   const [showAllActivity,setShowAllActivity]=useState(false);
+  const [activitySummaryDays, setActivitySummaryDays] = useState<7 | 30>(7);
   const [showAssignPeople, setShowAssignPeople] = useState(false);
   const [showHiddenJobs, setShowHiddenJobs] = useState(() => {
     if (typeof window === "undefined") {
@@ -1448,6 +1460,8 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
   const activeTimers = activeTimersQuery.data ?? [];
   const selectedJob = jobs.find((item) => item.job.id === selectedJobId) ?? null;
   const jobWorkspace = jobWorkspaceQuery.data ?? null;
+  const permitActualLine = (jobWorkspace?.manualActualCostLines ?? []).find(isTsbcPermitLine) ?? null;
+  const permitActualSelection = parseTsbcPermitSelection(permitActualLine?.note);
   const queueCount = queueQuery.data ?? 0;
   const attachmentPreviewUrls = attachmentPreviewUrlsQuery.data ?? {};
   const invoiceService = useMemo(
@@ -1482,7 +1496,9 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
   const selectedJobActualHours = selectedJob?.timeEntries
     .filter((entry) => entry.status !== "rejected")
     .reduce((total, entry) => total + entry.hours, 0) ?? 0;
-  const estimatedMaterialLines = jobWorkspace?.estimatedMaterials ?? selectedJob?.job.estimateSnapshot?.materials ?? [];
+  const estimatedMaterialLinesWithPermit = jobWorkspace?.estimatedMaterials ?? selectedJob?.job.estimateSnapshot?.materials ?? [];
+  const quotedPermitSelection = parseTsbcPermitSelection(estimatedMaterialLinesWithPermit.find(isTsbcPermitLine)?.note);
+  const estimatedMaterialLines = estimatedMaterialLinesWithPermit.filter((line) => !isTsbcPermitLine(line));
   const neededMaterialDisplayItems = useMemo<
     Array<{
       key: string;
@@ -1593,10 +1609,30 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
     () =>
       actualPartOptions.map((partName) => ({
         name: partName,
-        lines: (jobWorkspace?.manualActualCostLines ?? []).filter((line) => (line.sectionName?.trim() || "General") === partName),
+        lines: (jobWorkspace?.manualActualCostLines ?? []).filter((line) => !isTsbcPermitLine(line) && (line.sectionName?.trim() || "General") === partName),
       })),
     [actualPartOptions, jobWorkspace?.manualActualCostLines],
   );
+  const activitySummary = useMemo(() => {
+    const cutoff = Date.now() - activitySummaryDays * 24 * 60 * 60 * 1000;
+    const isRecent = (value: string | null | undefined) => Boolean(value && new Date(value).getTime() >= cutoff);
+    const timeEntries = (jobWorkspace?.timeEntries ?? []).filter((entry) => isRecent(entry.workDate || entry.createdAt));
+    const materials = (jobWorkspace?.usedMaterials ?? []).filter((entry) => isRecent(entry.createdAt));
+    const costs = (jobWorkspace?.manualActualCostLines ?? []).filter((entry) => isRecent(entry.updatedAt || entry.createdAt));
+    const notes = (jobWorkspace?.activity ?? []).filter((entry) => entry.type === "note" && isRecent(entry.createdAt));
+    const uploads = (jobWorkspace?.activity ?? []).filter((entry) => entry.type === "upload" && isRecent(entry.createdAt));
+    const jobEvents = (jobWorkspace?.activity ?? []).filter((entry) => entry.type === "job_event" && isRecent(entry.createdAt));
+    const invoices = (jobWorkspace?.invoices ?? []).filter((entry) => isRecent(entry.createdAt));
+    const hours = timeEntries.filter((entry) => entry.status !== "rejected").reduce((total, entry) => total + entry.hours, 0);
+    const pendingTime = (jobWorkspace?.timeEntries ?? []).filter((entry) => entry.status === "pending").length;
+    const timestamps = [
+      ...(jobWorkspace?.activity ?? []).map((entry) => entry.createdAt),
+      ...(jobWorkspace?.usedMaterials ?? []).map((entry) => entry.updatedAt || entry.createdAt),
+      ...(jobWorkspace?.manualActualCostLines ?? []).map((entry) => entry.updatedAt || entry.createdAt),
+      ...(jobWorkspace?.invoices ?? []).map((entry) => entry.createdAt),
+    ].filter(Boolean).sort().reverse();
+    return { timeEntries: timeEntries.length, hours, materials: materials.length, costs: costs.length, notes: notes.length, uploads: uploads.length, jobEvents: jobEvents.length, invoices: invoices.length, pendingTime, lastActivityAt: timestamps[0] ?? null };
+  }, [activitySummaryDays, jobWorkspace]);
   const labourByPart = useMemo(
     () =>
       actualPartOptions.map((partName) => ({
@@ -2095,6 +2131,30 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
     }
 
     await deleteManualActualCostLine.mutateAsync(String(item.id));
+  }
+
+  async function handleActualPermitSelection(selection: TsbcPermitSelection | null) {
+    if (!selectedJob) return;
+    if (!selection) {
+      if (permitActualLine) await deleteManualActualCostLine.mutateAsync(String(permitActualLine.id));
+      return;
+    }
+
+    const fee = calculateTsbcElectricalPermitFee(selection);
+    const input = {
+      category: "other" as const,
+      description: TSBC_PERMIT_DESCRIPTION,
+      quantity: 1,
+      unitCost: fee,
+      totalCost: fee,
+      note: serializeTsbcPermitSelection(selection),
+      sectionName: TSBC_PERMIT_SECTION,
+    };
+    if (permitActualLine) {
+      await updateManualActualCostLine.mutateAsync({ id: String(permitActualLine.id), ...input });
+    } else {
+      await createManualActualCostLine.mutateAsync({ jobId: selectedJob.job.id, ...input });
+    }
   }
 
   async function handleAddAssemblyToActuals() {
@@ -2860,6 +2920,66 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
           </Button>
         </div>
       </div>
+
+      <section style={{ ...cardStyle("#f8fafc"), borderColor: "#c7d2fe" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+          <div>
+            <h3 style={{ margin: 0 }}>TSBC permit actual</h3>
+            <div style={{ color: "var(--color-text-soft)", fontSize: "13px", marginTop: "4px" }}>Track the fee actually incurred in job cost and actuals invoicing.</div>
+          </div>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", fontWeight: 700 }}>
+            <input
+              type="checkbox"
+              checked={Boolean(permitActualSelection)}
+              disabled={createManualActualCostLine.isPending || updateManualActualCostLine.isPending || deleteManualActualCostLine.isPending}
+              onChange={(event) => void handleActualPermitSelection(event.target.checked
+                ? quotedPermitSelection ?? { type: "other", declaredValue: 0, scheduleYear: currentTsbcFeeScheduleYear() }
+                : null)}
+            />
+            {permitActualSelection ? "Included" : "Not included"}
+          </label>
+        </div>
+        {permitActualSelection ? (
+          <div style={{ display: "grid", gap: "10px", marginTop: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobileLayout ? "1fr" : "minmax(260px, 2fr) minmax(140px, 1fr)", gap: "10px" }}>
+              <label style={{ display: "grid", gap: "6px" }}>
+                <span>Permit type</span>
+                <select
+                  value={permitActualSelection.type}
+                  disabled={updateManualActualCostLine.isPending}
+                  onChange={(event) => void handleActualPermitSelection({ ...permitActualSelection, type: event.target.value as TsbcPermitSelection["type"] })}
+                >
+                  {TSBC_PERMIT_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </label>
+              <label style={{ display: "grid", gap: "6px" }}>
+                <span>Fee schedule</span>
+                <select
+                  value={permitActualSelection.scheduleYear}
+                  disabled={updateManualActualCostLine.isPending}
+                  onChange={(event) => void handleActualPermitSelection({ ...permitActualSelection, scheduleYear: Number(event.target.value) as TsbcPermitSelection["scheduleYear"] })}
+                >
+                  <option value={2026}>2026</option><option value={2027}>2027</option>
+                </select>
+              </label>
+            </div>
+            {TSBC_PERMIT_TYPE_OPTIONS.find((option) => option.value === permitActualSelection.type)?.usesDeclaredValue ? (
+              <label key={`${permitActualLine?.id}:${permitActualSelection.declaredValue}`} style={{ display: "grid", gap: "6px", maxWidth: "320px" }}>
+                <span>Final declared electrical job value</span>
+                <input
+                  type="number" min="0" step="1" defaultValue={permitActualSelection.declaredValue}
+                  disabled={updateManualActualCostLine.isPending}
+                  onBlur={(event) => void handleActualPermitSelection({ ...permitActualSelection, declaredValue: Math.max(0, Number(event.target.value) || 0) })}
+                />
+              </label>
+            ) : null}
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+              <span style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>Update this if the final scope/value changes so the actual cost and paperwork cue stay accurate.</span>
+              <strong style={{ fontSize: "20px" }}>${calculateTsbcElectricalPermitFee(permitActualSelection).toFixed(2)}</strong>
+            </div>
+          </div>
+        ) : null}
+      </section>
 
       <div
         style={{
@@ -3732,6 +3852,44 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
         {selectedJob.job.description ? (
           <div style={{ marginTop: "12px", color: "var(--color-text-muted)" }}>{selectedJob.job.description}</div>
         ) : null}
+      </section>
+
+      <section style={{ ...cardStyle("#fff"), minWidth: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+          <div>
+            <h3 style={{ margin: 0 }}>Paperwork summary</h3>
+            <div style={{ color: "var(--color-text-soft)", fontSize: "13px", marginTop: "4px" }}>Recent job activity at a glance.</div>
+          </div>
+          <div style={{ display: "flex", gap: "6px" }}>
+            <Button variant={activitySummaryDays === 7 ? "primary" : "secondary"} size="sm" onClick={() => setActivitySummaryDays(7)}>7 days</Button>
+            <Button variant={activitySummaryDays === 30 ? "primary" : "secondary"} size="sm" onClick={() => setActivitySummaryDays(30)}>30 days</Button>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(125px, 1fr))", gap: "10px", marginTop: "14px" }}>
+          {[
+            ["Time", `${activitySummary.hours.toFixed(2)}h · ${activitySummary.timeEntries} entries`],
+            ["Materials", `${activitySummary.materials} logged`],
+            ["Other costs", `${activitySummary.costs} changed`],
+            ["Notes", String(activitySummary.notes)],
+            ["Uploads", String(activitySummary.uploads)],
+            ["Invoices", String(activitySummary.invoices)],
+          ].map(([label, value]) => (
+            <div key={label} style={{ ...cardStyle("#fafcff"), padding: "11px" }}>
+              <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>{label}</div>
+              <strong>{value}</strong>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "grid", gap: "6px", marginTop: "12px", fontSize: "13px" }}>
+          <div><strong>Last update:</strong> {activitySummary.lastActivityAt ? formatDateTimeLabel(activitySummary.lastActivityAt) : "No recorded activity"}</div>
+          {activitySummary.pendingTime > 0 ? <div style={{ color: "#9a3412" }}><strong>Paperwork:</strong> {activitySummary.pendingTime} time entr{activitySummary.pendingTime === 1 ? "y needs" : "ies need"} approval.</div> : null}
+          {permitActualSelection && quotedPermitSelection && (permitActualSelection.type !== quotedPermitSelection.type || permitActualSelection.declaredValue !== quotedPermitSelection.declaredValue) ? (
+            <div style={{ color: "#9a3412" }}><strong>Permit review:</strong> Actual permit scope/value differs from the quote; confirm the active TSBC permit reflects the final work.</div>
+          ) : null}
+          {activitySummary.pendingTime === 0 && !(permitActualSelection && quotedPermitSelection && (permitActualSelection.type !== quotedPermitSelection.type || permitActualSelection.declaredValue !== quotedPermitSelection.declaredValue)) ? (
+            <div style={{ color: "#166534" }}>No specific paperwork exception is flagged from the recorded data.</div>
+          ) : null}
+        </div>
       </section>
 
       <section style={{ ...cardStyle("#fff"), minWidth: 0 }}>

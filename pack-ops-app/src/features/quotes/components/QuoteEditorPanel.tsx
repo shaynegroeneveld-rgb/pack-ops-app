@@ -8,6 +8,17 @@ import { MaterialSearchSelect } from "@/features/materials/components/MaterialSe
 import { AssemblySearchSelect } from "@/features/quotes/components/AssemblySearchSelect";
 import { getQuoteStatusActions } from "@/domain/quotes/status";
 import type { QuoteLineItemInput, QuoteView } from "@/domain/quotes/types";
+import {
+  calculateTsbcElectricalPermitFee,
+  currentTsbcFeeScheduleYear,
+  isTsbcPermitLine,
+  parseTsbcPermitSelection,
+  serializeTsbcPermitSelection,
+  TSBC_PERMIT_DESCRIPTION,
+  TSBC_PERMIT_SECTION,
+  TSBC_PERMIT_TYPE_OPTIONS,
+  type TsbcPermitSelection,
+} from "@/domain/permits/tsbc-electrical-fees";
 import { createId } from "@/lib/create-id";
 import { Modal, useConfirm } from "@/ui";
 
@@ -124,7 +135,7 @@ function buildOrderList(lines: QuoteEditorDraftLine[]): string {
   const grouped = new Map<string, { description: string; sku: string | null; quantity: number; unit: string }>();
 
   for (const line of lines) {
-    if (line.lineKind === "labor") {
+    if (line.lineKind === "labor" || isTsbcPermitLine(line)) {
       continue;
     }
 
@@ -337,6 +348,7 @@ export function QuoteEditorPanel({
         totalCost: 0,
         materialSell: 0,
         laborSell: 0,
+        permitFee: 0,
         subtotal: 0,
         tax: 0,
         finalTotal: 0,
@@ -347,7 +359,8 @@ export function QuoteEditorPanel({
       };
     }
 
-    const materialLines = draft.lineItems.filter((line) => line.lineKind !== "labor");
+    const permitLines = draft.lineItems.filter(isTsbcPermitLine);
+    const materialLines = draft.lineItems.filter((line) => line.lineKind !== "labor" && !isTsbcPermitLine(line));
     const laborLines = draft.lineItems.filter((line) => line.lineKind === "labor");
     const materialCost = roundMoney(
       materialLines.reduce((total, line) => total + (line.unitCost ?? 0) * (line.quantity ?? 0), 0),
@@ -361,10 +374,12 @@ export function QuoteEditorPanel({
     const laborSell = roundMoney(
       laborLines.reduce((total, line) => total + (line.unitSell ?? 0) * (line.quantity ?? 0), 0),
     );
-    const subtotal = roundMoney(materialSell + laborSell);
+    const permitCost = roundMoney(permitLines.reduce((total, line) => total + (line.unitCost ?? 0) * (line.quantity ?? 0), 0));
+    const permitFee = roundMoney(permitLines.reduce((total, line) => total + (line.unitSell ?? 0) * (line.quantity ?? 0), 0));
+    const subtotal = roundMoney(materialSell + laborSell + permitFee);
     const tax = roundMoney(subtotal * toNumber(draft.taxRate, 0));
     const finalTotal = roundMoney(subtotal + tax);
-    const totalCost = roundMoney(materialCost + laborCost);
+    const totalCost = roundMoney(materialCost + laborCost + permitCost);
     const grossProfit = roundMoney(subtotal - totalCost);
     const grossMarginPercent = subtotal > 0 ? roundMoney((grossProfit / subtotal) * 100) : 0;
     const laborHours = laborLines.reduce((total, line) => total + (line.quantity ?? 0), 0);
@@ -377,6 +392,7 @@ export function QuoteEditorPanel({
       totalCost,
       materialSell,
       laborSell,
+      permitFee,
       subtotal,
       tax,
       finalTotal,
@@ -453,11 +469,14 @@ export function QuoteEditorPanel({
 
   const selectedJobType = jobTypeOptions.find((option) => option.id === currentDraft.jobTypeId) ?? null;
 
-  const materialLines = currentDraft.lineItems.filter((line) => line.lineKind !== "labor");
+  const permitLine = currentDraft.lineItems.find(isTsbcPermitLine) ?? null;
+  const permitSelection = parseTsbcPermitSelection(permitLine?.note) ?? null;
+  const materialLines = currentDraft.lineItems.filter((line) => line.lineKind !== "labor" && !isTsbcPermitLine(line));
   const laborLines = currentDraft.lineItems.filter((line) => line.lineKind === "labor");
   const lineSectionNames = Array.from(
     new Set(
       currentDraft.lineItems
+        .filter((line) => !isTsbcPermitLine(line))
         .map((line) => line.sectionName?.trim())
         .filter((section): section is string => Boolean(section)),
     ),
@@ -472,7 +491,7 @@ export function QuoteEditorPanel({
     for (const sectionName of lineSectionNames) {
       ordered.add(sectionName);
     }
-    if (currentDraft.lineItems.some((line) => !line.sectionName?.trim()) || ordered.size === 0) {
+    if (currentDraft.lineItems.some((line) => !isTsbcPermitLine(line) && !line.sectionName?.trim()) || ordered.size === 0) {
       return ["General", ...Array.from(ordered)];
     }
     return Array.from(ordered);
@@ -482,7 +501,7 @@ export function QuoteEditorPanel({
     for (const sectionName of quoteSections) {
       grouped.set(sectionName, []);
     }
-    for (const line of currentDraft.lineItems) {
+    for (const line of currentDraft.lineItems.filter((item) => !isTsbcPermitLine(item))) {
       const section = line.sectionName?.trim() || "General";
       const current = grouped.get(section) ?? [];
       current.push(line);
@@ -552,6 +571,31 @@ export function QuoteEditorPanel({
       const next = new Set(current);
       next.delete(localId);
       return next;
+    });
+  }
+
+  function setPermitSelection(selection: TsbcPermitSelection | null) {
+    setDraft((current) => {
+      if (!current) return current;
+      const withoutPermit = current.lineItems.filter((line) => !isTsbcPermitLine(line));
+      if (!selection) return { ...current, lineItems: withoutPermit };
+      const fee = calculateTsbcElectricalPermitFee(selection);
+      const nextPermitLine: QuoteEditorDraftLine = {
+        localId: permitLine?.localId ?? createLocalId(),
+        ...(permitLine?.id ? { id: permitLine.id } : {}),
+        sortOrder: withoutPermit.length,
+        description: TSBC_PERMIT_DESCRIPTION,
+        sku: null,
+        note: serializeTsbcPermitSelection(selection),
+        sectionName: TSBC_PERMIT_SECTION,
+        sourceType: "manual",
+        lineKind: "item",
+        quantity: 1,
+        unit: "permit",
+        unitCost: fee,
+        unitSell: fee,
+      };
+      return { ...current, lineItems: [...withoutPermit, nextPermitLine] };
     });
   }
 
@@ -655,7 +699,7 @@ export function QuoteEditorPanel({
         ? {
             ...current,
             lineItems: current.lineItems.map((line) =>
-              line.lineKind === "labor"
+              line.lineKind === "labor" || isTsbcPermitLine(line)
                 ? line
                 : {
                     ...line,
@@ -731,6 +775,90 @@ export function QuoteEditorPanel({
         <p style={{ margin: 0, color: "#5b6475" }}>
           Build the internal estimate with materials, assemblies, manual lines, and live totals.
         </p>
+
+        <div
+          style={{
+            border: "1px solid #c7d2fe",
+            borderRadius: "14px",
+            padding: "14px",
+            background: "#f8fafc",
+            display: "grid",
+            gap: "12px",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+            <div>
+              <strong style={{ display: "block" }}>TSBC electrical permit</strong>
+              <span style={{ color: "#5b6475", fontSize: "13px" }}>2026–2027 published electrical fee schedule</span>
+            </div>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", fontWeight: 700 }}>
+              <input
+                type="checkbox"
+                checked={Boolean(permitSelection)}
+                disabled={isPending || isLockedByInvoice}
+                onChange={(event) => {
+                  if (!event.target.checked) {
+                    setPermitSelection(null);
+                    return;
+                  }
+                  const declaredValue = roundMoney(
+                    currentDraft.lineItems
+                      .filter((line) => !isTsbcPermitLine(line))
+                      .reduce((total, line) => total + (line.unitSell ?? 0) * (line.quantity ?? 0), 0),
+                  );
+                  setPermitSelection({ type: "other", declaredValue, scheduleYear: currentTsbcFeeScheduleYear() });
+                }}
+              />
+              {permitSelection ? "Included" : "Not included"}
+            </label>
+          </div>
+          {permitSelection ? (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: isMobileLayout ? "1fr" : "minmax(260px, 2fr) minmax(140px, 1fr)", gap: "10px" }}>
+                <label style={{ display: "grid", gap: "6px" }}>
+                  <span>Permit type</span>
+                  <select
+                    value={permitSelection.type}
+                    disabled={isPending || isLockedByInvoice}
+                    onChange={(event) => setPermitSelection({ ...permitSelection, type: event.target.value as TsbcPermitSelection["type"] })}
+                  >
+                    {TSBC_PERMIT_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+                <label style={{ display: "grid", gap: "6px" }}>
+                  <span>Fee schedule</span>
+                  <select
+                    value={permitSelection.scheduleYear}
+                    disabled={isPending || isLockedByInvoice}
+                    onChange={(event) => setPermitSelection({ ...permitSelection, scheduleYear: Number(event.target.value) as TsbcPermitSelection["scheduleYear"] })}
+                  >
+                    <option value={2026}>2026</option>
+                    <option value={2027}>2027</option>
+                  </select>
+                </label>
+              </div>
+              {TSBC_PERMIT_TYPE_OPTIONS.find((option) => option.value === permitSelection.type)?.usesDeclaredValue ? (
+                <label style={{ display: "grid", gap: "6px", maxWidth: "320px" }}>
+                  <span>TSBC declared electrical job value</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={permitSelection.declaredValue}
+                    disabled={isPending || isLockedByInvoice}
+                    onChange={(event) => setPermitSelection({ ...permitSelection, declaredValue: Math.max(0, Number(event.target.value) || 0) })}
+                  />
+                </label>
+              ) : null}
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ color: "#5b6475", fontSize: "13px" }}>
+                  Declared value should include electrical labour and materials from all sources, exclude GST and excluded utilization equipment. Review before filing.
+                </span>
+                <strong style={{ fontSize: "20px" }}>${calculateTsbcElectricalPermitFee(permitSelection).toFixed(2)}</strong>
+              </div>
+            </>
+          ) : null}
+        </div>
 
         <div
           style={{
@@ -1532,6 +1660,7 @@ export function QuoteEditorPanel({
               <div><div style={{ color: "#5b6475", fontSize: "13px" }}>Total Cost</div><strong>${totals.totalCost.toFixed(2)}</strong></div>
               <div><div style={{ color: "#5b6475", fontSize: "13px" }}>Material Sell</div><strong>${totals.materialSell.toFixed(2)}</strong></div>
               <div><div style={{ color: "#5b6475", fontSize: "13px" }}>Labor Sell</div><strong>${totals.laborSell.toFixed(2)}</strong></div>
+              <div><div style={{ color: "#5b6475", fontSize: "13px" }}>Permit Fee</div><strong>${totals.permitFee.toFixed(2)}</strong></div>
               <div><div style={{ color: "#5b6475", fontSize: "13px" }}>Gross Profit</div><strong>${totals.grossProfit.toFixed(2)}</strong></div>
               <div><div style={{ color: "#5b6475", fontSize: "13px" }}>Gross Margin %</div><strong>{totals.grossMarginPercent.toFixed(2)}%</strong></div>
               <div><div style={{ color: "#5b6475", fontSize: "13px" }}>Revenue / Hour</div><strong>{totals.revenuePerHour === null ? "—" : `$${totals.revenuePerHour.toFixed(2)}`}</strong></div>
