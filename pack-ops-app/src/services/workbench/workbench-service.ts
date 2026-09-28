@@ -40,6 +40,7 @@ import {
 import type { ActiveTimer, TimeEntry } from "@/domain/time-entries/types";
 import type { User } from "@/domain/users/types";
 import type { SavedInvoiceSummary } from "@/domain/invoices/types";
+import { isTsbcPermitLine } from "@/domain/permits/tsbc-electrical-fees";
 import { isWorkbenchEntityRef } from "@/lib/entity-ref/workbench-entity-ref";
 import {
   canAssignCurrentUserToWorkbenchJob,
@@ -83,6 +84,14 @@ export interface WorkbenchJobCard {
   }>;
   timeEntries: TimeEntry[];
   actionItems: ActionItem[];
+  paperworkActivity: {
+    materialTimestamps: string[];
+    manualCostTimestamps: string[];
+    noteTimestamps: string[];
+    uploadTimestamps: string[];
+    invoiceTimestamps: string[];
+    permitTimestamps: string[];
+  };
   workflow: ReturnType<typeof deriveJobWorkflowFlags>;
   permissions: {
     canCreateTimeEntry: boolean;
@@ -325,8 +334,9 @@ export class WorkbenchService {
 
   async listJobCards(): Promise<WorkbenchJobCard[]> {
     await this.sync.refreshWorkbench();
+    const canViewCompanyPaperwork = this.currentUser.role === "owner" || this.currentUser.role === "office";
 
-    const [jobs, assignments, timeEntries, actionItems, contacts, jobMaterials, catalogItems] = await Promise.all([
+    const [jobs, assignments, timeEntries, actionItems, contacts, jobMaterials, catalogItems, manualCosts, notes, documents, invoicesResponse] = await Promise.all([
       this.jobs.list(),
       this.jobAssignments.list(),
       this.timeEntries.list(),
@@ -334,7 +344,14 @@ export class WorkbenchService {
       this.contacts.list(),
       this.jobMaterials.list(),
       this.catalogItems.list({ filter: { includeInactive: true } }),
+      canViewCompanyPaperwork ? this.jobManualActualCostLines.list() : Promise.resolve([]),
+      canViewCompanyPaperwork ? this.notes.list({ entityType: "jobs" }) : Promise.resolve([]),
+      canViewCompanyPaperwork ? this.documents.list({ entityType: "jobs" }) : Promise.resolve([]),
+      canViewCompanyPaperwork
+        ? this.client.from("invoices").select("id, job_id, created_at").eq("org_id", this.context.orgId).is("deleted_at", null)
+        : Promise.resolve({ data: [], error: null }),
     ]);
+    if (invoicesResponse.error) throw invoicesResponse.error;
     const contactsById = new Map(contacts.map((contact) => [contact.id, contact]));
     const catalogItemsById = new Map(catalogItems.map((item) => [String(item.id), item]));
 
@@ -372,6 +389,7 @@ export class WorkbenchService {
       .map((job) => {
         const jobAssignments = assignments.filter((assignment) => assignment.jobId === job.id);
         const neededMaterials = jobMaterials.filter((entry) => entry.jobId === job.id && entry.kind === "needed");
+        const usedMaterials = jobMaterials.filter((entry) => entry.jobId === job.id && entry.kind === "used");
         const jobTimeEntries = timeEntries.filter((entry) => entry.jobId === job.id);
         const jobTimeEntryIds = new Set(jobTimeEntries.map((entry) => entry.id));
         const jobActionItems = actionItems.filter((item) => {
@@ -439,6 +457,14 @@ export class WorkbenchService {
           })),
           timeEntries: jobTimeEntries,
           actionItems: jobActionItems,
+          paperworkActivity: {
+            materialTimestamps: usedMaterials.map((entry) => entry.updatedAt || entry.createdAt),
+            manualCostTimestamps: manualCosts.filter((entry) => entry.jobId === job.id).map((entry) => entry.updatedAt || entry.createdAt),
+            noteTimestamps: notes.filter((entry) => entry.entityId === job.id).map((entry) => entry.updatedAt || entry.createdAt),
+            uploadTimestamps: documents.filter((entry) => entry.entityId === job.id).map((entry) => entry.updatedAt || entry.createdAt),
+            invoiceTimestamps: (invoicesResponse.data ?? []).filter((entry) => entry.job_id === job.id).map((entry) => entry.created_at),
+            permitTimestamps: manualCosts.filter((entry) => entry.jobId === job.id && isTsbcPermitLine(entry)).map((entry) => entry.updatedAt || entry.createdAt),
+          },
           permissions,
           workflow: deriveJobWorkflowFlags({
             job,

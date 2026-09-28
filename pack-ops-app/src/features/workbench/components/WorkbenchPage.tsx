@@ -1306,6 +1306,7 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
   const [jobFocus,setJobFocus]=useState<"all"|"tasks"|"materials"|"billing">("all");
   const [showAllActivity,setShowAllActivity]=useState(false);
   const [activitySummaryDays, setActivitySummaryDays] = useState<7 | 30>(7);
+  const [showCompanyActivity, setShowCompanyActivity] = useState(true);
   const [showAssignPeople, setShowAssignPeople] = useState(false);
   const [showHiddenJobs, setShowHiddenJobs] = useState(() => {
     if (typeof window === "undefined") {
@@ -1499,6 +1500,57 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
   const estimatedMaterialLinesWithPermit = jobWorkspace?.estimatedMaterials ?? selectedJob?.job.estimateSnapshot?.materials ?? [];
   const quotedPermitSelection = parseTsbcPermitSelection(estimatedMaterialLinesWithPermit.find(isTsbcPermitLine)?.note);
   const estimatedMaterialLines = estimatedMaterialLinesWithPermit.filter((line) => !isTsbcPermitLine(line));
+  const companyActivitySummary = useMemo(() => {
+    const cutoff = Date.now() - activitySummaryDays * 24 * 60 * 60 * 1000;
+    const isRecent = (value: string | null | undefined) => Boolean(value && new Date(value).getTime() >= cutoff);
+    const userLabels = new Map(assignableUsers.map((user) => [String(user.id), user.label]));
+    userLabels.set(String(currentUser.user.id), currentUser.user.fullName || currentUser.user.email || "Current user");
+    const employees = new Map<string, { userId: string; label: string; hours: number; entries: number; pending: number; jobs: Map<string, { label: string; hours: number }> }>();
+    const jobRows = jobs.map((item) => {
+      const recentTime = item.timeEntries.filter((entry) => isRecent(`${entry.workDate}T12:00:00`) && entry.status !== "rejected");
+      for (const entry of recentTime) {
+        const userId = String(entry.userId);
+        const employee = employees.get(userId) ?? { userId, label: userLabels.get(userId) ?? "Unknown worker", hours: 0, entries: 0, pending: 0, jobs: new Map() };
+        employee.hours += entry.hours;
+        employee.entries += 1;
+        if (entry.status === "pending") employee.pending += 1;
+        const job = employee.jobs.get(String(item.job.id)) ?? { label: `${item.job.number} · ${item.job.title}`, hours: 0 };
+        job.hours += entry.hours;
+        employee.jobs.set(String(item.job.id), job);
+        employees.set(userId, employee);
+      }
+
+      const recent = (values: string[]) => values.filter(isRecent);
+      const materialCount = recent(item.paperworkActivity.materialTimestamps).length;
+      const costCount = recent(item.paperworkActivity.manualCostTimestamps).length;
+      const noteCount = recent(item.paperworkActivity.noteTimestamps).length;
+      const uploadCount = recent(item.paperworkActivity.uploadTimestamps).length;
+      const invoiceCount = recent(item.paperworkActivity.invoiceTimestamps).length;
+      const permitCount = recent(item.paperworkActivity.permitTimestamps).length;
+      const taskCount = item.actionItems.filter((entry) => isRecent(entry.updatedAt)).length;
+      const pendingTime = item.timeEntries.filter((entry) => entry.status === "pending").length;
+      const hours = recentTime.reduce((total, entry) => total + entry.hours, 0);
+      const workerNames = Array.from(new Set(recentTime.map((entry) => userLabels.get(String(entry.userId)) ?? "Unknown worker")));
+      const timestamps = [
+        ...recentTime.map((entry) => entry.updatedAt || entry.createdAt),
+        ...recent(item.paperworkActivity.materialTimestamps), ...recent(item.paperworkActivity.manualCostTimestamps),
+        ...recent(item.paperworkActivity.noteTimestamps), ...recent(item.paperworkActivity.uploadTimestamps),
+        ...recent(item.paperworkActivity.invoiceTimestamps), ...item.actionItems.filter((entry) => isRecent(entry.updatedAt)).map((entry) => entry.updatedAt),
+      ].sort().reverse();
+      const activityCount = recentTime.length + materialCount + costCount + noteCount + uploadCount + invoiceCount + taskCount;
+      const needsBilling = ["work_complete", "ready_to_invoice"].includes(item.job.status);
+      return { item, hours, timeEntries: recentTime.length, workerNames, materialCount, costCount, noteCount, uploadCount, invoiceCount, permitCount, taskCount, pendingTime, activityCount, needsBilling, lastActivityAt: timestamps[0] ?? null };
+    }).filter((row) => row.activityCount > 0 || row.pendingTime > 0 || row.needsBilling)
+      .sort((left, right) => (right.lastActivityAt ?? "").localeCompare(left.lastActivityAt ?? ""));
+
+    return {
+      employees: Array.from(employees.values()).map((employee) => ({ ...employee, jobs: Array.from(employee.jobs.values()).sort((a, b) => b.hours - a.hours) })).sort((a, b) => b.hours - a.hours),
+      jobRows,
+      totalHours: Array.from(employees.values()).reduce((total, employee) => total + employee.hours, 0),
+      totalEntries: Array.from(employees.values()).reduce((total, employee) => total + employee.entries, 0),
+      pendingTime: jobs.reduce((total, item) => total + item.timeEntries.filter((entry) => entry.status === "pending").length, 0),
+    };
+  }, [activitySummaryDays, assignableUsers, currentUser.user.email, currentUser.user.fullName, currentUser.user.id, jobs]);
   const neededMaterialDisplayItems = useMemo<
     Array<{
       key: string;
@@ -2688,6 +2740,81 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
         {([["all","All active"],["tasks","Open tasks"],["materials","Materials to pick up"],["billing","Ready for billing"]] as const).map(([value,label]) =>
           <button type="button" key={value} aria-pressed={jobFocus===value} onClick={()=>setJobFocus(value)}>{label}</button>)}
       </div>
+      {canGenerateInvoices ? (
+        <section style={{ ...cardStyle("#fff"), display: "grid", gap: "14px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: "18px" }}>Company activity &amp; paperwork</h2>
+              <div style={{ color: "var(--color-text-soft)", fontSize: "13px", marginTop: "4px" }}>Employee time and recorded activity across every visible job.</div>
+            </div>
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+              <Button variant={activitySummaryDays === 7 ? "primary" : "secondary"} size="sm" onClick={() => setActivitySummaryDays(7)}>Last 7 days</Button>
+              <Button variant={activitySummaryDays === 30 ? "primary" : "secondary"} size="sm" onClick={() => setActivitySummaryDays(30)}>Last 30 days</Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowCompanyActivity((value) => !value)}>{showCompanyActivity ? "Hide" : "Show"}</Button>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px" }}>
+            <div style={{ ...cardStyle("#fafcff"), padding: "12px" }}><div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Total employee time</div><strong style={{ fontSize: "20px" }}>{companyActivitySummary.totalHours.toFixed(2)}h</strong></div>
+            <div style={{ ...cardStyle("#fafcff"), padding: "12px" }}><div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Time entries</div><strong style={{ fontSize: "20px" }}>{companyActivitySummary.totalEntries}</strong></div>
+            <div style={{ ...cardStyle(companyActivitySummary.pendingTime > 0 ? "#fff7ed" : "#f0fdf4"), padding: "12px" }}><div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Pending approval</div><strong style={{ fontSize: "20px", color: companyActivitySummary.pendingTime > 0 ? "#9a3412" : "#166534" }}>{companyActivitySummary.pendingTime}</strong></div>
+            <div style={{ ...cardStyle("#fafcff"), padding: "12px" }}><div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>Jobs with activity/flags</div><strong style={{ fontSize: "20px" }}>{companyActivitySummary.jobRows.length}</strong></div>
+          </div>
+
+          {showCompanyActivity ? (
+            <div style={{ display: "grid", gap: "16px" }}>
+              <div>
+                <h3 style={{ margin: "0 0 10px" }}>Hours by employee</h3>
+                {companyActivitySummary.employees.length === 0 ? (
+                  <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>No employee time was recorded in this period.</Card>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
+                    {companyActivitySummary.employees.map((employee) => (
+                      <div key={employee.userId} style={{ ...cardStyle("#fafcff"), padding: "12px", display: "grid", gap: "8px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: "10px" }}><strong>{employee.label}</strong><strong>{employee.hours.toFixed(2)}h</strong></div>
+                        <div style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>{employee.entries} entr{employee.entries === 1 ? "y" : "ies"}{employee.pending > 0 ? ` · ${employee.pending} pending` : ""}</div>
+                        <div style={{ display: "grid", gap: "4px", fontSize: "13px" }}>
+                          {employee.jobs.map((job) => <div key={job.label} style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}><span style={{ overflowWrap: "anywhere" }}>{job.label}</span><strong>{job.hours.toFixed(2)}h</strong></div>)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h3 style={{ margin: "0 0 10px" }}>Jobs needing a paperwork look</h3>
+                {companyActivitySummary.jobRows.length === 0 ? (
+                  <Card variant="soft" style={{ borderStyle: "dashed", color: "var(--color-text-soft)" }}>No recorded job activity or paperwork flags in this period.</Card>
+                ) : (
+                  <div style={{ display: "grid", gap: "8px" }}>
+                    {companyActivitySummary.jobRows.map((row) => (
+                      <button
+                        key={row.item.job.id}
+                        type="button"
+                        onClick={() => openSelectedJob(row.item.job.id)}
+                        style={{ border: "1px solid #d9dfeb", borderRadius: "12px", background: "#fff", color: "inherit", padding: "12px", textAlign: "left", display: "grid", gap: "7px", cursor: "pointer" }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+                          <span><strong>{row.item.job.number} · {row.item.job.title}</strong>{row.item.contactName ? <span style={{ color: "var(--color-text-soft)" }}> · {row.item.contactName}</span> : null}</span>
+                          <span style={{ color: "var(--color-text-soft)", fontSize: "12px" }}>{row.lastActivityAt ? `Last update ${formatDateTimeLabel(row.lastActivityAt)}` : getWorkbenchJobPhaseLabel(row.item.job)}</span>
+                        </div>
+                        <div style={{ color: "var(--color-text-soft)", fontSize: "13px" }}>
+                          {row.hours.toFixed(2)}h / {row.timeEntries} time entries{row.workerNames.length ? ` · ${row.workerNames.join(", ")}` : ""}
+                        </div>
+                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", fontSize: "12px" }}>
+                          <span>{row.materialCount} materials</span><span>{row.costCount} costs</span><span>{row.noteCount} notes</span><span>{row.uploadCount} uploads</span><span>{row.taskCount} task updates</span><span>{row.invoiceCount} invoices</span>{row.permitCount > 0 ? <span>{row.permitCount} permit updates</span> : null}
+                        </div>
+                        {(row.pendingTime > 0 || row.needsBilling) ? <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>{row.pendingTime > 0 ? <span style={badgeStyle("#fff7ed", "#9a3412")}>{row.pendingTime} time approval{row.pendingTime === 1 ? "" : "s"}</span> : null}{row.needsBilling ? <span style={badgeStyle("#eef4ff", "#163fcb")}>Review for invoicing</span> : null}</div> : null}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
       {activeJobs.length > 0 ? (
         <section style={{ display: "grid", gap: "12px" }}>
           <div style={sectionHeadingRow()}>
