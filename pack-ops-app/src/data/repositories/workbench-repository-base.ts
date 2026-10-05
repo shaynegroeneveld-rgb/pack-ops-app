@@ -15,6 +15,10 @@ export abstract class WorkbenchRepositoryBase<TEntity extends { id: string; orgI
     operation: "upsert" | "soft_delete" | "delete";
     payload: TEntityPayload;
   }): Promise<void> {
+    await localDb.transaction("rw", localDb.syncQueue, async () => {
+    if (params.entityType === "time_entries") {
+      await localDb.syncQueue.filter((entry) => entry.orgId === this.context.orgId && entry.entityType === params.entityType && entry.entityId === params.entityId && entry.status !== "processing").delete();
+    }
     await localDb.syncQueue.put(
       createSyncQueueEntry({
         orgId: this.context.orgId as OrgId,
@@ -26,6 +30,7 @@ export abstract class WorkbenchRepositoryBase<TEntity extends { id: string; orgI
         actorUserId: this.context.actorUserId,
       }),
     );
+    });
   }
 
   protected now(): string {

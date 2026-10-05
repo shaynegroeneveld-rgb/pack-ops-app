@@ -1,3 +1,4 @@
+import { validateTimeEntryHours } from "@/domain/time-entries/hours";
 import { localDb } from "@/data/dexie/db";
 import type { SyncQueueEntry } from "@/data/dexie/outbox";
 import { getSyncErrorMessage } from "@/data/sync/errors";
@@ -22,44 +23,34 @@ export class SyncEngine {
       return;
     }
 
-    console.info("[SyncEngine] flushPending entries", entries.map((entry) => ({
-      id: entry.id,
-      entityType: entry.entityType,
-      entityId: entry.entityId,
-      operation: entry.operation,
-      orgId: entry.orgId,
-      retryCount: entry.retryCount,
-      status: entry.status,
-    })));
-
-    await localDb.syncQueue.bulkPut(
-      entries.map((entry) => ({
-        ...entry,
-        status: "processing",
-        nextRetryAt: null,
-      })),
-    );
-
-    try {
-      await this.deps.push.flush(entries);
-      await localDb.syncQueue.bulkDelete(entries.map((entry) => entry.id));
-    } catch (error) {
-      const errorMessage = getSyncErrorMessage(error, "Unknown sync error");
-      console.error("[SyncEngine] flushPending error", {
-        error,
-        errorMessage,
-      });
-      await localDb.syncQueue.bulkPut(
-        entries.map((entry) => ({
-          ...entry,
-          status: "failed",
-          retryCount: entry.retryCount + 1,
-          nextRetryAt: this.computeNextRetryAt(entry.retryCount + 1),
-          lastError: errorMessage,
-        })),
-      );
-      throw error;
+    let firstError: unknown;
+    const blockedEntities = new Set<string>();
+    for (const entry of entries) {
+      const key = `${entry.orgId}:${entry.entityType}:${entry.entityId}`;
+      if (blockedEntities.has(key)) continue;
+      // Keep invalid legacy labour locally for correction without blocking job changes.
+      if (entry.entityType === "time_entries" && entry.operation === "upsert") {
+        try {
+          validateTimeEntryHours(entry.payload.hours as number);
+        } catch (error) {
+          await localDb.syncQueue.put({ ...entry, status: "failed", nextRetryAt: null,
+            lastError: `Labour entry needs correction (${String(entry.payload.hours)} hours). ${getSyncErrorMessage(error)} Other job changes can still sync.` });
+          blockedEntities.add(key);
+          continue;
+        }
+      }
+      await localDb.syncQueue.put({ ...entry, status: "processing", nextRetryAt: null });
+      try {
+        await this.deps.push.flush([entry]);
+        await localDb.syncQueue.delete(entry.id);
+      } catch (error) {
+        await localDb.syncQueue.put({ ...entry, status: "failed", retryCount: entry.retryCount + 1,
+          nextRetryAt: this.computeNextRetryAt(entry.retryCount + 1), lastError: getSyncErrorMessage(error, "Unknown sync error") });
+        blockedEntities.add(key);
+        firstError ??= error;
+      }
     }
+    if (firstError) throw firstError;
   }
 
   async flushPendingQueue(options?: { force?: boolean }): Promise<void> {

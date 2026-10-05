@@ -1,3 +1,4 @@
+import { validateTimeEntryHours } from "@/domain/time-entries/hours";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { localDb } from "@/data/dexie/db";
@@ -126,6 +127,7 @@ export interface WorkbenchFailedSyncItem {
   createdAt: string;
   retryCount: number;
   lastError: string | null;
+  payload?: Record<string, unknown>;
 }
 
 function roundMoney(value: number): number {
@@ -1449,6 +1451,10 @@ export class WorkbenchService {
       throw new Error("Assembly not found.");
     }
 
+    const laborHours = input.addLabor !== false && assembly.defaultLaborHours > 0
+      ? validateTimeEntryHours(assembly.defaultLaborHours * input.multiplier)
+      : null;
+
     for (const item of assembly.items) {
       const unitCost = item.materialCostPrice ?? 0;
       await this.createJobMaterial({
@@ -1470,10 +1476,10 @@ export class WorkbenchService {
       });
     }
 
-    if (input.addLabor !== false && assembly.defaultLaborHours > 0) {
+    if (laborHours !== null) {
       await this.createTimeEntry(
         input.jobId,
-        this.roundQuantity(assembly.defaultLaborHours * input.multiplier),
+        laborHours,
         [assembly.name, input.note].filter(Boolean).join(" · ") || "Assembly labour",
         input.workerUserId ?? this.currentUser.id,
         input.workDate ?? new Date().toISOString().slice(0, 10),
@@ -1632,6 +1638,7 @@ export class WorkbenchService {
     hourlyRate: number | null = null,
     sectionName: string | null = null,
   ): Promise<TimeEntry> {
+    hours = validateTimeEntryHours(hours);
     console.info("[WorkbenchService] createTimeEntry input", {
       jobId,
       hours,
@@ -1901,9 +1908,7 @@ export class WorkbenchService {
       throw new Error("A work date is required.");
     }
 
-    if (!Number.isFinite(input.hours) || input.hours <= 0) {
-      throw new Error("Hours must be greater than 0.");
-    }
+    input = { ...input, hours: validateTimeEntryHours(input.hours) };
 
     const existing = await this.timeEntries.getById(input.entryId);
     if (!existing) {
@@ -2010,6 +2015,19 @@ export class WorkbenchService {
         retryCount: entry.retryCount,
         lastError: entry.lastError,
       }));
+  }
+
+  async correctQueuedTimeHours(outboxId: string, hours: number): Promise<void> {
+    const queued = await localDb.syncQueue.get(outboxId);
+    if (!queued || queued.orgId !== this.context.orgId || queued.entityType !== "time_entries" || queued.operation !== "upsert") {
+      throw new Error("That labour entry is no longer waiting for correction.");
+    }
+    const entry = await localDb.timeEntries.get(queued.entityId);
+    if (!entry || entry.orgId !== this.context.orgId) throw new Error("Time entry not found.");
+    const assignments = await this.jobAssignments.list({ filter: { jobId: entry.jobId } });
+    if (!canEditWorkbenchTimeEntry(this.currentUser, entry, assignments)) throw new Error("You cannot edit this time entry.");
+    await this.timeEntries.update(entry.id, { hours: validateTimeEntryHours(hours), updatedBy: this.currentUser.id });
+    await this.sync.flushPendingQueue({ force: true });
   }
 
   async retrySyncItem(outboxId: string): Promise<void> {

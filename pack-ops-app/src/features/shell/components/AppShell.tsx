@@ -178,6 +178,7 @@ export function AppShell() {
     monthEnd: 0,
     receivablesPayables: 0,
   });
+  const [correctedHours, setCorrectedHours] = useState<Record<string, string>>({});
   const [syncActionState, setSyncActionState] = useState<{
     type: "retry" | "discard";
     outboxId: string;
@@ -228,6 +229,7 @@ export function AppShell() {
             createdAt: entry.createdAt,
             retryCount: entry.retryCount,
             lastError: entry.lastError,
+            payload: entry.payload,
           })),
       };
     }).subscribe({
@@ -452,6 +454,17 @@ export function AppShell() {
     } finally {
       setSyncActionState(null);
     }
+  }
+
+  async function handleCorrectHours(outboxId: string) {
+    if (!workbenchService) return;
+    try {
+      setSyncActionState({ type: "retry", outboxId });
+      await workbenchService.correctQueuedTimeHours(outboxId, Number(correctedHours[outboxId]));
+      showToast("Labour hours corrected and queued changes synced.", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not correct hours.", "error");
+    } finally { setSyncActionState(null); }
   }
 
   async function handleDiscardSyncItem(outboxId: string) {
@@ -745,6 +758,17 @@ export function AppShell() {
                     <div style={{ color: "#8f1d1d", fontSize: "13px", lineHeight: 1.45 }}>
                       {item.lastError ?? "Sync failed."}
                     </div>
+                    {item.entityType === "time_entries" && item.operation === "upsert" && (
+                      <div style={{ display: "grid", gap: "8px" }}>
+                        <span>{String(item.payload?.description ?? "Labour")} · {String(item.payload?.date ?? "")} · Saved hours: {String(item.payload?.hours ?? "unknown")}</span>
+                        <label>Correct hours (0.01–24)
+                          <input type="number" min="0.01" max="24" step="0.01" value={correctedHours[item.id] ?? ""}
+                            onChange={(event) => setCorrectedHours((current) => ({ ...current, [item.id]: event.target.value }))} />
+                        </label>
+                        <button type="button" disabled={Boolean(syncActionState) || !correctedHours[item.id]?.trim()}
+                          onClick={() => void handleCorrectHours(item.id)} style={secondaryButtonStyle()}>Save corrected hours</button>
+                      </div>
+                    )}
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                       <button
                         type="button"

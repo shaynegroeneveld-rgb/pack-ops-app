@@ -1,3 +1,4 @@
+import { validateTimeEntryHours } from "@/domain/time-entries/hours";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { localDb } from "@/data/dexie/db";
@@ -74,6 +75,7 @@ export class TimeEntriesRepositoryImpl
   }
 
   async create(input: CreateTimeEntryInput): Promise<TimeEntry> {
+    input = { ...input, hours: validateTimeEntryHours(input.hours) };
     const now = this.now();
     const id = createId();
     const entry: TimeEntry = {
@@ -135,6 +137,7 @@ export class TimeEntriesRepositoryImpl
       throw new Error(`Time entry ${id} not found in local cache.`);
     }
 
+    if (input.hours !== undefined) input = { ...input, hours: validateTimeEntryHours(input.hours) };
     const updatedAt = this.now();
     const entry: TimeEntry = {
       ...existing,
