@@ -1,41 +1,41 @@
 import { liveQuery } from "dexie";
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 
 import { APP_ROUTES } from "@/app/router/routes";
 import { useAuthContext } from "@/app/contexts/auth-context";
 import { useUiStore } from "@/app/store/ui-store";
 import { localDb } from "@/data/dexie/db";
 import { getSupabaseClient } from "@/data/supabase/client";
-import { DesignSystemPage } from "@/features/design-system/components/DesignSystemPage";
-import { AgingSummaryPage } from "@/features/finance/components/AgingSummaryPage";
-import { ExpenseByCategoryPage } from "@/features/finance/components/ExpenseByCategoryPage";
-import { FinanceMoneyPage } from "@/features/finance/components/FinanceMoneyPage";
-import { FinanceReconciliationPage } from "@/features/finance/components/FinanceReconciliationPage";
-import { FinanceReviewPage } from "@/features/finance/components/FinanceReviewPage";
-import { FieldJobPage } from "@/features/field/components/FieldJobPage";
-import { FieldModePage } from "@/features/field/components/FieldModePage";
-import { ElectricalTakeoffPage } from "@/features/takeoff/components/ElectricalTakeoffPage";
-import { GstSummaryPage } from "@/features/finance/components/GstSummaryPage";
-import { JobProfitabilityPage } from "@/features/finance/components/JobProfitabilityPage";
-import { MonthEndPage } from "@/features/finance/components/MonthEndPage";
-import { ProfitLossPage } from "@/features/finance/components/ProfitLossPage";
-import { ReceivablesPayablesPage } from "@/features/finance/components/ReceivablesPayablesPage";
-import { LeadsPage } from "@/features/leads/components/LeadsPage";
-import { MaterialsPage } from "@/features/materials/components/MaterialsPage";
-import { PayrollAssistPage } from "@/features/payroll/components/PayrollAssistPage";
-import { QuotesPage } from "@/features/quotes/components/QuotesPage";
-import { BaselinePage } from "@/features/reports/components/BaselinePage";
-import { JobPerformancePage } from "@/features/reports/components/JobPerformancePage";
-import { ScorecardPage } from "@/features/reports/components/ScorecardPage";
-import { SchedulingPage } from "@/features/scheduling/components/SchedulingPage";
-import { SettingsPage } from "@/features/settings/components/SettingsPage";
+const DesignSystemPage = lazy(() => import("@/features/design-system/components/DesignSystemPage").then((module) => ({ default: module.DesignSystemPage })));
+const AgingSummaryPage = lazy(() => import("@/features/finance/components/AgingSummaryPage").then((module) => ({ default: module.AgingSummaryPage })));
+const ExpenseByCategoryPage = lazy(() => import("@/features/finance/components/ExpenseByCategoryPage").then((module) => ({ default: module.ExpenseByCategoryPage })));
+const FinanceMoneyPage = lazy(() => import("@/features/finance/components/FinanceMoneyPage").then((module) => ({ default: module.FinanceMoneyPage })));
+const FinanceReconciliationPage = lazy(() => import("@/features/finance/components/FinanceReconciliationPage").then((module) => ({ default: module.FinanceReconciliationPage })));
+const FinanceReviewPage = lazy(() => import("@/features/finance/components/FinanceReviewPage").then((module) => ({ default: module.FinanceReviewPage })));
+const FieldJobPage = lazy(() => import("@/features/field/components/FieldJobPage").then((module) => ({ default: module.FieldJobPage })));
+const FieldModePage = lazy(() => import("@/features/field/components/FieldModePage").then((module) => ({ default: module.FieldModePage })));
+const ElectricalTakeoffPage = lazy(() => import("@/features/takeoff/components/ElectricalTakeoffPage").then((module) => ({ default: module.ElectricalTakeoffPage })));
+const GstSummaryPage = lazy(() => import("@/features/finance/components/GstSummaryPage").then((module) => ({ default: module.GstSummaryPage })));
+const JobProfitabilityPage = lazy(() => import("@/features/finance/components/JobProfitabilityPage").then((module) => ({ default: module.JobProfitabilityPage })));
+const MonthEndPage = lazy(() => import("@/features/finance/components/MonthEndPage").then((module) => ({ default: module.MonthEndPage })));
+const ProfitLossPage = lazy(() => import("@/features/finance/components/ProfitLossPage").then((module) => ({ default: module.ProfitLossPage })));
+const ReceivablesPayablesPage = lazy(() => import("@/features/finance/components/ReceivablesPayablesPage").then((module) => ({ default: module.ReceivablesPayablesPage })));
+const LeadsPage = lazy(() => import("@/features/leads/components/LeadsPage").then((module) => ({ default: module.LeadsPage })));
+const MaterialsPage = lazy(() => import("@/features/materials/components/MaterialsPage").then((module) => ({ default: module.MaterialsPage })));
+const PayrollAssistPage = lazy(() => import("@/features/payroll/components/PayrollAssistPage").then((module) => ({ default: module.PayrollAssistPage })));
+const QuotesPage = lazy(() => import("@/features/quotes/components/QuotesPage").then((module) => ({ default: module.QuotesPage })));
+const BaselinePage = lazy(() => import("@/features/reports/components/BaselinePage").then((module) => ({ default: module.BaselinePage })));
+const JobPerformancePage = lazy(() => import("@/features/reports/components/JobPerformancePage").then((module) => ({ default: module.JobPerformancePage })));
+const ScorecardPage = lazy(() => import("@/features/reports/components/ScorecardPage").then((module) => ({ default: module.ScorecardPage })));
+const SchedulingPage = lazy(() => import("@/features/scheduling/components/SchedulingPage").then((module) => ({ default: module.SchedulingPage })));
+const SettingsPage = lazy(() => import("@/features/settings/components/SettingsPage").then((module) => ({ default: module.SettingsPage })));
 import {
   brand,
   chipStyle,
   secondaryButtonStyle,
 } from "@/features/shared/ui/mobile-styles";
-import { TimePage } from "@/features/time/components/TimePage";
-import { WorkbenchPage } from "@/features/workbench/components/WorkbenchPage";
+const TimePage = lazy(() => import("@/features/time/components/TimePage").then((module) => ({ default: module.TimePage })));
+const WorkbenchPage = lazy(() => import("@/features/workbench/components/WorkbenchPage").then((module) => ({ default: module.WorkbenchPage })));
 import { WorkbenchService, type WorkbenchFailedSyncItem } from "@/services/workbench/workbench-service";
 import { Modal, useConfirm, useToast } from "@/ui";
 
@@ -635,6 +635,7 @@ export function AppShell() {
       </nav>
       ) : null}
 
+      <Suspense fallback={<div role="status" style={{ padding: "24px" }}>Loading page…</div>}>
         {(takeoffVisited || activeRoute === APP_ROUTES.electricalTakeoff) && <div hidden={activeRoute !== APP_ROUTES.electricalTakeoff}><ElectricalTakeoffPage /></div>}
         {activeRoute.startsWith(fieldJobRoutePrefix) ? (
           <FieldJobPage jobId={activeRoute.slice(fieldJobRoutePrefix.length)} />
@@ -708,6 +709,7 @@ export function AppShell() {
         <WorkbenchPage />
       )}
 
+      </Suspense>
       {!isFieldRoute ? (
         <Modal open={isSyncPanelOpen} onClose={() => setIsSyncPanelOpen(false)} title="Sync Status">
           <span style={{ color: brand.textSoft, fontSize: "13px" }}>{syncTitle}</span>

@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 
 import { useAuthContext } from "@/app/contexts/auth-context";
 import { AppShell } from "@/features/shell/components/AppShell";
-import { ElectricalTakeoffPage } from "@/features/takeoff/components/ElectricalTakeoffPage";
+const ElectricalTakeoffPage = lazy(() => import("@/features/takeoff/components/ElectricalTakeoffPage").then((module) => ({ default: module.ElectricalTakeoffPage })));
 
 export function AuthGate() {
   const {
@@ -23,7 +23,7 @@ export function AuthGate() {
   const [isTakeoffPreviewOpen, setIsTakeoffPreviewOpen] = useState(false);
 
   if (import.meta.env.DEV && isTakeoffPreviewOpen) {
-    return <ElectricalTakeoffPage />;
+    return <Suspense fallback={<main>Loading takeoff…</main>}><ElectricalTakeoffPage /></Suspense>;
   }
 
   if (isLoading) {
