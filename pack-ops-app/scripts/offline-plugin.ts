@@ -31,7 +31,13 @@ self.addEventListener("fetch", event => {
   if (event.request.mode === "navigate" && !url.pathname.startsWith("/takeoff")) {
     event.respondWith((async () => {
       try { return await fetch(event.request, { signal: AbortSignal.timeout(3500) }); }
-      catch { return (await caches.open(CACHE)).match("/index.html"); }
+      catch {
+        const saved = await (await caches.open(CACHE)).match("/index.html");
+        // Cloudflare redirects index.html to /. Remove the redirect metadata
+        // before returning the cached HTML as a navigation response.
+        return saved ? new Response(saved.body, { status: saved.status, statusText: saved.statusText, headers: saved.headers })
+          : new Response("Connect once and save your jobs for offline use.", { status: 503 });
+      }
     })());
   } else if (!url.search && FILES.includes(url.pathname)) {
     event.respondWith((async () => (await (await caches.open(CACHE)).match(url.pathname)) || fetch(event.request))());
