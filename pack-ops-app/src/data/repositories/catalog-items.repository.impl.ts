@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cachedRead } from "@/data/offline/cache";
 
 import { catalogItemsMapper } from "@/data/mappers/catalog-items.mapper";
 import type { RepositoryContext } from "@/data/repositories/contracts";
@@ -13,6 +14,10 @@ export class CatalogItemsRepositoryImpl implements CatalogItemsRepository {
   ) {}
 
   async list(options?: { filter?: CatalogItemFilter }): Promise<CatalogItem[]> {
+    return cachedRead(this.context, `catalog:${Boolean(options?.filter?.includeInactive)}`, () => this.listOnline(options));
+  }
+
+  private async listOnline(options?: { filter?: CatalogItemFilter }): Promise<CatalogItem[]> {
     const pageSize = 500;
     const rows: Database["public"]["Tables"]["catalog_items"]["Row"][] = [];
     let total: number | null = null;

@@ -16,7 +16,7 @@ export function OfflineFieldPanel({ currentUser, visible }: { currentUser: Authe
   const [saving, setSaving] = useState(false);
   const [pending, setPending] = useState(0);
   const [failed, setFailed] = useState(0);
-  const [ready, setReady] = useState<{ count: number; savedAt: string } | null>(null);
+  const [ready, setReady] = useState<{ count: number; savedAt: string; materialCount?: number; assemblyCount?: number } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const context = { orgId: currentUser.user.orgId, actorUserId: currentUser.user.id };
 
@@ -25,7 +25,7 @@ export function OfflineFieldPanel({ currentUser, visible }: { currentUser: Authe
     let syncing = false;
     const context = { orgId: currentUser.user.orgId, actorUserId: currentUser.user.id };
     const service = new WorkbenchService(context, currentUser.user, getSupabaseClient(import.meta.env));
-    void loadSnapshot<{ count: number; savedAt: string }>(context, "offline-ready").then(value => { if (active) setReady(value); }).catch(() => {});
+    void loadSnapshot<{ count: number; savedAt: string; materialCount?: number; assemblyCount?: number }>(context, "offline-ready").then(value => { if (active) setReady(value); }).catch(() => {});
     const subscription = liveQuery(() => localDb.syncQueue.filter(row => row.orgId === context.orgId && row.actorUserId === context.actorUserId).toArray())
       .subscribe(rows => { setPending(rows.length); setFailed(rows.filter(row => row.status === "failed").length); });
     async function sync() {
@@ -58,9 +58,9 @@ export function OfflineFieldPanel({ currentUser, visible }: { currentUser: Authe
       const today = toDayKey();
       await ensureOfflineApp();
       await scheduling.getUpcomingScheduleBlocks({ from: toScheduleRangeIso(startOfWeek(today)), to: toScheduleRangeIso(endOfWeek(today), true) });
-      const count = await service.prepareOfflineJobs();
-      setReady({ count, savedAt: new Date().toISOString() });
-      setMessage(`${count} assigned jobs saved. Stay signed in to use them offline. Plans, photos and uploads still need a connection.`);
+      const result = await service.prepareOfflineJobs();
+      setReady(result);
+      setMessage(`${result.count} assigned jobs saved. ${result.materialCount} materials and ${result.assemblyCount} assemblies downloaded. Stay signed in to use them offline. Plans, photos and uploads still need a connection.`);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not finish the offline download."); }
     finally { setSaving(false); }
   }
@@ -69,9 +69,9 @@ export function OfflineFieldPanel({ currentUser, visible }: { currentUser: Authe
   return <section aria-label="Offline access" style={{ padding: "12px 16px", background: offline ? "#fff7ed" : "#effaf3", color: "#16352c", fontSize: "14px" }}>
     <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
       <span role="status">{offline ? `Offline · showing saved jobs${pending ? ` · ${pending} changes saved on this device` : ""}` : failed ? `${failed} changes need sync attention` : pending ? `${pending} changes saved on this device · waiting to sync` : "Online · no changes waiting to sync"}</span>
-      <button type="button" disabled={offline || saving} onClick={() => void prepare()}>{saving ? "Saving jobs…" : "Save jobs offline"}</button>
+      <button type="button" disabled={offline || saving} onClick={() => void prepare()}>{saving ? "Saving jobs and materials…" : "Save jobs offline"}</button>
     </div>
-    {ready ? <div style={{ marginTop: "6px" }}>{ready.count} assigned jobs downloaded · {new Date(ready.savedAt).toLocaleString()}</div> : <div style={{ marginTop: "6px" }}>Before leaving reception, choose Save jobs offline.</div>}
+    {ready ? <div style={{ marginTop: "6px" }}>{ready.count} assigned jobs · {ready.materialCount !== undefined ? `${ready.materialCount} materials · ${ready.assemblyCount ?? 0} assemblies` : "Download again to confirm the full material list"} · {new Date(ready.savedAt).toLocaleString()}</div> : <div style={{ marginTop: "6px" }}>Before leaving reception, choose Save jobs offline to download assigned jobs and the full material list.</div>}
     {message ? <div role="status" style={{ marginTop: "6px" }}>{message}</div> : null}
     {offline ? <div style={{ marginTop: "6px" }}>Stay signed in. Hours, assigned tasks and materials save on this device. Notes, plans, photos and uploads need a connection.</div> : null}
   </section>;

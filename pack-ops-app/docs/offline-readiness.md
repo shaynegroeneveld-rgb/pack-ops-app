@@ -12,6 +12,7 @@ The first offline field workflow is implemented. Before leaving reception, sign 
 - A versioned service worker caches the app and screen code. Initial background caching starts after the page loads; Save jobs offline explicitly waits for the cache to be ready.
 - Offline session hydration uses the saved profile only when it matches the existing Supabase session identity. Sign-out removes that offline profile.
 - Save jobs offline downloads active assigned jobs, crew, the current week's schedule, material choices and job details into user/company-scoped snapshots.
+- The full active material catalogue and assemblies are downloaded independently of job plans, including all catalogue pages, names, supplier codes and nicknames. The download confirmation shows material and assembly counts. Download again after catalogue changes; use All materials or search to add items that were not on the plan.
 - Offline field screens read those snapshots and overlay saved hours, completed tasks and material changes from IndexedDB.
 - Fractional hours and material usage can be saved offline; running timers and unfinished time drafts survive refresh. Stable request IDs prevent repeated saves from creating duplicate hours/material entries.
 - New time entries, timer writes, task writes and offline material writes persist atomically with their queued operations.

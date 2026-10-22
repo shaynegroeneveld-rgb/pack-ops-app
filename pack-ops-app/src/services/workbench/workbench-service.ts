@@ -884,29 +884,38 @@ export class WorkbenchService {
   async getJobWorkspace(job: Job): Promise<JobWorkspaceData> {
     if (isOffline()) {
       const saved = await loadSnapshot<JobWorkspaceData>(this.context, `job:${job.id}`);
+      const fullCatalog = await this.catalogItems.list({ filter: { includeInactive: false } }).catch(() => null);
+      const materialCatalogOptions = fullCatalog ? fullCatalog.map(item => ({ id: item.id, name: item.name, sku: item.sku, aliases: item.aliases,
+        unit: item.unit, costPrice: item.costPrice, unitPrice: item.unitPrice, category: item.category, notes: item.notes })) : saved.materialCatalogOptions;
+      const assemblyOptions = await loadSnapshot<AssemblyView[]>(this.context, "field-assemblies").catch(() => saved.assemblyOptions);
       const materials = await this.jobMaterials.list({ filter: { jobId: job.id } });
-      const catalog = new Map(saved.materialCatalogOptions.map(item => [String(item.id), item]));
+      const catalog = new Map(materialCatalogOptions.map(item => [String(item.id), item]));
       const views: JobMaterialView[] = materials.map(entry => {
         const item = catalog.get(String(entry.catalogItemId));
         return { ...entry, materialName: entry.displayName ?? item?.name ?? "Material", materialSku: entry.skuSnapshot ?? item?.sku ?? null,
           materialUnit: entry.unitSnapshot ?? item?.unit ?? "each", currentCatalogCost: item?.costPrice ?? null, currentCatalogUnitPrice: item?.unitPrice ?? null };
       });
-      return { ...saved, usedMaterials: views.filter(entry => entry.kind === "used"), neededMaterials: views.filter(entry => entry.kind === "needed"),
+      return { ...saved, materialCatalogOptions, assemblyOptions, usedMaterials: views.filter(entry => entry.kind === "used"), neededMaterials: views.filter(entry => entry.kind === "needed"),
         timeEntries: await localDb.timeEntries.filter(row => row.orgId === this.context.orgId && row.jobId === job.id && !row.deletedAt
           && (row.createdBy === this.currentUser.id || saved.timeEntries.some(item => item.id === row.id))).toArray() };
     }
     return cachedRead(this.context, `job:${job.id}`, () => this.getOnlineJobWorkspace(job));
   }
 
-  async prepareOfflineJobs(): Promise<number> {
+  async prepareOfflineJobs(): Promise<{ count: number; materialCount: number; assemblyCount: number; savedAt: string }> {
     if (isOffline()) throw new Error("Connect to the internet to save jobs offline.");
+    const catalog = await this.catalogItems.list({ filter: { includeInactive: false } });
+    await saveSnapshot(this.context, "catalog:false", catalog);
+    const assemblies = await this.buildAssemblyViews();
+    await saveSnapshot(this.context, "field-assemblies", assemblies);
     const cards = await this.listJobCards();
     await saveSnapshot(this.context, "job-cards", cards);
     const assigned = cards.filter(card => card.assignments.some(row => row.userId === this.currentUser.id) && !["closed", "cancelled"].includes(card.job.status));
     await this.listAssignableUsers();
     for (const card of assigned) await saveSnapshot(this.context, `job:${card.job.id}`, await this.getJobWorkspace(card.job));
-    await saveSnapshot(this.context, "offline-ready", { count: assigned.length, jobIds: assigned.map(card => String(card.job.id)), savedAt: new Date().toISOString() });
-    return assigned.length;
+    const result = { count: assigned.length, materialCount: catalog.length, assemblyCount: assemblies.length, savedAt: new Date().toISOString() };
+    await saveSnapshot(this.context, "offline-ready", { ...result, jobIds: assigned.map(card => String(card.job.id)) });
+    return result;
   }
 
   private async getOnlineJobWorkspace(job: Job): Promise<JobWorkspaceData> {

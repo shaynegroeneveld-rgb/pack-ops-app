@@ -5,6 +5,8 @@ import { TimeEntriesRepositoryImpl } from "@/data/repositories/time-entries.repo
 import { JobMaterialsRepositoryImpl } from "@/data/repositories/job-materials.repository.impl";
 import { ActiveTimersRepositoryImpl } from "@/data/repositories/active-timers.repository.impl";
 import { ActionItemsRepositoryImpl } from "@/data/repositories/action-items.repository.impl";
+import { CatalogItemsRepositoryImpl } from "@/data/repositories/catalog-items.repository.impl";
+import { rankCatalogItems } from "@/services/materials/material-search";
 import { SyncEngine } from "@/data/sync/engine";
 import { createSyncQueueEntry } from "@/data/dexie/outbox";
 import { WorkbenchService } from "@/services/workbench/workbench-service";
@@ -95,6 +97,35 @@ it("only lists the downloaded jobs when reopening a prepared device offline", as
   await saveSnapshot(context, "offline-ready", { jobIds: ["downloaded"] });
   const service = new WorkbenchService(context, user, client);
   expect((await service.listJobCards()).map(card => card.job.id)).toEqual(["downloaded"]);
+});
+
+it("downloads every catalog page and searches a material beyond row 1000 after reopening offline", async () => {
+  online(true);
+  const rows = Array.from({ length: 1001 }, (_, index) => ({ id: `item-${index}`, org_id: "company", name: `Material ${index}`, sku: `SKU-${index}`, aliases: index === 1000 ? ["garage special"] : [], unit: "each", is_active: true, deleted_at: null }));
+  const query: any = {};
+  for (const method of ["select", "eq", "is", "order"]) query[method] = () => query;
+  query.range = vi.fn(async (start: number, end: number) => ({ data: rows.slice(start, end + 1), count: rows.length, error: null }));
+  const repo = new CatalogItemsRepositoryImpl(context, { from: () => query } as any);
+  expect(await repo.list()).toHaveLength(1001);
+  expect(query.range).toHaveBeenCalledTimes(3);
+  localDb.close(); await localDb.open(); online(false);
+  const offlineRepo = new CatalogItemsRepositoryImpl(context, client);
+  const downloaded = await offlineRepo.list();
+  expect(downloaded).toHaveLength(1001);
+  expect(rankCatalogItems(downloaded, "garage special")[0]?.id).toBe("item-1000");
+  expect(rankCatalogItems(downloaded, "SKU-1000")[0]?.id).toBe("item-1000");
+  expect(client.from).not.toHaveBeenCalled();
+});
+
+it("uses the full downloaded catalog in a saved job even when its old material list was empty", async () => {
+  await saveSnapshot(context, "catalog:false", [{ id: "not-on-plan", name: "Extra switch", aliases: ["garage special"], unit: "each" }]);
+  await saveSnapshot(context, "job:garage", { materialCatalogOptions: [], assemblyOptions: [], timeEntries: [] });
+  await saveSnapshot(context, "field-assemblies", [{ id: "assembly", name: "Switch assembly" }]);
+  const service = new WorkbenchService(context, user, client);
+  const workspace = await service.getJobWorkspace({ id: "garage" } as any);
+  expect(workspace.materialCatalogOptions.map(item => item.name)).toEqual(["Extra switch"]);
+  expect(workspace.assemblyOptions[0]?.name).toBe("Switch assembly");
+  expect(client.from).not.toHaveBeenCalled();
 });
 
 it("does not send queued changes offline; reconnect only sends this user's changes and recovers interrupted sync", async () => {
