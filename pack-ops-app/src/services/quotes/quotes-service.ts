@@ -345,7 +345,7 @@ export class QuotesService {
     this.sync = new SyncEngine({
       push: new PushSyncService(gateway),
       pull: new PullSyncService(gateway),
-    });
+    }, this.context);
   }
 
   private assertCanManageQuotes() {

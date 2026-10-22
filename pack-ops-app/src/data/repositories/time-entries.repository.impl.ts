@@ -50,8 +50,13 @@ export class TimeEntriesRepositoryImpl
     }
 
     const entries = (data ?? []).map((row) => timeEntriesMapper.toDomain(row));
-    await localDb.timeEntries.bulkPut(entries);
-    return entries;
+    const pending = await localDb.syncQueue.filter(row => row.orgId === this.context.orgId && row.actorUserId === this.context.actorUserId && row.entityType === "time_entries").toArray();
+    const ids = new Set(pending.map(row => row.entityId));
+    await localDb.timeEntries.bulkPut(entries.filter(row => !ids.has(row.id)));
+    const merged = new Map(entries.map(row => [row.id, row]));
+    (await localDb.timeEntries.filter(row => row.orgId === this.context.orgId && ids.has(row.id)).toArray()).forEach(row => merged.set(row.id, row));
+    return [...merged.values()].filter(row => !row.deletedAt && (!options?.filter?.jobId || row.jobId === options.filter.jobId)
+      && (!options?.filter?.userId || row.userId === options.filter.userId) && (!options?.filter?.statuses?.length || options.filter.statuses.includes(row.status)));
   }
 
   async getById(id: string): Promise<TimeEntry | null> {
@@ -77,7 +82,16 @@ export class TimeEntriesRepositoryImpl
   async create(input: CreateTimeEntryInput): Promise<TimeEntry> {
     input = { ...input, hours: validateTimeEntryHours(input.hours) };
     const now = this.now();
-    const id = createId();
+    const id = input.requestId ?? createId();
+    const existing = await localDb.timeEntries.get(id);
+    if (existing) {
+      if (existing.orgId !== this.context.orgId || existing.createdBy !== this.context.actorUserId || existing.jobId !== input.jobId
+        || existing.hours !== input.hours || existing.userId !== input.userId || existing.workDate !== input.workDate
+        || (existing.description ?? "") !== (input.description ?? "") || (existing.sectionName ?? "") !== (input.sectionName?.trim() ?? "")) {
+        throw new Error("This time entry was already saved with different details. Check the saved hours before adding another.");
+      }
+      return existing;
+    }
     const entry: TimeEntry = {
       id: id as TimeEntry["id"],
       orgId: this.context.orgId as TimeEntry["orgId"],
@@ -105,7 +119,6 @@ export class TimeEntriesRepositoryImpl
     console.info("[TimeEntriesRepository] create input", input);
     console.info("[TimeEntriesRepository] local time entry result", entry);
 
-    await localDb.timeEntries.put(entry);
     const queuePayload = {
       id,
       org_id: this.context.orgId,
@@ -121,11 +134,14 @@ export class TimeEntriesRepositoryImpl
       operation: "upsert",
       payload: queuePayload,
     });
+    await localDb.transaction("rw", localDb.timeEntries, localDb.syncQueue, async () => {
+    await localDb.timeEntries.put(entry);
     await this.enqueue({
       entityType: "time_entries",
       entityId: id,
       operation: "upsert",
       payload: queuePayload,
+    });
     });
 
     return entry;

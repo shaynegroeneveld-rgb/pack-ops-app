@@ -21,13 +21,16 @@ export interface SyncCursor {
   updatedAt: string;
 }
 
+let lastQueuedAt = 0;
+
 export function createSyncQueueEntry(
   entry: Omit<
     SyncQueueEntry,
     "id" | "createdAt" | "status" | "retryCount" | "lastError" | "idempotencyKey" | "nextRetryAt"
   >,
 ): SyncQueueEntry {
-  const now = new Date().toISOString();
+  lastQueuedAt = Math.max(Date.now(), lastQueuedAt + 1);
+  const now = new Date(lastQueuedAt).toISOString();
   const id = createId();
 
   return {

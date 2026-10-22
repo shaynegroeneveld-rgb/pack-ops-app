@@ -2,6 +2,7 @@ import { validateTimeEntryHours } from "@/domain/time-entries/hours";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { localDb } from "@/data/dexie/db";
+import { cachedRead, isOffline, loadSnapshot, saveSnapshot } from "@/data/offline/cache";
 import type { SyncQueueEntry } from "@/data/dexie/outbox";
 import { ActiveTimersRepositoryImpl } from "@/data/repositories/active-timers.repository.impl";
 import { ActionItemsRepositoryImpl } from "@/data/repositories/action-items.repository.impl";
@@ -185,7 +186,7 @@ export class WorkbenchService {
     this.sync = new SyncEngine({
       push: new PushSyncService(gateway),
       pull: new PullSyncService(gateway),
-    });
+    }, this.context);
   }
 
   private async sleep(ms: number) {
@@ -335,6 +336,22 @@ export class WorkbenchService {
   }
 
   async listJobCards(): Promise<WorkbenchJobCard[]> {
+    if (isOffline()) {
+      const cards = await loadSnapshot<WorkbenchJobCard[]>(this.context, "job-cards");
+      const ready = await loadSnapshot<{ jobIds?: string[] }>(this.context, "offline-ready").catch(() => null);
+      const available = ready?.jobIds ? cards.filter(card => ready.jobIds!.includes(String(card.job.id))) : cards;
+      return Promise.all(available.map(async card => ({
+        ...card,
+        timeEntries: await localDb.timeEntries.filter(row => row.orgId === this.context.orgId && row.jobId === card.job.id && !row.deletedAt
+          && (row.createdBy === this.currentUser.id || card.timeEntries.some(saved => saved.id === row.id))).toArray(),
+        actionItems: await localDb.actionItems.filter(row => row.orgId === this.context.orgId && row.entityId === card.job.id && !row.deletedAt
+          && card.actionItems.some(saved => saved.id === row.id)).toArray(),
+      })));
+    }
+    return cachedRead(this.context, "job-cards", () => this.listOnlineJobCards());
+  }
+
+  private async listOnlineJobCards(): Promise<WorkbenchJobCard[]> {
     await this.sync.refreshWorkbench();
     const canViewCompanyPaperwork = this.currentUser.role === "owner" || this.currentUser.role === "office";
 
@@ -548,6 +565,10 @@ export class WorkbenchService {
   }
 
   async listAssignableUsers(): Promise<WorkbenchAssignableUserOption[]> {
+    return cachedRead(this.context, "crew", () => this.listOnlineAssignableUsers());
+  }
+
+  private async listOnlineAssignableUsers(): Promise<WorkbenchAssignableUserOption[]> {
     if (!["owner", "office", "field"].includes(this.currentUser.role)) {
       throw new Error("You cannot view job assignments.");
     }
@@ -861,6 +882,34 @@ export class WorkbenchService {
   }
 
   async getJobWorkspace(job: Job): Promise<JobWorkspaceData> {
+    if (isOffline()) {
+      const saved = await loadSnapshot<JobWorkspaceData>(this.context, `job:${job.id}`);
+      const materials = await this.jobMaterials.list({ filter: { jobId: job.id } });
+      const catalog = new Map(saved.materialCatalogOptions.map(item => [String(item.id), item]));
+      const views: JobMaterialView[] = materials.map(entry => {
+        const item = catalog.get(String(entry.catalogItemId));
+        return { ...entry, materialName: entry.displayName ?? item?.name ?? "Material", materialSku: entry.skuSnapshot ?? item?.sku ?? null,
+          materialUnit: entry.unitSnapshot ?? item?.unit ?? "each", currentCatalogCost: item?.costPrice ?? null, currentCatalogUnitPrice: item?.unitPrice ?? null };
+      });
+      return { ...saved, usedMaterials: views.filter(entry => entry.kind === "used"), neededMaterials: views.filter(entry => entry.kind === "needed"),
+        timeEntries: await localDb.timeEntries.filter(row => row.orgId === this.context.orgId && row.jobId === job.id && !row.deletedAt
+          && (row.createdBy === this.currentUser.id || saved.timeEntries.some(item => item.id === row.id))).toArray() };
+    }
+    return cachedRead(this.context, `job:${job.id}`, () => this.getOnlineJobWorkspace(job));
+  }
+
+  async prepareOfflineJobs(): Promise<number> {
+    if (isOffline()) throw new Error("Connect to the internet to save jobs offline.");
+    const cards = await this.listJobCards();
+    await saveSnapshot(this.context, "job-cards", cards);
+    const assigned = cards.filter(card => card.assignments.some(row => row.userId === this.currentUser.id) && !["closed", "cancelled"].includes(card.job.status));
+    await this.listAssignableUsers();
+    for (const card of assigned) await saveSnapshot(this.context, `job:${card.job.id}`, await this.getJobWorkspace(card.job));
+    await saveSnapshot(this.context, "offline-ready", { count: assigned.length, jobIds: assigned.map(card => String(card.job.id)), savedAt: new Date().toISOString() });
+    return assigned.length;
+  }
+
+  private async getOnlineJobWorkspace(job: Job): Promise<JobWorkspaceData> {
     const now = new Date().toISOString();
     const [contact, notes, attachments, scheduleBlocks, linkedQuote, linkedQuoteLineItems, jobEvents, catalogItems, jobMaterials, manualActualCostLines, timeEntries, assignableUsers, assemblyOptions, orgResponse, invoicesResponse, jobTypeOptions] = await Promise.all([
       this.contacts.getById(job.contactId),
@@ -1158,6 +1207,7 @@ export class WorkbenchService {
   }
 
   async createJobNote(jobId: string, body: string) {
+    if (isOffline()) throw new Error("Notes need a connection. Keep this note open until you are back online.");
     const trimmedBody = body.trim();
     if (!trimmedBody) {
       throw new Error("Add a note before saving.");
@@ -1172,6 +1222,7 @@ export class WorkbenchService {
   }
 
   async uploadJobAttachment(jobId: string, file: File) {
+    if (isOffline()) throw new Error("Photos and attachments need a connection. Upload them when you are back online.");
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-");
     const storagePath = `${this.context.orgId}/jobs/${jobId}/${Date.now()}-${safeName}`;
     const { error: uploadError } = await this.client.storage
@@ -1218,6 +1269,7 @@ export class WorkbenchService {
   }
 
   async getAttachmentAccessUrl(storagePath: string): Promise<string> {
+    if (isOffline()) throw new Error("Plans and attachments need a connection to open.");
     const { data, error } = await this.client.storage
       .from("job-attachments")
       .createSignedUrl(storagePath, 60 * 15);
@@ -1637,6 +1689,7 @@ export class WorkbenchService {
     endTime: string | null = null,
     hourlyRate: number | null = null,
     sectionName: string | null = null,
+    requestId?: string,
   ): Promise<TimeEntry> {
     hours = validateTimeEntryHours(hours);
     console.info("[WorkbenchService] createTimeEntry input", {
@@ -1654,6 +1707,7 @@ export class WorkbenchService {
     });
 
     const entry = await this.timeEntries.create({
+      ...(requestId ? { requestId } : {}),
       jobId: jobId as TimeEntry["jobId"],
       userId: workedByUserId as TimeEntry["userId"],
       workDate,
@@ -1667,7 +1721,7 @@ export class WorkbenchService {
     });
 
     console.info("[WorkbenchService] createTimeEntry local result", entry);
-    await this.sync.flushPendingQueue();
+    await this.sync.flushPendingQueue().catch(error => console.warn("Time saved on device; sync pending", error));
     console.info("[WorkbenchService] createTimeEntry push result", {
       queueCount: await localDb.syncQueue.count(),
     });
@@ -1816,6 +1870,7 @@ export class WorkbenchService {
       null,
       null,
       draft.sectionName,
+      draft.requestId,
     );
   }
 
@@ -1966,7 +2021,7 @@ export class WorkbenchService {
     });
 
     console.info("[WorkbenchService] resolveActionItem local result", updatedItem);
-    await this.sync.flushPendingQueue();
+    await this.sync.flushPendingQueue().catch(error => console.warn("Task saved on device; sync pending", error));
     console.info("[WorkbenchService] resolveActionItem push result", {
       queueCount: await localDb.syncQueue.count(),
     });
@@ -1975,6 +2030,9 @@ export class WorkbenchService {
   }
 
   async flushSyncQueue(): Promise<number> {
+    if (isOffline()) return 0;
+    const { data, error } = await this.client.auth.getUser();
+    if (error || data.user?.id !== this.currentUser.id) throw new Error("Sign in again to sync changes saved on this device.");
     const before = await localDb.syncQueue.count();
     try {
       await this.sync.flushPendingQueue({ force: true });
@@ -1994,7 +2052,7 @@ export class WorkbenchService {
   }
 
   async getQueueCount(): Promise<number> {
-    return localDb.syncQueue.count();
+    return localDb.syncQueue.filter(row => row.orgId === this.context.orgId && row.actorUserId === this.context.actorUserId).count();
   }
 
   async listFailedSyncItems(): Promise<WorkbenchFailedSyncItem[]> {

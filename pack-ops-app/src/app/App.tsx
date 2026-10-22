@@ -5,7 +5,10 @@ import { OrgProvider } from "@/app/providers/org-provider";
 import { AuthGate } from "@/features/auth/components/AuthGate";
 import { ConfirmProvider, ToastProvider } from "@/ui";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({ defaultOptions: {
+  queries: { networkMode: "always", retry: 1 },
+  mutations: { networkMode: "always" },
+} });
 
 export function App() {
   return (

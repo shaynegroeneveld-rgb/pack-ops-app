@@ -1,6 +1,6 @@
 # Offline readiness — October 22, 2026
 
-The app has offline foundations, but is not ready to promise reliable offline use.
+The first offline field workflow is implemented. Before leaving reception, sign in, open Field, choose **Save jobs offline**, and wait for the downloaded job count. Stay signed in. A previously verified profile can reopen offline for up to seven days before an online sign-in is required again.
 
 ## Already implemented
 
@@ -9,24 +9,30 @@ The app has offline foundations, but is not ready to promise reliable offline us
 - The sync engine retries failed writes with backoff and preserves ordering per entity.
 - Pulls preserve local entities that still have queued changes.
 - The shell displays offline, pending, syncing and failed states, with retry controls.
+- A versioned service worker caches the app and screen code. Initial background caching starts after the page loads; Save jobs offline explicitly waits for the cache to be ready.
+- Offline session hydration uses the saved profile only when it matches the existing Supabase session identity. Sign-out removes that offline profile.
+- Save jobs offline downloads active assigned jobs, crew, the current week's schedule, material choices and job details into user/company-scoped snapshots.
+- Offline field screens read those snapshots and overlay saved hours, completed tasks and material changes from IndexedDB.
+- Fractional hours and material usage can be saved offline; running timers and unfinished time drafts survive refresh. Stable request IDs prevent repeated saves from creating duplicate hours/material entries.
+- New time entries, timer writes, task writes and offline material writes persist atomically with their queued operations.
+- The app retries queued changes on reconnect and every 30 seconds while open and online. It checks the signed-in user before automatic replay. Flushes are scoped by company and actor, serialized across tabs where Web Locks are available, and recover interrupted processing entries.
+- Pending hour edits are preserved during server refresh. Retried entity edits remain ordered behind their failed creation.
 
 ## Remaining gaps
 
-- No service worker or app-shell precache: reopening or refreshing without a connection is not guaranteed to load the app. A web app manifest alone does not provide this.
-- Session hydration fetches the user profile from Supabase. There is no offline profile bootstrap; network failures prevent opening a session normally.
-- Workbench reads await remote refreshes and office data queries. IndexedDB exists, but the screens are not consistently local-first.
-- Some save workflows await a flush and authoritative server confirmation. A local queued write does not guarantee the screen reports a successful offline save.
-- The online event updates the status indicator; reconnect recovery needs a consistent sync coordinator rather than depending on individual screen actions.
-- Attachments, plan PDFs and uploads need an explicit download/cache and deferred-upload design.
+- Office workflows, financial calculations, scheduling changes, job creation and assignment changes still require a connection.
+- Notes, attachments, plan PDFs and uploads need an explicit download/cache and deferred-upload design. The field offline status explains these limitations.
+- Offline access applies to data downloaded on that device. A new assignment or changed schedule is not available until refreshed online.
+- Reconnection requires the app to remain open; there is no OS background sync while it is closed.
+- A live connection with an unreachable server can still produce a network error instead of using snapshots, because the first release switches to offline reads when the browser reports offline.
+- Broader multi-device edit conflict resolution and revoked-access behavior need further testing on field devices. Server permissions remain authoritative when queued writes are sent; rejected writes remain visible for correction.
 
 ## Recommended implementation sequence
 
-1. Define offline scope around assigned field jobs, time, tasks and material usage.
-2. Add a versioned app cache with a controlled update flow and cached field screen chunks.
-3. Add user-scoped offline session bootstrap, explicit sign-out cleanup, and online access revalidation.
-4. Render cached assigned jobs immediately, refresh in the background, and distinguish saved-on-device from synced.
-5. Coordinate reconnect sync and handle conflicts, expired sessions and rejected writes without losing local changes.
-6. Add explicit plan downloads for offline use and show what is available on this device.
-7. Verify airplane-mode reopening, refresh, timer restart, queued edits, reconnection, account switching and app updates on actual field devices.
+1. Verify the workflow on the actual crew phones, including airplane mode and return to reception.
+2. Add explicit plan downloads for offline use and show what is available on each device.
+3. Extend cached reads to slow or unreachable networks even when the browser still reports online.
+4. Add background-first refresh for faster online field views and broader conflict handling.
+5. Extend support to other workflows only after the field scope has been used successfully.
 
-The loading optimization in this change loads screen code on demand. Unvisited screens therefore still need a connection until the app cache work is implemented.
+Automated checks cover snapshot identity isolation, fractional-hour persistence and deduplication, cached assignment permissions, timer restart/stop persistence, material add/edit/remove persistence, reconnect filtering, interrupted processing recovery, delayed-entity ordering, unfinished time drafts and offline profile matching/expiry.

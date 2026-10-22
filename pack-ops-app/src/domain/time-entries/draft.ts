@@ -1,7 +1,9 @@
 import type { JobId, UserId } from "@/domain/ids";
 import type { ActiveTimer } from "@/domain/time-entries/types";
+import { createId } from "@/lib/create-id";
 
 export interface TimeEntryDraft {
+  requestId?: string;
   jobId: JobId;
   userId: UserId;
   activeTimerId: ActiveTimer["id"] | null;
@@ -37,6 +39,7 @@ export function createManualTimeEntryDraft(
   description = "On-site work",
 ): TimeEntryDraft {
   return {
+    requestId: createId(),
     jobId,
     userId,
     activeTimerId: null,
@@ -65,6 +68,7 @@ export function isTimeEntryDraftRunning(draft: TimeEntryDraft): boolean {
 
 export function createDraftFromActiveTimer(timer: ActiveTimer): TimeEntryDraft {
   return {
+    requestId: String(timer.id),
     jobId: timer.jobId,
     userId: timer.userId,
     activeTimerId: timer.id,

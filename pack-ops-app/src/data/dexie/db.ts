@@ -19,7 +19,7 @@ import type {
   ImportedTransaction,
 } from "@/domain/finance/types";
 import type { Invoice } from "@/domain/invoices/types";
-import type { Job, JobAssignment } from "@/domain/jobs/types";
+import type { Job, JobAssignment, JobMaterialEntry } from "@/domain/jobs/types";
 import type { LeadRecord } from "@/domain/leads/types";
 import type { Note } from "@/domain/notes/types";
 import type { Payment } from "@/domain/payments/types";
@@ -31,6 +31,8 @@ import { DEXIE_TABLES } from "@/data/dexie/schema";
 import type { SyncCursor, SyncQueueEntry } from "@/data/dexie/outbox";
 
 export class PackOpsDexie extends Dexie {
+  offlineSnapshots!: Table<{ key: string; value: unknown; savedAt: string }, string>;
+  jobMaterials!: Table<JobMaterialEntry, string>;
   contacts!: Table<Contact, string>;
   leads!: Table<LeadRecord, string>;
   quotes!: Table<Quote, string>;
@@ -72,6 +74,7 @@ export class PackOpsDexie extends Dexie {
     this.version(6).stores(DEXIE_TABLES);
     this.version(7).stores(DEXIE_TABLES);
     this.version(8).stores(DEXIE_TABLES);
+    this.version(9).stores({ ...DEXIE_TABLES, offlineSnapshots: "key, savedAt", jobMaterials: "id, orgId, jobId, kind, deletedAt" });
   }
 }
 

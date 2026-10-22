@@ -52,6 +52,16 @@ export class WorkbenchSyncGateway implements PushSyncPort, PullSyncPort {
 
   async push(entries: SyncQueueEntry[]): Promise<void> {
     for (const entry of entries) {
+      if (entry.entityType === "job_materials") {
+        const payload = { ...entry.payload, updated_at: entry.clientUpdatedAt };
+        const { error } = entry.operation === "soft_delete"
+          ? await this.client.rpc("fn_soft_delete_job_material", { p_job_material_id: entry.entityId, p_deleted_at: entry.clientUpdatedAt })
+          : "job_id" in payload
+            ? await this.client.from("job_materials").upsert(payload as Database["public"]["Tables"]["job_materials"]["Insert"]).select("id").single()
+            : await this.client.from("job_materials").update(payload).eq("org_id", entry.orgId).eq("id", entry.entityId).select("id").single();
+        if (error) throw new SyncPushError(getSyncErrorMessage(error), entry, payload, error);
+        continue;
+      }
       const tableName = this.toTableName(entry.entityType);
       if (!tableName) {
         continue;

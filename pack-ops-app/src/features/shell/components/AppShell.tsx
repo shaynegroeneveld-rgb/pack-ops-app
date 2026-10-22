@@ -5,6 +5,7 @@ import { APP_ROUTES } from "@/app/router/routes";
 import { useAuthContext } from "@/app/contexts/auth-context";
 import { useUiStore } from "@/app/store/ui-store";
 import { localDb } from "@/data/dexie/db";
+import { OfflineFieldPanel } from "@/features/field/components/OfflineFieldPanel";
 import { getSupabaseClient } from "@/data/supabase/client";
 const DesignSystemPage = lazy(() => import("@/features/design-system/components/DesignSystemPage").then((module) => ({ default: module.DesignSystemPage })));
 const AgingSummaryPage = lazy(() => import("@/features/finance/components/AgingSummaryPage").then((module) => ({ default: module.AgingSummaryPage })));
@@ -212,7 +213,7 @@ export function AppShell() {
 
   useEffect(() => {
     const subscription = liveQuery(async () => {
-      const entries = await localDb.syncQueue.toArray();
+      const entries = await localDb.syncQueue.filter(row => row.orgId === currentUser?.user.orgId && row.actorUserId === currentUser?.user.id).toArray();
       return {
         pendingCount: entries.filter((entry) => entry.status === "pending").length,
         failedCount: entries.filter((entry) => entry.status === "failed").length,
@@ -240,7 +241,7 @@ export function AppShell() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [currentUser?.user.id, currentUser?.user.orgId]);
 
   useEffect(() => {
     if (!canSeeFinance) {
@@ -635,6 +636,7 @@ export function AppShell() {
       </nav>
       ) : null}
 
+      {currentUser ? <OfflineFieldPanel key={currentUser.user.id} currentUser={currentUser} visible={isFieldRoute} /> : null}
       <Suspense fallback={<div role="status" style={{ padding: "24px" }}>Loading page…</div>}>
         {(takeoffVisited || activeRoute === APP_ROUTES.electricalTakeoff) && <div hidden={activeRoute !== APP_ROUTES.electricalTakeoff}><ElectricalTakeoffPage /></div>}
         {activeRoute.startsWith(fieldJobRoutePrefix) ? (

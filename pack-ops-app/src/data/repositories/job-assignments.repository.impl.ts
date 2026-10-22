@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { localDb } from "@/data/dexie/db";
+import { isOffline } from "@/data/offline/cache";
 import { jobAssignmentsMapper } from "@/data/mappers/job-assignments.mapper";
 import type { RepositoryContext } from "@/data/repositories/contracts";
 import type {
@@ -26,6 +27,8 @@ export class JobAssignmentsRepositoryImpl
   }
 
   async list(options?: { filter?: JobAssignmentFilter }): Promise<JobAssignment[]> {
+    if (isOffline()) return localDb.jobAssignments.filter(row => row.orgId === this.context.orgId && !row.deletedAt
+      && (!options?.filter?.jobId || row.jobId === options.filter.jobId) && (!options?.filter?.userId || row.userId === options.filter.userId)).toArray();
     let query = this.client
       .from("job_assignments")
       .select("*")

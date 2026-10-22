@@ -20,7 +20,7 @@ export const useUiStore = create<UiStoreState>((set) => ({
   takeoffQuote: null,
   setTakeoffQuote: (value) => set({takeoffQuote: value}),
   isCommandBarOpen: false,
-  activeRoute: APP_ROUTES.workbench,
+  activeRoute: typeof navigator !== "undefined" && !navigator.onLine ? APP_ROUTES.field : APP_ROUTES.workbench,
   selectedWorkbenchJobId: null,
   selectedQuoteId: null,
   setCommandBarOpen: (next) => set({ isCommandBarOpen: next }),

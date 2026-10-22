@@ -1,4 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { localDb } from "@/data/dexie/db";
+import { createSyncQueueEntry } from "@/data/dexie/outbox";
+import { isOffline } from "@/data/offline/cache";
 
 import { jobMaterialsMapper } from "@/data/mappers/job-materials.mapper";
 import type { RepositoryContext } from "@/data/repositories/contracts";
@@ -19,6 +22,9 @@ export class JobMaterialsRepositoryImpl implements JobMaterialsRepository {
   ) {}
 
   async list(options?: { filter?: JobMaterialFilter }): Promise<JobMaterialEntry[]> {
+    const matches = (row: JobMaterialEntry) => row.orgId === this.context.orgId && !row.deletedAt
+      && (!options?.filter?.jobId || row.jobId === options.filter.jobId) && (!options?.filter?.kind || row.kind === options.filter.kind);
+    if (isOffline()) return localDb.jobMaterials.filter(matches).toArray();
     const rows: Database["public"]["Tables"]["job_materials"]["Row"][] = [];
     let total: number | null = null;
     while (true) {
@@ -43,7 +49,15 @@ export class JobMaterialsRepositoryImpl implements JobMaterialsRepository {
       rows.push(...page);
       if (total !== null ? rows.length >= total : page.length < 500) break;
     }
-    return rows.map((row) => jobMaterialsMapper.toDomain(row));
+    const materials = rows.map((row) => jobMaterialsMapper.toDomain(row));
+    const pending = await localDb.syncQueue.filter(row => row.orgId === this.context.orgId && row.actorUserId === this.context.actorUserId && row.entityType === "job_materials").toArray();
+    const ids = new Set(pending.map(row => row.entityId));
+    const serverIds = new Set(materials.map(row => row.id));
+    await localDb.jobMaterials.filter(row => matches(row) && !ids.has(row.id) && !serverIds.has(row.id)).delete();
+    await localDb.jobMaterials.bulkPut(materials.filter(row => !ids.has(row.id)));
+    const merged = new Map(materials.map(row => [row.id, row]));
+    (await localDb.jobMaterials.filter(row => row.orgId === this.context.orgId && ids.has(row.id)).toArray()).forEach(row => merged.set(row.id, row));
+    return [...merged.values()].filter(row => !row.deletedAt && (!ids.has(row.id) || matches(row)));
   }
 
   async create(input: CreateJobMaterialInput): Promise<JobMaterialEntry> {
@@ -72,6 +86,17 @@ export class JobMaterialsRepositoryImpl implements JobMaterialsRepository {
         created_at: now,
         updated_at: now,
       };
+    if (isOffline() || await this.hasPending(payload.id)) {
+      const existing = await localDb.jobMaterials.get(payload.id);
+      const entry = jobMaterialsMapper.toDomain({ ...payload, deleted_at: null } as Database["public"]["Tables"]["job_materials"]["Row"]);
+      if (existing) {
+        const keys = ["orgId", "jobId", "catalogItemId", "kind", "quantity", "note", "sectionName", "displayName", "unitCost", "unitSell"] as const;
+        if (!keys.every(key => existing[key] === entry[key])) throw new Error("This entry was already saved with different details.");
+        return existing;
+      }
+      await this.queueOfflineMaterial(entry, payload);
+      return entry;
+    }
     const { data, error } = await this.client.from("job_materials").insert(payload)
       .select("*")
       .single();
@@ -93,6 +118,13 @@ export class JobMaterialsRepositoryImpl implements JobMaterialsRepository {
   }
 
   async update(id: string, input: UpdateJobMaterialInput): Promise<JobMaterialEntry> {
+    if (isOffline() || await this.hasPending(id)) {
+      const existing = await localDb.jobMaterials.get(id);
+      if (!existing || existing.orgId !== this.context.orgId || existing.deletedAt) throw new Error("Open this job online before editing this material offline.");
+      const entry = { ...existing, ...Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)), updatedAt: new Date().toISOString() } as JobMaterialEntry;
+      await this.queueOfflineMaterial(entry, { ...jobMaterialsMapper.toPatch({ ...input, actorUserId: this.context.actorUserId }), id, org_id: this.context.orgId }, "upsert");
+      return entry;
+    }
     const patchInput = {
       ...(input.catalogItemId !== undefined ? { catalogItemId: input.catalogItemId } : {}),
       ...(input.quantity !== undefined ? { quantity: input.quantity } : {}),
@@ -127,6 +159,12 @@ export class JobMaterialsRepositoryImpl implements JobMaterialsRepository {
   }
 
   async softDelete(id: string): Promise<void> {
+    if (isOffline() || await this.hasPending(id)) {
+      const existing = await localDb.jobMaterials.get(id);
+      if (!existing || existing.orgId !== this.context.orgId) throw new Error("This material is not saved on this device.");
+      await this.queueOfflineMaterial({ ...existing, deletedAt: new Date().toISOString() }, { id, org_id: this.context.orgId }, "soft_delete");
+      return;
+    }
     const deletedAt = new Date().toISOString();
     const { error } = await (this.client as SupabaseClient<Database> & {
       rpc: (
@@ -141,5 +179,17 @@ export class JobMaterialsRepositoryImpl implements JobMaterialsRepository {
     if (error) {
       throw error;
     }
+  }
+
+  private async queueOfflineMaterial(entry: JobMaterialEntry, payload: Record<string, unknown>, operation: "upsert" | "soft_delete" = "upsert") {
+    await localDb.transaction("rw", localDb.jobMaterials, localDb.syncQueue, async () => {
+      await localDb.jobMaterials.put(entry);
+      await localDb.syncQueue.put(createSyncQueueEntry({ orgId: entry.orgId, actorUserId: this.context.actorUserId,
+        entityType: "job_materials", entityId: entry.id, operation, clientUpdatedAt: entry.updatedAt, payload }));
+    });
+  }
+
+  private async hasPending(id: string): Promise<boolean> {
+    return (await localDb.syncQueue.filter(row => row.orgId === this.context.orgId && row.actorUserId === this.context.actorUserId && row.entityType === "job_materials" && row.entityId === id).count()) > 0;
   }
 }

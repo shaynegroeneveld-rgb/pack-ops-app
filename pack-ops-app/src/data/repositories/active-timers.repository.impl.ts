@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { localDb } from "@/data/dexie/db";
+import { isOffline } from "@/data/offline/cache";
 import { activeTimersMapper } from "@/data/mappers/active-timers.mapper";
 import type { RepositoryContext } from "@/data/repositories/contracts";
 import type {
@@ -74,7 +75,6 @@ export class ActiveTimersRepositoryImpl
     }
 
     const timer = activeTimersMapper.toDomain(data);
-    await localDb.activeTimers.put(timer);
     return timer;
   }
 
@@ -82,6 +82,11 @@ export class ActiveTimersRepositoryImpl
     userId: ActiveTimer["userId"],
     options?: { preferCache?: boolean },
   ): Promise<ActiveTimer | null> {
+    const queued = await localDb.syncQueue.filter(row => row.orgId === this.context.orgId && row.actorUserId === this.context.actorUserId && row.entityType === "active_timers").toArray();
+    if (isOffline() || queued.length > 0) {
+      return (await localDb.activeTimers.filter(row => row.orgId === this.context.orgId && row.userId === userId && !row.deletedAt).toArray())
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null;
+    }
     if (options?.preferCache) {
       const cachedTimers = await localDb.activeTimers
         .where("userId")
@@ -118,7 +123,6 @@ export class ActiveTimersRepositoryImpl
     }
 
     const timer = activeTimersMapper.toDomain(data);
-    await localDb.activeTimers.put(timer);
     return timer;
   }
 
@@ -133,6 +137,7 @@ export class ActiveTimersRepositoryImpl
   }
 
   async deleteRemoteForUser(userId: ActiveTimer["userId"]): Promise<void> {
+    if (isOffline()) return;
     const { error } = await this.client
       .from("active_timers")
       .delete()
@@ -162,7 +167,8 @@ export class ActiveTimersRepositoryImpl
       deletedAt: null,
     };
 
-    await localDb.activeTimers.put(timer);
+    await localDb.transaction("rw", localDb.activeTimers, localDb.syncQueue, async () => {
+      await localDb.activeTimers.put(timer);
     await this.enqueue({
       entityType: "active_timers",
       entityId: id,
@@ -177,6 +183,7 @@ export class ActiveTimersRepositoryImpl
         deleted_at: null,
         ...activeTimersMapper.toInsert(input),
       },
+    });
     });
 
     return timer;
@@ -199,7 +206,8 @@ export class ActiveTimersRepositoryImpl
       updatedBy: (input.updatedBy ?? this.context.actorUserId) as ActiveTimer["updatedBy"],
     };
 
-    await localDb.activeTimers.put(timer);
+    await localDb.transaction("rw", localDb.activeTimers, localDb.syncQueue, async () => {
+      await localDb.activeTimers.put(timer);
     await this.enqueue({
       entityType: "active_timers",
       entityId: id,
@@ -218,17 +226,20 @@ export class ActiveTimersRepositoryImpl
         deleted_at: timer.deletedAt,
       },
     });
+    });
 
     return timer;
   }
 
   async softDelete(id: string): Promise<void> {
+    await localDb.transaction("rw", localDb.activeTimers, localDb.syncQueue, async () => {
     await localDb.activeTimers.delete(id);
     await this.enqueue({
       entityType: "active_timers",
       entityId: id,
       operation: "delete",
       payload: {},
+    });
     });
   }
 }

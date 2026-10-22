@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { getSupabaseClient } from "@/data/supabase/client";
+import { loadTimeDraft, saveTimeDraft } from "@/data/offline/time-draft";
 import { getSyncErrorMessage } from "@/data/sync/errors";
 import type { Job, JobManualActualCategory } from "@/domain/jobs/types";
 import {
@@ -61,7 +62,10 @@ export function useWorkbenchSlice(
 ) {
   const queryClient = useQueryClient();
   const client = getSupabaseClient(import.meta.env);
-  const [timeEntryDraft, setTimeEntryDraft] = useState<TimeEntryDraft | null>(null);
+  const [timeEntryDraft, setTimeEntryDraft] = useState<TimeEntryDraft | null>(() => loadTimeDraft(authenticatedUser.user.orgId, authenticatedUser.user.id));
+  useEffect(() => {
+    saveTimeDraft(authenticatedUser.user.orgId, authenticatedUser.user.id, timeEntryDraft);
+  }, [authenticatedUser.user.orgId, authenticatedUser.user.id, timeEntryDraft]);
   const [activeRunningTimerDraft, setActiveRunningTimerDraft] = useState<TimeEntryDraft | null>(null);
   const [isSavingTimeEntryDraft, setIsSavingTimeEntryDraft] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);

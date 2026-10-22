@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { localDb } from "@/data/dexie/db";
+import { isOffline } from "@/data/offline/cache";
 import { actionItemsMapper } from "@/data/mappers/action-items.mapper";
 import type { RepositoryContext } from "@/data/repositories/contracts";
 import type {
@@ -68,6 +69,10 @@ export class ActionItemsRepositoryImpl
   }
 
   async getById(id: string): Promise<ActionItem | null> {
+    if (isOffline()) {
+      const item = await localDb.actionItems.get(id);
+      return item?.orgId === this.context.orgId && !item.deletedAt ? item : null;
+    }
     const { data, error } = await this.client
       .from("action_items")
       .select("*")
@@ -83,7 +88,6 @@ export class ActionItemsRepositoryImpl
     }
 
     const item = actionItemsMapper.toDomain(data);
-    await localDb.actionItems.put(item);
     return item;
   }
 
@@ -143,12 +147,14 @@ export class ActionItemsRepositoryImpl
       payload: queuePayload,
     });
     await localDb.transaction("rw", localDb.actionItems, localDb.syncQueue, async () => {
+      await localDb.transaction("rw", localDb.actionItems, localDb.syncQueue, async () => {
       await localDb.actionItems.put(item);
     await this.enqueue({
       entityType: "action_items",
       entityId: id,
       operation: "upsert",
       payload: queuePayload,
+    });
     });
     });
 
@@ -178,7 +184,6 @@ export class ActionItemsRepositoryImpl
     console.info("[ActionItemsRepository] update input", { id, input });
     console.info("[ActionItemsRepository] local updated action item", item);
 
-    await localDb.actionItems.put(item);
     const queuePayload = {
       id,
       org_id: item.orgId,
@@ -208,11 +213,14 @@ export class ActionItemsRepositoryImpl
       operation: item.deletedAt ? "soft_delete" : "upsert",
       payload: queuePayload,
     });
+    await localDb.transaction("rw", localDb.actionItems, localDb.syncQueue, async () => {
+      await localDb.actionItems.put(item);
     await this.enqueue({
       entityType: "action_items",
       entityId: id,
       operation: item.deletedAt ? "soft_delete" : "upsert",
       payload: queuePayload,
+    });
     });
 
     return item;

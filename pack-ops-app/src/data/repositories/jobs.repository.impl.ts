@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { localDb } from "@/data/dexie/db";
+import { isOffline } from "@/data/offline/cache";
 import { jobsMapper } from "@/data/mappers/jobs.mapper";
 import type { RepositoryContext } from "@/data/repositories/contracts";
 import type {
@@ -87,6 +88,10 @@ export class JobsRepositoryImpl
   }
 
   async getById(id: string): Promise<Job | null> {
+    if (isOffline()) {
+      const job = await localDb.jobs.get(id);
+      return job?.orgId === this.context.orgId && !job.deletedAt ? job : null;
+    }
     const queuedJobIds = await this.getQueuedJobIds();
     if (queuedJobIds.has(id)) {
       const localJob = await localDb.jobs.get(id);

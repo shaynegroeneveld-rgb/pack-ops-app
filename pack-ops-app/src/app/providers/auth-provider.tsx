@@ -209,10 +209,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
       void resolveSession(session, `auth_event:${event}`, hydrationId);
     });
 
+    function revalidateOnline() {
+      const hydrationId = ++latestHydrationIdRef.current;
+      void withTimeout(sessionService.getCurrentSession(), "Reconnect session lookup")
+        .then(session => { if (isMounted) return resolveSession(session, "reconnect", hydrationId); })
+        .catch(error => { if (isMounted) applyFinalState(createAuthState("error", { authError: error instanceof Error ? error.message : "Sign in again to sync." })); });
+    }
+    window.addEventListener("online", revalidateOnline);
+
     return () => {
       isMounted = false;
       log("auth provider unmount");
       unsubscribe();
+      window.removeEventListener("online", revalidateOnline);
     };
   }, [sessionService]);
 

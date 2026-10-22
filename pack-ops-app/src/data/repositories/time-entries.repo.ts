@@ -9,6 +9,7 @@ export interface TimeEntryFilter {
 }
 
 export interface CreateTimeEntryInput {
+  requestId?: string;
   jobId: TimeEntry["jobId"];
   userId: TimeEntry["userId"];
   workDate: TimeEntry["workDate"];

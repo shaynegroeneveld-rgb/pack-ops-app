@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cachedRead } from "@/data/offline/cache";
 
 import { JobAssignmentsRepositoryImpl } from "@/data/repositories/job-assignments.repository.impl";
 import { JobsRepositoryImpl } from "@/data/repositories/jobs.repository.impl";
@@ -186,7 +187,7 @@ export class SchedulingService {
     this.sync = new SyncEngine({
       push: new PushSyncService(gateway),
       pull: new PullSyncService(gateway),
-    });
+    }, this.context);
   }
 
   private assertCanManageSchedule() {
@@ -645,6 +646,14 @@ export class SchedulingService {
   }
 
   async getUpcomingScheduleBlocks(options?: {
+    from?: string;
+    to?: string;
+    userId?: ScheduleBlock["userId"];
+  }): Promise<SchedulingBlockDetail[]> {
+    return cachedRead(this.context, `schedule:${JSON.stringify(options ?? {})}`, () => this.getOnlineUpcomingScheduleBlocks(options));
+  }
+
+  private async getOnlineUpcomingScheduleBlocks(options?: {
     from?: string;
     to?: string;
     userId?: ScheduleBlock["userId"];

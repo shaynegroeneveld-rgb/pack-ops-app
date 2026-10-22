@@ -5,7 +5,8 @@ export type SyncEntityType =
   | "job_assignments"
   | "active_timers"
   | "schedule_blocks"
-  | "worker_unavailability";
+  | "worker_unavailability"
+  | "job_materials";
 
 export type SyncOperationType = "upsert" | "soft_delete" | "delete";
 export type SyncQueueStatus = "pending" | "processing" | "failed" | "complete";
