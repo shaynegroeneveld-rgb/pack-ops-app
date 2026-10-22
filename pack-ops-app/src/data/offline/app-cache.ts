@@ -5,11 +5,24 @@ export async function ensureOfflineApp(): Promise<ServiceWorkerRegistration> {
   registration ??= navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(error => { registration = undefined; throw error; });
   await registration;
   let timeout: number | undefined;
+  let onControl: (() => void) | undefined;
+  const controlled = async () => {
+    const ready = await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) await new Promise<void>(resolve => {
+      onControl = () => resolve();
+      navigator.serviceWorker.addEventListener("controllerchange", onControl, { once: true });
+      if (navigator.serviceWorker.controller) resolve();
+    });
+    return ready;
+  };
   try {
-    return await Promise.race([navigator.serviceWorker.ready, new Promise<never>((_, reject) => {
+    return await Promise.race([controlled(), new Promise<never>((_, reject) => {
       timeout = window.setTimeout(() => reject(new Error("Offline app download did not finish. Keep the app open with a connection and try again.")), 45_000);
     })]);
-  } finally { window.clearTimeout(timeout); }
+  } finally {
+    window.clearTimeout(timeout);
+    if (onControl) navigator.serviceWorker.removeEventListener("controllerchange", onControl);
+  }
 }
 
 export function scheduleOfflineApp() {
