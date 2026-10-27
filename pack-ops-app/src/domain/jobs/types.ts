@@ -77,6 +77,7 @@ export interface JobEstimateLaborSnapshot {
 }
 
 export interface JobEstimateSnapshot {
+  partNames?: Record<string, string>;
   sourceQuoteId: QuoteId | null;
   sourceQuoteNumber: string | null;
   generatedAt: string;

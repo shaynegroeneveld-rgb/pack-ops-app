@@ -1,3 +1,4 @@
+import { RenamePart } from "@/components/parts/RenamePart";
 import { JobQuotePlan } from "./JobQuotePlan";
 import type {WorkbenchJobCard} from "@/services/workbench/workbench-service";
 import { JobTaskBoard } from "@/features/jobs/components/JobTaskBoard";
@@ -1393,6 +1394,7 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
     jobTypeOptionsQuery,
     assignableUsersQuery,
     actualPartOptions,
+    renameActualPart,
     addActualPart: addActualPartToSlice,
     createJob,
     createJobType,
@@ -2070,6 +2072,17 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
       storagePath: attachment.storagePath,
       fileName: attachment.fileName,
     });
+  }
+
+  async function renamePart(oldName: string, newName: string) {
+    await renameActualPart.mutateAsync({oldName, newName});
+    const move = <T extends {sectionName: string}>(draft: T): T => (draft.sectionName.trim() || "General") === oldName ? {...draft, sectionName: newName} : draft;
+    setNeededMaterialDraft(move); setUsedMaterialDraft(move); setManualActualCostDraft(move);
+    setAssemblyActualDraft(move); setActualLaborDraft(move);
+  }
+  function partRenameButton(name: string) {
+    return currentUser.user.role === "owner" || currentUser.user.role === "office"
+      ? <RenamePart name={name} names={actualPartOptions} disabled={renameActualPart.isPending} onRename={next => renamePart(name, next)} /> : null;
   }
 
   function addActualPart() {
@@ -3666,7 +3679,7 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
           {actualPartOptions.map((partName) => (
-            <span key={partName} style={badgeStyle("#eef2ff", "#163fcb")}>{partName}</span>
+            <span key={partName} style={{display:"inline-flex",gap:8,alignItems:"center"}}><span style={badgeStyle("#eef2ff", "#163fcb")}>{partName}</span>{partRenameButton(partName)}</span>
           ))}
         </div>
       </section>
@@ -3914,7 +3927,7 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
         <div className="job-parts-grid">{actualPartOptions.map(part => {
           const materialCount = (jobWorkspace?.usedMaterials ?? []).filter(row => (row.sectionName?.trim() || "General") === part).length;
           const entries = (jobWorkspace?.timeEntries ?? []).filter(row => (row.sectionName?.trim() || "General") === part && row.status !== "rejected");
-          return <div className="job-part-card" key={part}><strong>{part}</strong><p>{estimatedMaterialLines.filter(row => (row.sectionName?.trim() || "General") === part).length} planned material lines · {(jobWorkspace?.estimatedLabor ?? []).filter(row => (row.sectionName?.trim() || "General") === part).reduce((total, row) => total + row.quantity, 0)} planned hours</p><p>Actual: {materialCount} material entries · {entries.length} time entries</p>
+          return <div className="job-part-card" key={part}><strong>{part}</strong> {partRenameButton(part)}<p>{estimatedMaterialLines.filter(row => (row.sectionName?.trim() || "General") === part).length} planned material lines · {(jobWorkspace?.estimatedLabor ?? []).filter(row => (row.sectionName?.trim() || "General") === part).reduce((total, row) => total + row.quantity, 0)} planned hours</p><p>Actual: {materialCount} material entries · {entries.length} time entries</p>
             <button type="button" onClick={() => setJobScreen("actuals")}>View materials & time</button></div>;
         })}</div>
       </section>

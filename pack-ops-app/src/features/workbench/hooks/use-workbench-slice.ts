@@ -245,6 +245,19 @@ export function useWorkbenchSlice(
     return normalized;
   }
 
+  const renameActualPart = useMutation({
+    mutationFn: async ({oldName, newName}: {oldName: string; newName: string}) => {
+      if (!selectedJobIdForParts) throw new Error("Select a job first.");
+      if (actualPartOptions.some(name => name !== oldName && name.toLowerCase() === newName.toLowerCase())) throw new Error("That part already exists.");
+      await service.renameJobPart(selectedJobIdForParts, oldName, newName);
+    },
+    onSuccess: async (_, {oldName, newName}) => {
+      setPendingActualPartNames(current => [...new Set([...current.map(name => name === oldName ? newName : name), newName])]);
+      await queryClient.invalidateQueries({queryKey: ["workbench"]});
+      setFeedback({tone: "success", text: "Part renamed. Its materials and labour stayed together."});
+    },
+  });
+
   const activeWorkspaceKey = [...JOB_WORKSPACE_QUERY_KEY, authenticatedUser.user.id, options?.selectedJobId ?? null];
 
   const patchActiveWorkspace = (updater: (current: any) => any) => {
@@ -1158,6 +1171,7 @@ export function useWorkbenchSlice(
     queueQuery,
     activeTimersQuery,
     actualPartOptions,
+    renameActualPart,
     addActualPart,
     createJob,
     createJobType,

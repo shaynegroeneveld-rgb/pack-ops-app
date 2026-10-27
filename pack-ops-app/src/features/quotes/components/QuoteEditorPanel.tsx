@@ -1,3 +1,4 @@
+import { RenamePart } from "@/components/parts/RenamePart";
 import type { Contact } from "@/domain/contacts/types";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -545,6 +546,20 @@ export function QuoteEditorPanel({
           }
         : current,
     );
+  }
+
+  function renameQuotePart(oldName: string, newName: string) {
+    setDraft(current => current ? { ...current, lineItems: current.lineItems.map(line =>
+      !isTsbcPermitLine(line) && (line.sectionName?.trim() || "General") === oldName
+        ? { ...line, sectionName: newName === "General" ? null : newName } : line) } : current);
+    setSectionNames(current => [...new Set([...current.map(name => name === oldName ? newName : name), newName])]);
+    const moveKey = (current: Record<string, string>) => {
+      const next = {...current};
+      if (oldName in next) { next[newName] = next[oldName]!; delete next[oldName]; }
+      return next;
+    };
+    setSelectedCatalogItemIds(moveKey); setSelectedCatalogQuantities(moveKey);
+    setSelectedAssemblyIds(moveKey); setSelectedAssemblyQuantities(moveKey);
   }
 
   function addJobPart() {
@@ -1277,7 +1292,7 @@ export function QuoteEditorPanel({
                   <div key={section.name} style={{ display: "grid", gap: "10px", border: "1px solid #d9dfeb", borderRadius: "14px", padding: "12px", background: "#fff" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
                       <div>
-                        <strong>{section.name}</strong>
+                        <strong>{section.name}</strong> <RenamePart name={section.name} names={quoteSections} disabled={isPending || isLockedByInvoice} onRename={name => renameQuotePart(section.name, name)} />
                         <div style={{ color: "#5b6475", fontSize: "13px", marginTop: "3px" }}>
                           {section.lines.length} lines · Materials ${section.materialSell.toFixed(2)} · Labour ${section.laborSell.toFixed(2)}
                         </div>

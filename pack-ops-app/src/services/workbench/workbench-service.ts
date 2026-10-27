@@ -1118,10 +1118,10 @@ export class WorkbenchService {
       .filter((entry) => entry.kind === "needed")
       .map(toMaterialView)
       .filter((entry): entry is JobMaterialView => Boolean(entry));
-    const estimatedMaterials =
+    const estimatedMaterials = (
       linkedQuoteLineItems.length > 0
         ? quoteLineItemsToEstimateMaterialSnapshot(linkedQuoteLineItems)
-        : normalizeEstimateMaterialSnapshotLines(job.estimateSnapshot?.materials ?? []);
+        : normalizeEstimateMaterialSnapshotLines(job.estimateSnapshot?.materials ?? [])).map(line => ({...line, sectionName: job.estimateSnapshot?.partNames?.[line.sectionName?.trim() || "General"] ?? line.sectionName}));
 
     const performance = computeJobPerformanceSummary({
       job,
@@ -1199,9 +1199,9 @@ export class WorkbenchService {
       assemblyOptions,
       jobTypeOptions,
       estimatedMaterials,
-      estimatedLabor: linkedQuoteLineItems.length > 0
+      estimatedLabor: (linkedQuoteLineItems.length > 0
         ? linkedQuoteLineItems.filter((line) => line.lineKind === "labor").map(({description, sectionName, quantity, unit}) => ({description, sectionName, quantity, unit}))
-        : job.estimateSnapshot?.laborLines ?? [],
+        : job.estimateSnapshot?.laborLines ?? []).map(line => ({...line, sectionName: job.estimateSnapshot?.partNames?.[line.sectionName?.trim() || "General"] ?? line.sectionName})),
       usedMaterials,
       neededMaterials,
       manualActualCostLines,
@@ -1341,6 +1341,13 @@ export class WorkbenchService {
       sourceAssemblyName: input.sourceAssemblyName?.trim() || null,
       sourceAssemblyMultiplier: input.sourceAssemblyMultiplier ?? null,
     });
+  }
+
+  async renameJobPart(jobId: string, oldName: string, newName: string) {
+    const { error } = await this.client.rpc("rename_job_part" as never, {
+      p_job_id: jobId, p_old_name: oldName, p_new_name: newName,
+    } as never);
+    if (error) throw new Error(error.message);
   }
 
   async updateJobMaterial(input: {
