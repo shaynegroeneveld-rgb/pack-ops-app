@@ -287,3 +287,12 @@
   font-size: 13px;
   margin: 8px 0 14px;
 }
+
+.field-assembly-counter{border:1px solid #dce2ed;border-radius:10px;padding:10px;background:#fff;color:#172033}
+.field-assembly-counter__line{display:flex;align-items:center;gap:6px}
+.field-assembly-counter__name{flex:1;min-width:0;display:grid;gap:3px;overflow-wrap:anywhere}
+.field-assembly-counter__name span{font-size:13px;color:#526078}
+.field-assembly-counter button{min-height:44px;padding:8px 10px;white-space:nowrap}
+.field-assembly-counter details{margin-top:6px;font-size:12px;color:#526078}
+.field-assembly-counter__edit{display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:12px}
+.field-assembly-counter__edit label{flex:1;min-width:130px}

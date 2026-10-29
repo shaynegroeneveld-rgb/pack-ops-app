@@ -764,6 +764,7 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
               <FieldMaterialsUsedPanel
                 jobId={selectedJobCard.job.id}
                 draftScope={`${currentUser.user.orgId}:${currentUser.user.id}`}
+                onCounterSaved={() => { void workbench.jobWorkspaceQuery.refetch(); }}
                 parts={jobParts}
                 plannedMaterialIds={[...selectedNeededMaterials, ...(jobWorkspace?.estimatedMaterials ?? [])].map(row => row.catalogItemId).filter((id): id is NonNullable<typeof id> => Boolean(id))}
                 catalogItems={catalogItems}
