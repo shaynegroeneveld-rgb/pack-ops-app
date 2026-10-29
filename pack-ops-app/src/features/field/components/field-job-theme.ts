@@ -1,0 +1,8 @@
+import type {CSSProperties} from 'react';
+export const fieldColors={backgroundTop:'#f5f3ef',backgroundMid:'#f5f3ef',backgroundBottom:'#f5f3ef',white:'#402825',whiteSoft:'#75675d',gold:'#bc8733',goldBright:'#835b25',card:'#fff',cardSoft:'#faf8f4',border:'#e3dbd0',warningBg:'#fff0d1',warningText:'#79511d',danger:'#ad3030'};
+export const shellCardStyle=():CSSProperties=>({width:'100%',maxWidth:'100%',boxSizing:'border-box',borderRadius:20,border:'1px solid #e3dbd0',background:'#fff',boxShadow:'0 4px 16px #37241606'});
+export const softCardStyle=():CSSProperties=>({...shellCardStyle(),background:'#faf8f4',boxShadow:'none',borderRadius:14});
+export const actionButtonStyle=(kind:'primary'|'secondary'='primary'):CSSProperties=>({minHeight:46,borderRadius:12,border:kind==='primary'?'1px solid #622e29':'1px solid #d9cfc3',background:kind==='primary'?'#622e29':'#fff',color:kind==='primary'?'#fff8ed':'#623b30',padding:'11px 15px',fontSize:15,fontWeight:650,width:'100%',maxWidth:'100%',boxSizing:'border-box'});
+export const toggleButtonStyle=(open:boolean):CSSProperties=>({...shellCardStyle(),display:'flex',justifyContent:'space-between',alignItems:'center',padding:'16px',gap:12,color:'#402825',fontWeight:650,fontSize:16,textAlign:'left',borderColor:open?'#cbb38d':'#e3dbd0',cursor:'pointer'});
+export const infoLabelStyle=():CSSProperties=>({color:'#7d6950',fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase'});
+export const inputStyle=():CSSProperties=>({width:'100%',maxWidth:'100%',boxSizing:'border-box',borderRadius:10,border:'1px solid #d9cfc3',background:'#fff',color:'#402825',padding:'12px',fontSize:16});

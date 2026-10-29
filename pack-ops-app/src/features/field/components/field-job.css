@@ -1,0 +1,16 @@
+.field-job-page{font-family:Inter,system-ui,sans-serif}
+.field-job-brand{display:grid;place-items:center}.field-job-brand img{width:170px;height:102px;object-fit:cover;mix-blend-mode:multiply}
+.field-job-number{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#946c2e;font-weight:700}
+.field-job-page button{cursor:pointer;min-height:44px}.field-job-page button:disabled{opacity:.5;cursor:default}
+.field-job-page button:focus-visible,.field-job-page input:focus-visible,.field-job-page select:focus-visible{outline:3px solid #c9973c;outline-offset:3px}
+.field-job-page .job-organizer--field{background:#fff;border:1px solid #e3dbd0;color:#402825;border-radius:16px;box-shadow:none}
+.field-job-page .job-organizer--field .job-primary{background:#622e29;color:#fff8ed;border-color:#622e29}
+.field-job-page .job-organizer--field .job-muted{color:#75675d}
+.field-job-page nav[aria-label="Quick job actions"]{padding:6px;position:sticky;top:0;z-index:5;box-shadow:0 3px 12px #3724160c}
+.field-job-page nav[aria-label="Quick job actions"] button{flex:1;border:0;background:#faf6ef;color:#623b30;border-radius:10px;font-weight:650;padding:8px;font-size:13px}
+.field-job-page details[aria-label="Job parts"] summary{font-weight:650;cursor:pointer;min-height:32px}
+.field-job-page .field-material-bubble{background:#faf8f4;border-color:#e3dbd0}
+.field-job-page .field-part-switcher button[aria-pressed=true]{background:#622e29;border-color:#622e29}
+.field-job-page .field-part-destination{background:#faf1e2;color:#62492e}
+.field-job-section{scroll-margin-top:65px}.field-job-section>div[id]{scroll-margin-top:65px}
+.field-job-page .job-organizer--field{--jo-bg:#fff;--jo-soft:#faf8f4;--jo-ink:#402825;--jo-muted:#75675d;--jo-line:#e3dbd0;--jo-accent:#835b25}

@@ -1,3 +1,5 @@
+import "./field-job.css";
+import { actionButtonStyle, fieldColors, infoLabelStyle, inputStyle, shellCardStyle, softCardStyle, toggleButtonStyle } from "./field-job-theme";
 import { JobTaskBoard } from "@/features/jobs/components/JobTaskBoard";
 import { collectJobParts, jobTasks, readTaskContext } from "@/services/jobs/job-organization";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -21,17 +23,10 @@ import { MaterialSearchSelect } from "@/features/materials/components/MaterialSe
 import { useWorkbenchSlice } from "@/features/workbench/hooks/use-workbench-slice";
 
 import {
-  actionButtonStyle,
-  fieldColors,
   formatElapsed,
   formatHours,
   formatMoney,
-  infoLabelStyle,
-  inputStyle,
-  shellCardStyle,
-  softCardStyle,
   storeRecentJobId,
-  toggleButtonStyle,
 } from "./field-mode-shared";
 import { FieldMaterialsUsedPanel } from "./FieldMaterialsUsedPanel";
 
@@ -52,7 +47,7 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
   const setActiveRoute = useUiStore((state) => state.setActiveRoute);
   const [jobAccordions, setJobAccordions] = useState<Record<JobAccordionKey, boolean>>({
     info: false,
-    timer: false,
+    timer: true,
     notes: false,
     attachments: false,
     materials: true,
@@ -189,7 +184,7 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
   function renderSectionCard(key: JobAccordionKey, title: string, children: ReactNode) {
     const isOpen = jobAccordions[key];
     return (
-      <div style={{ display: "grid", gap: "8px" }}>
+      <div className={`field-job-section field-job-section--${key}`} style={{ display: "grid", gap: "8px" }}>
         <button type="button" aria-expanded={isOpen} aria-controls={`field-section-${key}`} onClick={() => toggleJobAccordion(key)} style={toggleButtonStyle(isOpen)}>
           <span style={{ display: "flex", gap: "12px", alignItems: "center" }}>
             <span style={{ fontSize: "20px" }}>
@@ -271,7 +266,8 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
   if (isJobLookupLoading) {
     return (
       <div
-        data-theme="field"
+        className="field-job-page"
+      data-theme="field"
         style={{
           minHeight: "100vh",
           width: "100%",
@@ -284,7 +280,7 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
       >
         <div style={{ width: "min(100%, 760px)", maxWidth: "calc(100vw - 24px)", boxSizing: "border-box", margin: "0 auto", display: "grid", gap: "16px", minWidth: 0 }}>
           <button type="button" style={{ ...actionButtonStyle("secondary"), width: "auto", maxWidth: "100%", boxSizing: "border-box" }} onClick={() => setActiveRoute(APP_ROUTES.field)}>
-            Back
+            ← Jobs
           </button>
           <div style={{ ...shellCardStyle(), padding: "18px", display: "grid", gap: "8px" }}>
             <strong style={{ fontSize: "22px", color: fieldColors.white }}>Loading job…</strong>
@@ -298,7 +294,8 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
   if (!selectedJobCard) {
     return (
       <div
-        data-theme="field"
+        className="field-job-page"
+      data-theme="field"
         style={{
           minHeight: "100vh",
           width: "100%",
@@ -311,7 +308,7 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
       >
         <div style={{ width: "min(100%, 760px)", maxWidth: "calc(100vw - 24px)", boxSizing: "border-box", margin: "0 auto", display: "grid", gap: "16px", minWidth: 0 }}>
           <button type="button" style={{ ...actionButtonStyle("secondary"), width: "auto", maxWidth: "100%", boxSizing: "border-box" }} onClick={() => setActiveRoute(APP_ROUTES.field)}>
-            Back
+            ← Jobs
           </button>
           <div style={{ ...shellCardStyle(), padding: "18px", display: "grid", gap: "8px" }}>
             <strong style={{ fontSize: "22px", color: fieldColors.white }}>{workbench.jobsQuery.isError ? "Could not load jobs" : "Job not available"}</strong>
@@ -325,6 +322,7 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
 
   return (
     <div
+      className="field-job-page"
       data-theme="field"
       style={{
         minHeight: "100vh",
@@ -338,15 +336,17 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
       }}
     >
       <div style={{ width: "min(100%, 760px)", maxWidth: "calc(100vw - 24px)", boxSizing: "border-box", margin: "0 auto", display: "grid", gap: "14px", minWidth: 0 }}>
+        <div className="field-job-brand"><img src="/pack-electric-brand.jpeg" alt="Pack Electric" /></div>
         <header style={{ ...shellCardStyle(), padding: "16px", display: "grid", gap: "10px", minWidth: 0 }}>
           <button
             type="button"
             style={{ ...actionButtonStyle("secondary"), width: "auto", justifySelf: "start", minWidth: "min(120px, 100%)", maxWidth: "100%", boxSizing: "border-box" }}
             onClick={() => setActiveRoute(APP_ROUTES.field)}
           >
-            Back
+            ← Jobs
           </button>
           <div style={{ display: "grid", gap: "6px" }}>
+            <span className="field-job-number">{selectedJobCard.job.number} · {selectedJobCard.job.status.replaceAll("_", " ")}</span>
             <strong style={{ fontSize: "26px", lineHeight: 1.08, color: fieldColors.white, overflowWrap: "anywhere" }}>
               {selectedJobCard.job.title}
             </strong>
@@ -411,67 +411,10 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
           Job details could not be refreshed. Saved information may be out of date.
           <button type="button" style={actionButtonStyle("secondary")} onClick={()=>void workbench.jobWorkspaceQuery.refetch()}>Try again</button>
         </div>}
-        <JobTaskBoard key={jobId} field jobId={jobId} items={selectedJobCard.actionItems}
-          parts={jobParts} currentUser={currentUser.user} crew={timerWorkerOptions}
-          canCreate={selectedJobCard.permissions.canCreateActionItem}
-          onCreate={(input) => workbench.createActionItem.mutateAsync({...input, jobId})}
-          onComplete={(item) => workbench.resolveActionItem.mutateAsync(item)} />
-        <section className="job-organizer job-organizer--field" aria-label="Job parts">
-          <h2>Job parts</h2>
-          <p>Split a bigger job into areas or stages. Small jobs can stay in General.</p>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>{jobParts.map(part => <span key={part} style={{ padding: "6px 10px", border: "1px solid currentColor", borderRadius: 8 }}>{part}</span>)}</div>
-          <form onSubmit={(event) => { event.preventDefault(); if (workbench.addActualPart(newJobPartName)) setNewJobPartName(""); }} style={{ display: "grid", gap: 10 }}>
-            <label style={{ display: "grid", gap: 6 }}>Job part name
-              <input value={newJobPartName} onChange={event => setNewJobPartName(event.target.value)} placeholder="e.g. Service, Suite, Garage" style={{ ...inputStyle(), minHeight: 48 }} />
-            </label>
-            <button type="submit" disabled={!newJobPartName.trim()} style={actionButtonStyle()}>+ Add job part</button>
-          </form>
-        </section>
         <nav className="job-organizer job-organizer--field" aria-label="Quick job actions" style={{display: "flex", gap: 8, flexWrap: "wrap"}}>
-          {([['materials','Log materials'],['timer','Time'],['notes','Add note']] as const).map(([key,label]) =>
+          {([['timer','Time'],['materials','Materials'],['notes','Notes'],['attachments','Photos']] as const).map(([key,label]) =>
             <button key={key} type="button" onClick={() => {setJobAccordions(current=>({...current,[key]:true})); requestAnimationFrame(()=>document.getElementById(`field-section-${key}`)?.scrollIntoView({behavior:'smooth',block:'start'}));}}>{label}</button>)}
         </nav>
-        {renderSectionCard(
-          "info",
-          "Info",
-          <div style={{ display: "grid", gap: "12px" }}>
-            <div>
-              <div style={infoLabelStyle()}>Customer</div>
-              <div style={{ color: fieldColors.white, overflowWrap: "anywhere" }}>{selectedJobCard.contactName ?? "No customer linked"}</div>
-            </div>
-            <div>
-              <div style={infoLabelStyle()}>Contact</div>
-              <div style={{ color: fieldColors.whiteSoft, overflowWrap: "anywhere" }}>{selectedJobCard.contactSubtitle ?? "No contact details"}</div>
-            </div>
-            <div>
-              <div style={infoLabelStyle()}>Address</div>
-              <div style={{ color: fieldColors.whiteSoft, overflowWrap: "anywhere" }}>
-                {[
-                  selectedJobCard.job.addressLine1,
-                  selectedJobCard.job.addressLine2,
-                  selectedJobCard.job.city,
-                  selectedJobCard.job.region,
-                  selectedJobCard.job.postalCode,
-                ].filter(Boolean).join(", ") || "No address added"}
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>
-              <div style={{ ...softCardStyle(), padding: "12px", minWidth: 0 }}>
-                <div style={infoLabelStyle()}>Assigned Crew</div>
-                <div style={{ color: fieldColors.whiteSoft, overflowWrap: "anywhere" }}>{crewNames.join(", ") || "No crew assigned"}</div>
-              </div>
-              <div style={{ ...softCardStyle(), padding: "12px", minWidth: 0 }}>
-                <div style={infoLabelStyle()}>Estimated Hours</div>
-                <div style={{ color: fieldColors.white }}>{formatHours(selectedJobCard.job.estimatedHours)}</div>
-              </div>
-              <div style={{ ...softCardStyle(), padding: "12px", minWidth: 0 }}>
-                <div style={infoLabelStyle()}>Actual Cost</div>
-                <div style={{ color: fieldColors.white }}>{formatMoney(jobWorkspace?.performance?.totalActualCost ?? null)}</div>
-              </div>
-            </div>
-          </div>,
-        )}
-
         {renderSectionCard(
           "timer",
           "Timer",
@@ -699,64 +642,6 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
         )}
 
         {renderSectionCard(
-          "notes",
-          "Notes",
-          <div style={{ display: "grid", gap: "12px" }}>
-            <label style={{ display: "grid", gap: "6px" }}>
-              <span style={infoLabelStyle()}>New Note</span>
-              <textarea
-                ref={noteInputRef}
-                rows={3}
-                value={noteDraft}
-                onChange={(event) => setNoteDraft(event.target.value)}
-                style={inputStyle()}
-              />
-            </label>
-            <button type="button" style={actionButtonStyle()} onClick={() => void handleAddNote().catch(() => undefined)} disabled={!noteDraft.trim() || workbench.addJobNote.isPending}>
-              Save Note
-            </button>
-            {(jobWorkspace?.notes ?? []).slice(0, 8).map((note) => (
-              <div key={note.id} style={{ ...softCardStyle(), padding: "12px" }}>
-                <p style={{ margin: 0, color: fieldColors.white, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-                  {note.body}
-                </p>
-                <div style={{ color: fieldColors.whiteSoft, fontSize: "12px", marginTop: "6px" }}>
-                  {new Date(note.createdAt).toLocaleString()}
-                </div>
-              </div>
-            ))}
-          </div>,
-        )}
-
-        {renderSectionCard(
-          "attachments",
-          "Attachments",
-          <div style={{ display: "grid", gap: "12px" }}>
-            <input ref={fileInputRef} type="file" hidden onChange={(event) => void handleUploadAttachment(event.target.files?.[0] ?? null).catch(() => undefined)} />
-            <button type="button" style={actionButtonStyle()} onClick={() => fileInputRef.current?.click()}>
-              Upload Attachment
-            </button>
-            {(jobWorkspace?.attachments ?? []).length === 0 ? (
-              <div style={{ ...softCardStyle(), padding: "12px", color: fieldColors.whiteSoft }}>No attachments yet.</div>
-            ) : (
-              (jobWorkspace?.attachments ?? []).map((attachment) => (
-                <button
-                  key={attachment.id}
-                  type="button"
-                  onClick={() => void workbench.openAttachment(attachment.storagePath).then((url) => window.open(url, "_blank"))}
-                  style={{ ...softCardStyle(), padding: "12px", textAlign: "left", color: fieldColors.white }}
-                >
-                  <strong style={{ display: "block", overflowWrap: "anywhere" }}>{attachment.fileName}</strong>
-                  <span style={{ color: fieldColors.whiteSoft, fontSize: "12px" }}>
-                    {new Date(attachment.createdAt).toLocaleString()}
-                  </span>
-                </button>
-              ))
-            )}
-          </div>,
-        )}
-
-        {renderSectionCard(
           "materials",
           "Materials",
           <div style={{ display: "grid", gap: "16px" }}>
@@ -870,6 +755,122 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
 
           </div>,
         )}
+        <JobTaskBoard key={jobId} field jobId={jobId} items={selectedJobCard.actionItems}
+          parts={jobParts} currentUser={currentUser.user} crew={timerWorkerOptions}
+          canCreate={selectedJobCard.permissions.canCreateActionItem}
+          onCreate={(input) => workbench.createActionItem.mutateAsync({...input, jobId})}
+          onComplete={(item) => workbench.resolveActionItem.mutateAsync(item)} />
+        <details className="job-organizer job-organizer--field" aria-label="Job parts">
+          <summary>Manage job parts</summary>
+          <p>Split a bigger job into areas or stages. Small jobs can stay in General.</p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>{jobParts.map(part => <span key={part} style={{ padding: "6px 10px", border: "1px solid currentColor", borderRadius: 8 }}>{part}</span>)}</div>
+          <form onSubmit={(event) => { event.preventDefault(); if (workbench.addActualPart(newJobPartName)) setNewJobPartName(""); }} style={{ display: "grid", gap: 10 }}>
+            <label style={{ display: "grid", gap: 6 }}>Job part name
+              <input value={newJobPartName} onChange={event => setNewJobPartName(event.target.value)} placeholder="e.g. Service, Suite, Garage" style={{ ...inputStyle(), minHeight: 48 }} />
+            </label>
+            <button type="submit" disabled={!newJobPartName.trim()} style={actionButtonStyle()}>+ Add job part</button>
+          </form>
+        </details>
+
+        {renderSectionCard(
+          "info",
+          "Info",
+          <div style={{ display: "grid", gap: "12px" }}>
+            <div>
+              <div style={infoLabelStyle()}>Customer</div>
+              <div style={{ color: fieldColors.white, overflowWrap: "anywhere" }}>{selectedJobCard.contactName ?? "No customer linked"}</div>
+            </div>
+            <div>
+              <div style={infoLabelStyle()}>Contact</div>
+              <div style={{ color: fieldColors.whiteSoft, overflowWrap: "anywhere" }}>{selectedJobCard.contactSubtitle ?? "No contact details"}</div>
+            </div>
+            <div>
+              <div style={infoLabelStyle()}>Address</div>
+              <div style={{ color: fieldColors.whiteSoft, overflowWrap: "anywhere" }}>
+                {[
+                  selectedJobCard.job.addressLine1,
+                  selectedJobCard.job.addressLine2,
+                  selectedJobCard.job.city,
+                  selectedJobCard.job.region,
+                  selectedJobCard.job.postalCode,
+                ].filter(Boolean).join(", ") || "No address added"}
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>
+              <div style={{ ...softCardStyle(), padding: "12px", minWidth: 0 }}>
+                <div style={infoLabelStyle()}>Assigned Crew</div>
+                <div style={{ color: fieldColors.whiteSoft, overflowWrap: "anywhere" }}>{crewNames.join(", ") || "No crew assigned"}</div>
+              </div>
+              <div style={{ ...softCardStyle(), padding: "12px", minWidth: 0 }}>
+                <div style={infoLabelStyle()}>Estimated Hours</div>
+                <div style={{ color: fieldColors.white }}>{formatHours(selectedJobCard.job.estimatedHours)}</div>
+              </div>
+              <div style={{ ...softCardStyle(), padding: "12px", minWidth: 0 }}>
+                <div style={infoLabelStyle()}>Actual Cost</div>
+                <div style={{ color: fieldColors.white }}>{formatMoney(jobWorkspace?.performance?.totalActualCost ?? null)}</div>
+              </div>
+            </div>
+          </div>,
+        )}
+
+        {renderSectionCard(
+          "notes",
+          "Notes",
+          <div style={{ display: "grid", gap: "12px" }}>
+            <label style={{ display: "grid", gap: "6px" }}>
+              <span style={infoLabelStyle()}>New Note</span>
+              <textarea
+                ref={noteInputRef}
+                rows={3}
+                value={noteDraft}
+                onChange={(event) => setNoteDraft(event.target.value)}
+                style={inputStyle()}
+              />
+            </label>
+            <button type="button" style={actionButtonStyle()} onClick={() => void handleAddNote().catch(() => undefined)} disabled={!noteDraft.trim() || workbench.addJobNote.isPending}>
+              Save Note
+            </button>
+            {(jobWorkspace?.notes ?? []).slice(0, 8).map((note) => (
+              <div key={note.id} style={{ ...softCardStyle(), padding: "12px" }}>
+                <p style={{ margin: 0, color: fieldColors.white, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                  {note.body}
+                </p>
+                <div style={{ color: fieldColors.whiteSoft, fontSize: "12px", marginTop: "6px" }}>
+                  {new Date(note.createdAt).toLocaleString()}
+                </div>
+              </div>
+            ))}
+          </div>,
+        )}
+
+        {renderSectionCard(
+          "attachments",
+          "Attachments",
+          <div style={{ display: "grid", gap: "12px" }}>
+            <input ref={fileInputRef} type="file" hidden onChange={(event) => void handleUploadAttachment(event.target.files?.[0] ?? null).catch(() => undefined)} />
+            <button type="button" style={actionButtonStyle()} onClick={() => fileInputRef.current?.click()}>
+              Upload Attachment
+            </button>
+            {(jobWorkspace?.attachments ?? []).length === 0 ? (
+              <div style={{ ...softCardStyle(), padding: "12px", color: fieldColors.whiteSoft }}>No attachments yet.</div>
+            ) : (
+              (jobWorkspace?.attachments ?? []).map((attachment) => (
+                <button
+                  key={attachment.id}
+                  type="button"
+                  onClick={() => void workbench.openAttachment(attachment.storagePath).then((url) => window.open(url, "_blank"))}
+                  style={{ ...softCardStyle(), padding: "12px", textAlign: "left", color: fieldColors.white }}
+                >
+                  <strong style={{ display: "block", overflowWrap: "anywhere" }}>{attachment.fileName}</strong>
+                  <span style={{ color: fieldColors.whiteSoft, fontSize: "12px" }}>
+                    {new Date(attachment.createdAt).toLocaleString()}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>,
+        )}
+
       </div>
     </div>
   );
