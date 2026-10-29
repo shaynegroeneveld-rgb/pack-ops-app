@@ -18,11 +18,11 @@ export function AssemblyCounterRow({assembly,catalog,jobId,part,scope,onSaved,ma
    const next=await changeAssemblyCounter({context:{orgId,actorUserId},jobId,part,assembly,catalog,action,materialOnly});setState(next);setEditing(false);onSaved();
   }catch(e){setError(e instanceof Error?e.message:'Could not save. Try again.');}finally{locked.current=false;setBusy(false);}
  }
- return <article className="field-assembly-counter" aria-label={`${assembly.name} counter`}>
-  <div className="field-assembly-counter__line"><div className="field-assembly-counter__name"><strong>{assembly.name}</strong><span aria-live="polite">{state?.count ?? '…'} {materialOnly ? catalog.find(m=>m.id===assembly.items[0]?.catalogItemId)?.unit : ''} used</span></div>
+ return <article className={`field-assembly-counter ${materialOnly?"field-material-bubble":""}`} aria-label={`${assembly.name} counter`}>
+  <div className="field-assembly-counter__line"><div className="field-assembly-counter__name"><strong>{assembly.name}</strong><span aria-live="polite">{materialOnly ? catalog.find(m=>m.id===assembly.items[0]?.catalogItemId)?.unit : `${state?.count ?? '…'} used`}</span></div>
    <button type="button" className="job-primary" aria-label={`Add one ${assembly.name}`} disabled={busy||!state} onClick={()=>void change('add')}>+1</button>
    <button type="button" aria-label={`Undo ${assembly.name}`} disabled={busy||!state?.history.length} onClick={()=>void change('undo')}>Undo</button>
-   <button type="button" aria-label={`Set quantity for ${assembly.name}`} disabled={busy||!state} onClick={()=>{setValue(String(state?.count??0));setEditing(true);}}>Set qty</button>
+   <button type="button" aria-label={`Set quantity for ${assembly.name}`} disabled={busy||!state} onClick={()=>{setValue(String(state?.count??0));setEditing(true);}}>{materialOnly ? `${state?.count ?? "…"} · Set qty` : "Set qty"}</button>
   </div>
   {editing&&<form className="field-assembly-counter__edit" onSubmit={e=>{e.preventDefault();if(!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(value.trim())){setError('Enter a quantity, such as 6 or 0.5.');return;}void change(Number(value));}}>
    <label>Total for this counter<input autoFocus inputMode="decimal" aria-label={`Total ${assembly.name}`} value={value} onChange={e=>setValue(e.target.value)} disabled={busy}/></label>

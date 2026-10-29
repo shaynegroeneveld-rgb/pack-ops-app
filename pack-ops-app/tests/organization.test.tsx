@@ -1,4 +1,6 @@
-import { describe,it,expect,vi } from 'vitest';
+import {localDb} from '@/data/dexie/db';
+beforeEach(async()=>{for(const t of localDb.tables)await t.clear();});
+import { describe,it,expect,vi,beforeEach } from 'vitest';
 import {render,screen,fireEvent,waitFor} from '@testing-library/react';
 import {FieldMaterialsUsedPanel} from '@/features/field/components/FieldMaterialsUsedPanel';
 import {JobTaskBoard} from '@/features/jobs/components/JobTaskBoard';
@@ -12,9 +14,15 @@ describe('material quantities and job context',()=>{
  it('does not include another job or time-entry followup',()=>{expect(jobTasks([{id:'a',entityType:'jobs',entityId:'job',status:'open'},{id:'b',entityType:'time_entries',entityId:'job',status:'open'}] as any,'job').map(x=>x.id)).toEqual(['a']);});
 });
 describe('field material entry',()=>{
- it('saves exact quantity to selected part and does not merge same SKU from another part',async()=>{const {props}=panel({usedMaterials:[{...item,id:'old',catalogItemId:'material',quantity:10,sectionName:'Shop',createdAt:'2026-01-01'}]});fireEvent.click(screen.getByRole('button',{name:'Choose Copper wire'}));fireEvent.change(screen.getByLabelText('Quantity used (m)'),{target:{value:'12.25'}});fireEvent.change(screen.getByLabelText('Job part',{selector:'select'}),{target:{value:'Service'}});fireEvent.click(screen.getByRole('button',{name:'Add 12.25 m used'}));await waitFor(()=>expect(props.onCreateUsedMaterial).toHaveBeenCalledTimes(1));expect(props.onCreateUsedMaterial.mock.calls[0][0]).toMatchObject({quantity:12.25,sectionName:'Service',catalogItemId:'material'});expect(props.onUpdateUsedMaterial).not.toHaveBeenCalled();await screen.findByRole('status');});
- it('retains failed draft across remount and retries with the same request ID',async()=>{const save=vi.fn().mockRejectedValue(new Error('Connection lost'));const view=panel({onCreateUsedMaterial:save});fireEvent.click(screen.getByRole('button',{name:'Choose Copper wire'}));fireEvent.click(screen.getByRole('button',{name:'Add 1 m used'}));await screen.findByRole('alert');const requestId=save.mock.calls[0][0].requestId;view.unmount();panel({onCreateUsedMaterial:save});expect((screen.getByLabelText('Quantity used (m)') as HTMLInputElement).value).toBe('1');fireEvent.click(screen.getByRole('button',{name:'Add 1 m used'}));await waitFor(()=>expect(save).toHaveBeenCalledTimes(2));expect(save.mock.calls[1][0].requestId).toBe(requestId);});
- it('blocks repeated taps during save',async()=>{let finish:any;const save=vi.fn(()=>new Promise(resolve=>finish=resolve));panel({onCreateUsedMaterial:save});fireEvent.click(screen.getByRole('button',{name:'Choose Copper wire'}));fireEvent.click(screen.getByRole('button',{name:'Add 1 m used'}));fireEvent.click(screen.getByRole('button',{name:'Saving…'}));expect(save).toHaveBeenCalledTimes(1);finish({});await screen.findByRole('status');});
+ it('counts fractional material quantities against the selected job part',async()=>{
+ panel();fireEvent.change(screen.getByLabelText('Job part'),{target:{value:'Service'}});
+ fireEvent.change(screen.getByLabelText('Choose material or assembly'),{target:{value:'material:material'}});
+ await screen.findByText('0 · Set qty');fireEvent.click(screen.getByRole('button',{name:'Set quantity for Copper wire'}));
+ fireEvent.change(screen.getByLabelText('Total Copper wire'),{target:{value:'12.25'}});fireEvent.click(screen.getByRole('button',{name:'Save total'}));
+ await screen.findByText('12.25 · Set qty');expect((await localDb.jobMaterials.toArray())[0]).toMatchObject({quantity:12.25,sectionName:'Service'});
+ });
+ it('keeps selection at zero without creating usage',async()=>{panel();fireEvent.change(screen.getByLabelText('Choose material or assembly'),{target:{value:'material:material'}});await screen.findByText('0 · Set qty');expect(await localDb.jobMaterials.count()).toBe(0);});
+ it('keeps independent lists for different parts',async()=>{panel();fireEvent.change(screen.getByLabelText('Choose material or assembly'),{target:{value:'material:material'}});await screen.findByText('0 · Set qty');fireEvent.change(screen.getByLabelText('Job part'),{target:{value:'Shop'}});expect(screen.queryByRole('button',{name:'Add one Copper wire'})).toBeNull();fireEvent.change(screen.getByLabelText('Job part'),{target:{value:'General'}});await screen.findByText('0 · Set qty');});
  it('requires confirmation before removing a saved entry',async()=>{const {props}=panel({usedMaterials:[{...item,id:'old',catalogItemId:'material',quantity:10,sectionName:'Shop',createdAt:'2026-01-01'}]});fireEvent.click(screen.getByRole('button',{name:'Remove',exact:true}));expect(props.onDeleteUsedMaterial).not.toHaveBeenCalled();fireEvent.click(screen.getByRole('button',{name:'Keep entry'}));expect(props.onDeleteUsedMaterial).not.toHaveBeenCalled();});
 });
 describe('job tasks',()=>{

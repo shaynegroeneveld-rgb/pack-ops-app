@@ -296,3 +296,10 @@
 .field-assembly-counter details{margin-top:6px;font-size:12px;color:#526078}
 .field-assembly-counter__edit{display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:12px}
 .field-assembly-counter__edit label{flex:1;min-width:130px}
+.field-material-bubbles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:8px;margin:12px 0}
+.field-material-bubble{border-radius:18px;padding:10px;background:#f6f8fc}
+.field-material-bubble .field-assembly-counter__line{flex-wrap:wrap}
+.field-material-bubble .field-assembly-counter__name{flex-basis:100%;font-size:14px}
+.field-material-bubble .field-assembly-counter__line>button:last-child{order:1;flex:1}
+.field-material-bubble .field-assembly-counter__line>button:first-of-type{order:2;min-width:54px}
+.field-material-bubble .field-assembly-counter__line>button:nth-of-type(2){order:3}

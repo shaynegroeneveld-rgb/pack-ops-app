@@ -2,7 +2,6 @@ import { AssemblyMaterialCounters } from "./AssemblyMaterialCounters";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { JobMaterialView } from "@/domain/jobs/types";
 import type { AssemblyView, CatalogItem } from "@/domain/materials/types";
-import { rankCatalogItems, rankAssemblies } from "@/services/materials/material-search";
 import { parseMaterialQuantity } from "@/services/jobs/job-organization";
 import { createId } from "@/lib/create-id";
 import "@/features/jobs/components/job-organization.css";
@@ -99,11 +98,7 @@ function MaterialEntry({
   onDeleteUsedMaterial,
 }: FieldMaterialsUsedPanelProps) {
   const storageKey = `pack-ops:material-draft:${draftScope}:${jobId}`;
-  const [draft, setDraft] = useState<Draft>(() => readDraft(storageKey));
-  const [search, setSearch] = useState("");
-  const [resultLimit, setResultLimit] = useState(12);
-  useEffect(() => setResultLimit(12), [search]);
-  const [tab, setTab] = useState<"job" | "all" | "assemblies">("job");
+  const [draft, setDraft] = useState<Draft>(() => { const saved=readDraft(storageKey);try { saved.part=localStorage.getItem(`${storageKey}:part`) || saved.part; } catch {} return saved; });
   const [pending, setPending] = useState(false);
   const lock = useRef(false);
   const [message, setMessage] = useState("");
@@ -119,12 +114,6 @@ function MaterialEntry({
     () => new Map(catalogItems.map((x) => [String(x.id), x])),
     [catalogItems],
   );
-  const selected = catalogById.get(draft.materialId);
-  const entryFormRef = useRef<HTMLFormElement>(null);
-  useEffect(() => {
-    if (draft.materialId) entryFormRef.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
-  }, [draft.materialId]);
-  const quantity = parseMaterialQuantity(draft.quantity);
   const allParts = [
     ...new Set([
       "General",
@@ -133,24 +122,6 @@ function MaterialEntry({
       draft.part,
     ]),
   ];
-  const suggestedIds = [
-    ...new Set([
-      ...plannedMaterialIds,
-      ...[...usedMaterials]
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .map((x) => String(x.catalogItemId)),
-    ]),
-  ];
-  const matchingAssemblies = useMemo(() => rankAssemblies(assemblies, search), [assemblies, search]);
-  const resultItems = (
-    search.trim()
-      ? rankCatalogItems(catalogItems, search)
-      : tab === "job"
-        ? suggestedIds
-            .map((id) => catalogById.get(id))
-            .filter((x): x is CatalogItem => !!x)
-        : catalogItems
-  ).filter((x) => x.isActive);
   const recent = [...usedMaterials]
     .filter(
       (x) =>
@@ -158,29 +129,8 @@ function MaterialEntry({
     )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   useEffect(() => {
-    try {
-      if (draft.materialId)
-        localStorage.setItem(storageKey, JSON.stringify(draft));
-      else localStorage.removeItem(storageKey);
-    } catch {
-      setStorageAvailable(false);
-    }
-  }, [storageKey, draft]);
-  useEffect(() => {
-    const prevent = (e: BeforeUnloadEvent) => {
-      if (draft.materialId || pending) {
-        e.preventDefault();
-        e.returnValue = "";
-      }
-    };
-    window.addEventListener("beforeunload", prevent);
-    return () => window.removeEventListener("beforeunload", prevent);
-  }, [draft.materialId, pending]);
-  function choose(item: CatalogItem) {
-    setDraft({ ...blank(), materialId: String(item.id), part: draft.part });
-    setMessage("");
-    setError("");
-  }
+    try { localStorage.setItem(`${storageKey}:part`, draft.part); } catch { /* Counter saves report storage errors separately. */ }
+  }, [storageKey,draft.part]);
   async function run(action: () => Promise<unknown>, success: () => void) {
     if (lock.current) return;
     lock.current = true;
@@ -200,40 +150,6 @@ function MaterialEntry({
       lock.current = false;
       setPending(false);
     }
-  }
-  async function add() {
-    if (!selected || quantity === null) return;
-    const captured = { ...draft };
-    const item = selected;
-    await run(
-      () =>
-        onCreateUsedMaterial({
-          jobId,
-          requestId: captured.requestId,
-          catalogItemId: String(item.id),
-          kind: "used",
-          quantity,
-          displayName: item.name,
-          skuSnapshot: item.sku,
-          unitSnapshot: item.unit,
-          unitCost: item.costPrice,
-          unitSell: item.unitPrice,
-          note: captured.note.trim() || null,
-          sectionName: captured.part === "General" ? null : captured.part,
-        }),
-      () => {
-        setDraft({ ...blank(), part: captured.part });
-        setSearch("");
-        setMessage(
-          `Added ${quantity} ${item.unit} of ${item.name} to ${captured.part}.`,
-        );
-        try {
-          localStorage.removeItem(storageKey);
-        } catch {
-          /* UI still reports saved server result. */
-        }
-      },
-    );
   }
   function saveEdit(line: JobMaterialView) {
     const qty = parseMaterialQuantity(editQty);
@@ -262,8 +178,7 @@ function MaterialEntry({
           <p className="job-eyebrow">Before you leave</p>
           <h2>Log materials used</h2>
           <p>
-            Choose the item, enter what you used, then save. Each entry stays
-            with its job part.
+            Choose materials or an assembly, then count what you use. Tap a quantity to set it.
           </p>
         </div>
       </div>
@@ -277,170 +192,9 @@ function MaterialEntry({
           {message}
         </p>
       )}
-      {draft.materialId && (
-        <form
-          ref={entryFormRef}
-          className="job-task-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void add();
-          }}
-        >
-          <strong>
-            {selected?.name ??
-              "Previously selected material is no longer available"}
-          </strong>
-          {selected && (
-            <p className="job-muted">
-              {selected.sku ?? "No SKU"} · Priced and counted in {selected.unit}
-            </p>
-          )}
-          <div className="job-form-grid">
-            <label>
-              Quantity used {selected ? `(${selected.unit})` : ""}
-              <input
-                inputMode="decimal"
-                value={draft.quantity}
-                onChange={(e) =>
-                  setDraft({ ...draft, quantity: e.target.value })
-                }
-                disabled={pending}
-                required
-                aria-invalid={quantity === null}
-              />
-            </label>
-            <label>
-              Job part
-              <select
-                value={draft.part}
-                onChange={(e) => setDraft({ ...draft, part: e.target.value })}
-                disabled={pending}
-              >
-                {allParts.map((p) => (
-                  <option key={p}>{p}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {quantity === null && (
-            <p className="job-error">
-              Enter a quantity greater than zero, with up to 2 decimal places.
-            </p>
-          )}
-          <details>
-            <summary>Add a note / location</summary>
-            <textarea
-              aria-label="Material note or location"
-              rows={2}
-              value={draft.note}
-              disabled={pending}
-              onChange={(e) => setDraft({ ...draft, note: e.target.value })}
-              placeholder="e.g. Suite kitchen, east wall"
-            />
-          </details>
-          <p className="job-muted">
-            {storageAvailable
-              ? "Draft kept on this device until you save. It is not in the job yet."
-              : "Device storage is unavailable. Keep this page open until you save."}
-          </p>
-          <div className="job-chips">
-            <button
-              className="job-primary"
-              disabled={pending || !selected || quantity === null}
-              type="submit"
-            >
-              {pending
-                ? "Saving…"
-                : `Add ${quantity ?? ""} ${selected?.unit ?? ""} used`}
-            </button>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => setDraft({ ...blank(), part: draft.part })}
-            >
-              Discard entry
-            </button>
-          </div>
-        </form>
-      )}
-      <label>
-        Find a material
-        <input
-          type="search"
-          autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false}
-          placeholder="Name, nickname or supplier code"
-          value={search}
-          disabled={pending}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </label>
-      <div className="job-chips" aria-label="Material sources">
-        {(
-          [
-            ["job", "On this job"],
-            ["all", "All materials"],
-            ["assemblies", "Browse assemblies"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            aria-pressed={tab === id}
-            onClick={() => { setTab(id); setResultLimit(12); }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {search.trim() && <p role="status" className="job-muted">{tab === "assemblies" ? `${matchingAssemblies.length} matching assemblies` : `${resultItems.length} matches across all materials`} · best matches first</p>}
-      {!!draft.materialId && <p className="job-muted">Save or discard the selected entry above before choosing another material.</p>}
-      {tab !== "assemblies" ? (
-        <div className="job-task-list">
-          {resultItems.slice(0, resultLimit).map((item) => (
-            <article className="job-task" key={item.id}>
-              <div>
-                <strong>{item.name}</strong>
-                <p className="job-muted">
-                  {item.sku ?? "No SKU"} · {item.unit}
-                </p>
-                {!!item.aliases?.length && <p className="job-muted">Also called: {item.aliases.slice(0, 3).join(", ")}</p>}
-              </div>
-              <button
-                type="button"
-                disabled={pending || !!draft.materialId}
-                onClick={() => choose(item)}
-                aria-label={`Choose ${item.name}`}
-              >
-                Choose
-              </button>
-            </article>
-          ))}
-          {resultItems.length === 0 && (
-            <p className="job-muted">
-              {search
-                ? "No matches. Try fewer words, a size, or the supplier code. If it is still missing, add a job note for the office."
-                : "No materials on this job yet. Search or choose All materials."}
-            </p>
-          )}
-          {resultItems.length > resultLimit && (
-            <p className="job-muted">
-              Showing {resultLimit} of {resultItems.length}.{" "}
-              <button
-                type="button"
-                onClick={() => setResultLimit((n) => n + 12)}
-              >
-                Show more matches
-              </button>
-            </p>
-          )}
-        </div>
-      ) : (
-        <div className="job-task-list">
-          <label>Count materials for job part<select value={draft.part} onChange={e=>setDraft({...draft,part:e.target.value})}>{allParts.map(p=><option key={p}>{p}</option>)}</select></label>
-          <AssemblyMaterialCounters key={`${draftScope}:${jobId}:${draft.part}`} assemblies={matchingAssemblies} catalog={catalogItems} jobId={jobId} part={draft.part} scope={draftScope} onSaved={()=>{setMessage("Saved on this phone. Materials queued to sync.");onCounterSaved?.();}} />
-        </div>
-      )}
-      <details open className="job-task-form">
+      <label>Job part<select value={draft.part} onChange={e=>setDraft({...draft,part:e.target.value})}>{allParts.map(p=><option key={p}>{p}</option>)}</select></label>
+      <AssemblyMaterialCounters key={`${draftScope}:${jobId}:${draft.part}`} assemblies={assemblies} catalog={catalogItems} jobId={jobId} part={draft.part} scope={draftScope} onSaved={()=>{onCounterSaved?.();}} />
+      <details className="job-task-form">
         <summary>Saved entries · {usedMaterials.length}</summary>
         {allParts.length > 1 && (
           <label>
