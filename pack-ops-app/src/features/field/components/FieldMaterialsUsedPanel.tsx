@@ -1,4 +1,4 @@
-import { AssemblyCounterRow } from "./AssemblyCounterRow";
+import { AssemblyMaterialCounters } from "./AssemblyMaterialCounters";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { JobMaterialView } from "@/domain/jobs/types";
 import type { AssemblyView, CatalogItem } from "@/domain/materials/types";
@@ -436,11 +436,8 @@ function MaterialEntry({
         </div>
       ) : (
         <div className="job-task-list">
-          <label>Adding assemblies to job part<select value={draft.part} onChange={e=>setDraft({...draft,part:e.target.value})}>{allParts.map(p=><option key={p}>{p}</option>)}</select></label>
-          <p className="job-muted">Your counts on this device · {draft.part}. Saved on this phone immediately; syncs when connected. Set qty changes this counter’s total only.</p>
-          {matchingAssemblies.slice(0,resultLimit).map(assembly => <AssemblyCounterRow key={`${assembly.id}:${draft.part}`} assembly={assembly} catalog={catalogItems} jobId={jobId} part={draft.part} scope={draftScope} onSaved={()=>{setMessage("Saved on this phone. Materials queued to sync.");onCounterSaved?.();}} />)}
-          {matchingAssemblies.length === 0 && <p className="job-muted">No assemblies match. Search an assembly name or one of its materials.</p>}
-          {matchingAssemblies.length > resultLimit && <button type="button" onClick={() => setResultLimit(value => value + 12)}>Show more assemblies ({matchingAssemblies.length - resultLimit} remaining)</button>}
+          <label>Count materials for job part<select value={draft.part} onChange={e=>setDraft({...draft,part:e.target.value})}>{allParts.map(p=><option key={p}>{p}</option>)}</select></label>
+          <AssemblyMaterialCounters key={`${draftScope}:${jobId}:${draft.part}`} assemblies={matchingAssemblies} catalog={catalogItems} jobId={jobId} part={draft.part} scope={draftScope} onSaved={()=>{setMessage("Saved on this phone. Materials queued to sync.");onCounterSaved?.();}} />
         </div>
       )}
       <details open className="job-task-form">

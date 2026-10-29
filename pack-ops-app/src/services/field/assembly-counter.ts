@@ -19,7 +19,7 @@ export async function readAssemblyCounter(key: string): Promise<AssemblyCounterS
 }
 export async function changeAssemblyCounter(input: {
   context: RepositoryContext; jobId: string; part: string; assembly: AssemblyView;
-  catalog: CatalogItem[]; action: 'add' | 'undo' | number;
+  catalog: CatalogItem[]; materialOnly?: boolean; action: 'add' | 'undo' | number;
 }): Promise<AssemblyCounterState> {
   const {context, jobId, part, assembly, catalog, action} = input;
   const key = counterKey(`${context.orgId}:${context.actorUserId}`,jobId,part,assembly.id);
@@ -45,9 +45,9 @@ export async function changeAssemblyCounter(input: {
         const material = catalog.find(m=>m.id===item.catalogItemId && m.isActive);
         if (!material || !Number.isFinite(item.quantity) || item.quantity<=0) throw new Error('This assembly has missing, inactive or invalid materials. Update its recipe first.');
         const payload = {...jobMaterialsMapper.toInsert({orgId:context.orgId,jobId,catalogItemId:material.id,kind:'used',quantity:item.quantity,
-          note:'Field assembly counter',displayName:material.name,skuSnapshot:material.sku,unitSnapshot:material.unit,
+          note:input.materialOnly?'Field material counter':'Field assembly counter',displayName:material.name,skuSnapshot:material.sku,unitSnapshot:material.unit,
           unitCost:material.costPrice,unitSell:material.unitPrice,sectionName:part==='General'?null:part,
-          sourceAssemblyId:assembly.id,sourceAssemblyName:assembly.name,sourceAssemblyMultiplier:count,actorUserId:context.actorUserId}),
+          sourceAssemblyId:input.materialOnly?null:assembly.id,sourceAssemblyName:input.materialOnly?null:assembly.name,sourceAssemblyMultiplier:input.materialOnly?null:count,actorUserId:context.actorUserId}),
           id:createId(),created_at:now,updated_at:now,deleted_at:null};
         return {each:item.quantity,row:jobMaterialsMapper.toDomain(payload as Parameters<typeof jobMaterialsMapper.toDomain>[0])};
       });
@@ -56,10 +56,10 @@ export async function changeAssemblyCounter(input: {
     for (const line of lines) {
       const quantity = Math.round(line.each*count*1000)/1000;
       if (count>0 && (quantity<=0 || !Number.isFinite(quantity))) throw new Error('That amount is too small for this assembly.');
-      const row = {...line.row,quantity:count===0?line.row.quantity:quantity,sourceAssemblyMultiplier:count,updatedAt:now,deletedAt:count===0?now:null};
+      const row = {...line.row,quantity:count===0?line.row.quantity:quantity,sourceAssemblyMultiplier:input.materialOnly?null:count,updatedAt:now,deletedAt:count===0?now:null};
       const payload = {...jobMaterialsMapper.toInsert({orgId:context.orgId,jobId,catalogItemId:row.catalogItemId,kind:'used',quantity:row.quantity,
         note:row.note,displayName:row.displayName,skuSnapshot:row.skuSnapshot,unitSnapshot:row.unitSnapshot,unitCost:row.unitCost,unitSell:row.unitSell,
-        sectionName:row.sectionName,sourceAssemblyId:row.sourceAssemblyId,sourceAssemblyName:row.sourceAssemblyName,sourceAssemblyMultiplier:count,actorUserId:context.actorUserId}),
+        sectionName:row.sectionName,sourceAssemblyId:row.sourceAssemblyId,sourceAssemblyName:row.sourceAssemblyName,sourceAssemblyMultiplier:row.sourceAssemblyMultiplier,actorUserId:context.actorUserId}),
         id:row.id,created_at:row.createdAt,updated_at:now,deleted_at:row.deletedAt};
       await localDb.jobMaterials.put(row);
       await localDb.syncQueue.put(createSyncQueueEntry({orgId:context.orgId as JobMaterialEntry['orgId'],actorUserId:context.actorUserId,
