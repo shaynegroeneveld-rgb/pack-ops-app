@@ -1,10 +1,9 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import "./field-home.css";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuthContext } from "@/app/contexts/auth-context";
 import { APP_ROUTES } from "@/app/router/routes";
 import { useUiStore } from "@/app/store/ui-store";
-import { getSupabaseClient } from "@/data/supabase/client";
-import { getAllowedNextJobStatuses } from "@/domain/jobs/status";
 import {
   deriveTimeEntryDraftElapsedLabel,
   deriveTimeEntryDraftHours,
@@ -13,37 +12,25 @@ import {
   updateManualTimeEntryDraftHours,
   type TimeEntryDraft,
 } from "@/domain/time-entries/draft";
-import { useSchedulingSlice } from "@/features/scheduling/hooks/use-scheduling-slice";
+
 import { useWorkbenchSlice } from "@/features/workbench/hooks/use-workbench-slice";
 import type { WorkbenchJobCard } from "@/services/workbench/workbench-service";
-import { Button, Modal, useConfirm, useToast } from "@/ui";
+import { Button, Modal } from "@/ui";
 
 import {
   actionButtonStyle,
-  addDays,
-  buildLogoDataUrl,
-  endOfWeek,
   fieldColors,
-  formatBlockTime,
   formatElapsed,
   infoLabelStyle,
   inputStyle,
   loadRecentJobIds,
-  noTimerMessagesByDay,
   shellCardStyle,
   softCardStyle,
-  startOfWeek,
   storeRecentJobId,
-  toDayKey,
-  toScheduleRangeIso,
-  toggleButtonStyle,
-  weekdayLabels,
 } from "./field-mode-shared";
 
 const fieldJobRoute = (jobId: string) => `${APP_ROUTES.fieldJobs}/${jobId}`;
 const MOBILE_FIELD_DESKTOP_OVERRIDE_KEY = "pack-ops-mobile-desktop-override";
-
-type MainAccordionKey = "today" | "tomorrow" | "week" | "jobs";
 
 function buildJobSearchText(jobCard: WorkbenchJobCard): string {
   const job = jobCard.job;
@@ -74,37 +61,19 @@ function fromDateTimeLocalValue(value: string): string {
   return new Date(value).toISOString();
 }
 
-function stopEvent(event: { stopPropagation?: () => void }) {
-  event.stopPropagation?.();
-}
-
-function isActivateKey(key: string) {
-  return key === "Enter" || key === " ";
-}
-
 export function FieldModePage() {
+  const timerLock=useRef(false);
+  const [timerBusy,setTimerBusy]=useState(false);
   const [hoursText,setHoursText]=useState("");
   const hoursFocused=useRef(false);
   const { currentUser } = useAuthContext();
-  const { showToast } = useToast();
-  const { confirm } = useConfirm();
   const setActiveRoute = useUiStore((state) => state.setActiveRoute);
-  const today = useMemo(() => toDayKey(), []);
-  const tomorrow = useMemo(() => addDays(today, 1), [today]);
-  const weekStart = useMemo(() => startOfWeek(today), [today]);
-  const weekEnd = useMemo(() => endOfWeek(today), [today]);
   const [jobSearch, setJobSearch] = useState("");
   const [recentJobIds, setRecentJobIds] = useState<string[]>([]);
   const [showAddJobForm, setShowAddJobForm] = useState(false);
   const [showTimerStartEditor, setShowTimerStartEditor] = useState(false);
   const [timerStartDraft, setTimerStartDraft] = useState("");
   const [timerStartError, setTimerStartError] = useState<string | null>(null);
-  const [mainAccordions, setMainAccordions] = useState<Record<MainAccordionKey, boolean>>({
-    today: false,
-    tomorrow: false,
-    week: false,
-    jobs: false,
-  });
   const [addJobDraft, setAddJobDraft] = useState({
     title: "",
     fieldName: "",
@@ -112,30 +81,22 @@ export function FieldModePage() {
     address: "",
     description: "",
   });
-  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [clockNowMs, setClockNowMs] = useState(() => Date.now());
-  const client = getSupabaseClient(import.meta.env);
 
   if (!currentUser) {
     return null;
   }
 
   const workbench = useWorkbenchSlice(currentUser);
-  const scheduling = useSchedulingSlice(currentUser, {
-    weekStartIso: toScheduleRangeIso(weekStart),
-    weekEndIso: toScheduleRangeIso(weekEnd, true),
-  });
 
   const jobCards = workbench.jobsQuery.data ?? [];
   const jobCardById = useMemo(() => new Map(jobCards.map((card) => [String(card.job.id), card])), [jobCards]);
-  const todayMessage = noTimerMessagesByDay[new Date().getDay() as keyof typeof noTimerMessagesByDay];
   const runningDraft = workbench.activeRunningTimerDraft;
   const timeEntryDraft = workbench.timeEntryDraft;
   const runningJob = runningDraft?.jobId ? jobCardById.get(String(runningDraft.jobId)) ?? null : null;
   const elapsed = runningDraft?.startedAt ? formatElapsed(runningDraft.startedAt, clockNowMs) : null;
   const contactOptions = workbench.contactsQuery.data ?? [];
   const assignableUsers = workbench.assignableUsersQuery.data ?? [];
-  const userNamesById = useMemo(() => new Map(assignableUsers.map((user) => [user.id, user.label])), [assignableUsers]);
   const availableWorkerOptions = useMemo(() => {
     const currentUserOption = {
       id: String(currentUser.user.id),
@@ -145,7 +106,6 @@ export function FieldModePage() {
       ? assignableUsers
       : [currentUserOption, ...assignableUsers];
   }, [assignableUsers, currentUser.user.fullName, currentUser.user.id]);
-  const canManageSchedule = currentUser.user.role === "owner" || currentUser.user.role === "office";
   const draftJobCard = timeEntryDraft?.jobId ? jobCardById.get(String(timeEntryDraft.jobId)) ?? null : null;
   const timeDraftHours = timeEntryDraft ? deriveTimeEntryDraftHours(timeEntryDraft, new Date(clockNowMs)) : null;
   const hoursInvalid=parseTimeEntryHoursInput(hoursText)===null;
@@ -153,14 +113,6 @@ export function FieldModePage() {
     if(!hoursFocused.current)setHoursText(timeEntryDraft?formatTimeEntryHoursInput(deriveTimeEntryDraftHours(timeEntryDraft)):"");
   },[timeEntryDraft?.jobId,timeEntryDraft?.startedAt,timeEntryDraft?.endedAt]);
   const timeDraftElapsed = timeEntryDraft ? deriveTimeEntryDraftElapsedLabel(timeEntryDraft, new Date(clockNowMs)) : null;
-
-  const upcomingBlocks = scheduling.upcomingBlocksQuery.data ?? [];
-  const todayBlocks = upcomingBlocks.filter((entry) => entry.block.startAt.slice(0, 10) === today);
-  const tomorrowBlocks = upcomingBlocks.filter((entry) => entry.block.startAt.slice(0, 10) === tomorrow);
-  const weekBlocks = upcomingBlocks.filter((entry) => {
-    const day = entry.block.startAt.slice(0, 10);
-    return day !== today && day !== tomorrow;
-  });
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -171,26 +123,6 @@ export function FieldModePage() {
   }, []);
 
   useEffect(() => {
-    let isActive = true;
-
-    async function loadLogo() {
-      const { data, error } = await client.from("app_settings").select("logo_b64").maybeSingle();
-      if (!isActive || error) {
-        if (error) {
-          console.error("[FieldModePage] logo load failed", error);
-        }
-        return;
-      }
-      setLogoDataUrl(buildLogoDataUrl(data?.logo_b64 ?? null));
-    }
-
-    void loadLogo();
-    return () => {
-      isActive = false;
-    };
-  }, [client]);
-
-  useEffect(() => {
     setRecentJobIds(loadRecentJobIds());
   }, []);
 
@@ -198,7 +130,7 @@ export function FieldModePage() {
     if (!jobSearch.trim()) {
       return jobCards;
     }
-    return jobCards.filter((jobCard) => buildJobSearchText(jobCard).includes(jobSearch.trim().toLowerCase()));
+    return jobCards.filter((jobCard) => jobSearch.trim().toLowerCase().split(/\s+/).every(term=>buildJobSearchText(jobCard).includes(term)));
   }, [jobCards, jobSearch]);
 
   const recentJobs = useMemo(
@@ -233,30 +165,11 @@ export function FieldModePage() {
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [mainAccordions, recentJobs.length, filteredJobs.length, showAddJobForm, showTimerStartEditor]);
-
-  function toggleMainAccordion(key: MainAccordionKey) {
-    setMainAccordions((current) => ({ ...current, [key]: !current[key] }));
-  }
-
-  function getCrewNames(jobCard: WorkbenchJobCard): string[] {
-    return jobCard.assignments.map((assignment) => userNamesById.get(assignment.userId) ?? "Crew");
-  }
+  }, [recentJobs.length, filteredJobs.length, showAddJobForm, showTimerStartEditor]);
 
   function openFieldJob(jobId: string) {
     setRecentJobIds(storeRecentJobId(jobId));
     setActiveRoute(fieldJobRoute(jobId));
-  }
-
-  async function handleAutoFillNextAvailable(jobCard: WorkbenchJobCard) {
-    await scheduling.autoFillScheduleBlocks.mutateAsync({
-      jobId: jobCard.job.id,
-      day: today,
-      findNextAvailable: true,
-      clearExisting: false,
-      assumeDefaultDayWhenNoEstimate: !jobCard.job.estimatedHours,
-      notes: !jobCard.job.estimatedHours ? "No estimate set — defaulted to one workday." : null,
-    });
   }
 
   async function handleCreateJob() {
@@ -293,7 +206,6 @@ export function FieldModePage() {
       description: "",
     });
     setShowAddJobForm(false);
-    setMainAccordions((current) => ({ ...current, jobs: true }));
     openFieldJob(String(createdJob.id));
   }
 
@@ -320,357 +232,31 @@ export function FieldModePage() {
     setShowTimerStartEditor(false);
   }
 
-  async function handleMarkJobComplete(jobCard: WorkbenchJobCard) {
-    if (!getAllowedNextJobStatuses(jobCard.job.status).includes("work_complete")) {
-      showToast("This job cannot be marked complete from its current status yet.", "error");
-      return;
-    }
-
-    const confirmed = await confirm({
-      title: "Mark job complete?",
-      description: `Mark ${jobCard.job.title} as complete?`,
-    });
-    if (!confirmed) {
-      return;
-    }
-
-    await workbench.updateJobStatus.mutateAsync({
-      jobId: jobCard.job.id,
-      status: "work_complete",
-      waitingReason: null,
-    });
+  async function runTimerAction(action:()=>Promise<void>){
+    if(timerLock.current)return;
+    timerLock.current=true;setTimerBusy(true);
+    try{await action();}finally{timerLock.current=false;setTimerBusy(false);}
   }
 
   function renderBrandHeader() {
-    return (
-      <header style={{ display: "grid", gap: "10px", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "start", flexWrap: "wrap", width: "100%", maxWidth: "100%", minWidth: 0 }}>
-          <div style={{ flex: 1, minWidth: 0, display: "grid", justifyItems: "center", paddingTop: "2px" }}>
-            {logoDataUrl ? (
-              <div
-                style={{
-                  width: "min(280px, calc(100vw - 72px))",
-                  maxWidth: "100%",
-                  minWidth: 0,
-                  boxSizing: "border-box",
-                  display: "grid",
-                  justifyItems: "center",
-                  gap: "2px",
-                }}
-              >
-                <img
-                  src={logoDataUrl}
-                  alt="Pack Ops dog logo"
-                  style={{
-                    width: "min(120px, 32vw)",
-                    maxWidth: "100%",
-                    objectFit: "contain",
-                    display: "block",
-                    mixBlendMode: "multiply",
-                    filter: "brightness(1.12) saturate(1.22) contrast(1.06)",
-                    isolation: "isolate",
-                  }}
-                />
-                <div style={{ textAlign: "center", color: fieldColors.gold }}>
-                  <div
-                    style={{
-                      fontSize: "60px",
-                      lineHeight: 0.92,
-                      fontWeight: 900,
-                      letterSpacing: "-0.06em",
-                      textTransform: "uppercase",
-                      textShadow: "0 8px 28px rgba(0,0,0,0.38)",
-                    }}
-                  >
-                    PACK
-                  </div>
-                  <div
-                    style={{
-                      marginTop: "3px",
-                      fontSize: "28px",
-                      fontWeight: 800,
-                      letterSpacing: "0.24em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    OPS
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div style={{ textAlign: "center", color: fieldColors.gold }}>
-                <div
-                  style={{
-                    fontSize: "58px",
-                    lineHeight: 0.92,
-                    fontWeight: 900,
-                    letterSpacing: "-0.06em",
-                    textTransform: "uppercase",
-                    textShadow: "0 8px 28px rgba(0,0,0,0.38)",
-                  }}
-                >
-                  PACK
-                </div>
-                <div
-                  style={{
-                    marginTop: "2px",
-                    fontSize: "28px",
-                    fontWeight: 800,
-                    letterSpacing: "0.22em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  OPS
-                </div>
-              </div>
-            )}
-            <div
-              style={{
-                marginTop: "6px",
-                color: fieldColors.gold,
-                fontWeight: 800,
-                fontSize: "18px",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-              }}
-            >
-              Ryley Mode
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (typeof window !== "undefined") {
-                window.sessionStorage.setItem(MOBILE_FIELD_DESKTOP_OVERRIDE_KEY, "1");
-              }
-              setActiveRoute(APP_ROUTES.workbench);
-            }}
-            style={{
-              ...actionButtonStyle("secondary"),
-              width: "auto",
-              maxWidth: "100%",
-              minWidth: "min(132px, 100%)",
-              padding: "10px 14px",
-              minHeight: "42px",
-              boxSizing: "border-box",
-            }}
-          >
-            Back to Main Page
-          </button>
-        </div>
-      </header>
-    );
+    return <header className="field-home-brand">
+      <img src="/pack-electric-brand.jpeg" alt="Pack Electric" />
+      <div className="field-home-brand-bar"><span>FIELD WORKSPACE</span><button type="button" onClick={()=>{window.sessionStorage.setItem(MOBILE_FIELD_DESKTOP_OVERRIDE_KEY,"1");setActiveRoute(APP_ROUTES.workbench);}}>Office view ↗</button></div>
+    </header>;
   }
 
   function renderTimerHero() {
-    return (
-      <section
-        style={{
-          ...shellCardStyle(),
-          padding: "18px 16px 20px",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: "16px",
-          height: "auto",
-          minHeight: "unset",
-          overflow: "visible",
-        }}
-      >
-        <div
-          style={{
-            position: "relative",
-            width: "min(100%, 390px)",
-            maxWidth: "calc(100vw - 56px)",
-            minWidth: 0,
-            aspectRatio: "1 / 1",
-            display: "grid",
-            placeItems: "center",
-            boxSizing: "border-box",
-            overflow: "visible",
-            flex: "0 0 auto",
-          }}
-        >
-          {weekdayLabels.map((entry) => (
-            <span
-              key={entry.label}
-              style={{
-                position: "absolute",
-                color: fieldColors.gold,
-                fontSize: "13px",
-                fontWeight: 800,
-                letterSpacing: "0.04em",
-                ...entry.style,
-              }}
-            >
-              {entry.label}
-            </span>
-          ))}
-          <div
-            style={{
-              width: "min(72vw, 340px)",
-              aspectRatio: "1 / 1",
-              maxWidth: "100%",
-              borderRadius: "999px",
-              border: `12px solid ${fieldColors.gold}`,
-              background: "radial-gradient(circle at 50% 40%, rgba(130, 16, 33, 0.56), rgba(25, 3, 8, 0.82))",
-              boxShadow: "0 0 0 6px rgba(255, 177, 0, 0.08), 0 24px 48px rgba(0,0,0,0.34)",
-              display: "grid",
-              placeItems: "center",
-              padding: "28px",
-              textAlign: "center",
-              boxSizing: "border-box",
-            }}
-          >
-            {runningDraft && runningJob ? (
-              <div style={{ display: "grid", gap: "12px" }}>
-                <div style={{ color: fieldColors.gold, fontWeight: 800, fontSize: "14px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                  Timer Running
-                </div>
-                <strong style={{ color: fieldColors.white, fontSize: "23px", lineHeight: 1.15, overflowWrap: "anywhere" }}>
-                  {runningJob.job.fieldName || runningJob.job.title}
-                </strong>
-                <div style={{ color: fieldColors.whiteSoft, fontSize: "13px", overflowWrap: "anywhere" }}>
-                  {runningJob.job.number} · {runningJob.contactName ?? "No customer"}
-                </div>
-                <div style={{ color: fieldColors.goldBright, fontSize: "32px", fontWeight: 900, letterSpacing: "0.04em" }}>
-                  {elapsed}
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: "grid", gap: "10px" }}>
-                <div style={{ color: fieldColors.gold, fontSize: "34px" }}>⏱</div>
-                <strong style={{ color: fieldColors.white, fontSize: "22px", lineHeight: 1.15 }}>
-                  Don&apos;t forget your timer!!!
-                </strong>
-                <div
-                  style={{
-                    width: "120px",
-                    height: "2px",
-                    background: "rgba(255, 210, 74, 0.55)",
-                    justifySelf: "center",
-                  }}
-                />
-                <div style={{ color: fieldColors.goldBright, fontSize: "18px", lineHeight: 1.35 }}>
-                  {todayMessage}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {runningDraft && runningJob ? (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                setTimerStartDraft(toDateTimeLocalValue(runningDraft.startedAt));
-                setTimerStartError(null);
-                setShowTimerStartEditor((current) => !current);
-              }}
-              style={{
-                ...actionButtonStyle("secondary"),
-                width: "min(100%, 430px)",
-                maxWidth: "100%",
-                minHeight: "42px",
-                padding: "10px 12px",
-                position: "static",
-                transform: "none",
-                boxSizing: "border-box",
-              }}
-            >
-              Edit Start Time
-            </button>
-            {showTimerStartEditor ? (
-              <div
-                style={{
-                  ...softCardStyle(),
-                  width: "min(100%, 430px)",
-                  maxWidth: "100%",
-                  padding: "12px 14px",
-                  display: "grid",
-                  gap: "8px",
-                  position: "static",
-                  transform: "none",
-                  boxSizing: "border-box",
-                }}
-              >
-                <label style={{ display: "grid", gap: "6px", textAlign: "left" }}>
-                  <span style={infoLabelStyle()}>Running Timer Start</span>
-                  <input
-                    type="datetime-local"
-                    value={timerStartDraft}
-                    onChange={(event) => setTimerStartDraft(event.target.value)}
-                    style={inputStyle()}
-                  />
-                </label>
-                {timerStartError ? (
-                  <div style={{ color: fieldColors.danger, fontSize: "13px", textAlign: "left" }}>{timerStartError}</div>
-                ) : null}
-                <div style={{ display: "grid", gap: "8px" }}>
-                  <button type="button" onClick={() => void handleSaveRunningTimerStart()} style={actionButtonStyle()}>
-                    Save Start Time
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowTimerStartEditor(false);
-                      setTimerStartError(null);
-                    }}
-                    style={actionButtonStyle("secondary")}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div
-                style={{
-                  ...softCardStyle(),
-                  width: "min(100%, 430px)",
-                  maxWidth: "100%",
-                  padding: "12px 14px",
-                  display: "grid",
-                  gap: "4px",
-                  boxSizing: "border-box",
-                }}
-              >
-                <div style={infoLabelStyle()}>Running Timer Start</div>
-                <div style={{ color: fieldColors.white, fontWeight: 700 }}>
-                  {new Date(runningDraft.startedAt).toLocaleString()}
-                </div>
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={() => void workbench.stopTimer()}
-              style={{ ...actionButtonStyle(), width: "min(100%, 430px)", maxWidth: "100%", boxSizing: "border-box" }}
-            >
-              Stop Timer
-            </button>
-          </>
-        ) : null}
-
-        {workbench.feedback ? (
-          <div
-            style={{
-              ...softCardStyle(),
-              width: "100%",
-              padding: "12px 14px",
-              color:
-                workbench.feedback.tone === "error"
-                  ? fieldColors.danger
-                  : workbench.feedback.tone === "success"
-                    ? fieldColors.goldBright
-                    : fieldColors.white,
-            }}
-          >
-            {workbench.feedback.text}
-          </div>
-        ) : null}
-      </section>
-    );
+    return <section className="field-home-timer" aria-label="Work timer">
+      <div className="field-home-timer-heading"><span className={runningDraft?"field-live-dot":"field-idle-dot"}/><span>{runningDraft?"ON THE CLOCK":"READY WHEN YOU ARE"}</span></div>
+      <div className="field-home-time">{elapsed??"00:00:00"}</div>
+      <p>{runningDraft?(runningJob?.job.fieldName||runningJob?.job.title||"Current job"):"Choose a job below to start your day."}</p>
+      {runningDraft&&<><div className="field-home-timer-actions">
+       <button type="button" className="field-home-primary" disabled={timerBusy} onClick={()=>void runTimerAction(()=>workbench.stopTimer())}>Stop & review time</button>
+       <button type="button" onClick={()=>openFieldJob(String(runningDraft.jobId))}>Open job ↗</button>
+      </div><button type="button" className="field-home-text-button" onClick={()=>{setTimerStartDraft(toDateTimeLocalValue(runningDraft.startedAt));setTimerStartError(null);setShowTimerStartEditor(!showTimerStartEditor);}}>Started {new Date(runningDraft.startedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})} · Edit</button>
+      {showTimerStartEditor&&<div className="field-home-start-editor"><label>Start time<input type="datetime-local" value={timerStartDraft} onChange={e=>setTimerStartDraft(e.target.value)}/></label>{timerStartError&&<p role="alert">{timerStartError}</p>}<button type="button" onClick={()=>void handleSaveRunningTimerStart()}>Save start time</button></div>}</>}
+      {workbench.feedback&&<p role="status">{workbench.feedback.text}</p>}
+    </section>;
   }
 
   function renderFinishTimerPanel() {
@@ -819,230 +405,25 @@ export function FieldModePage() {
     );
   }
 
-  function renderMainAccordion(
-    key: MainAccordionKey,
-    title: string,
-    content: ReactNode,
-    trailing?: ReactNode,
-  ) {
-    const isOpen = mainAccordions[key];
-    return (
-      <div style={{ display: "grid", gap: "10px" }}>
-        <button type="button" onClick={() => toggleMainAccordion(key)} style={toggleButtonStyle(isOpen)}>
-          <span style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
-            <span style={{ fontSize: "20px" }}>{key === "jobs" ? "🧰" : "📅"}</span>
-            <span>{title}</span>
-          </span>
-          <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            {trailing}
-            <span style={{ color: fieldColors.goldBright, fontSize: "18px" }}>{isOpen ? "▾" : "▸"}</span>
-          </span>
-        </button>
-        {isOpen ? content : null}
-      </div>
-    );
-  }
-
-  function renderNeededPreview(preview: WorkbenchJobCard["neededMaterialsPreview"]) {
-    if (preview.length === 0) {
-      return null;
-    }
-    return (
-      <div style={{ display: "grid", gap: "8px" }}>
-        {preview.map((material) => (
-          <div key={material.id} style={{ ...softCardStyle(), padding: "12px 14px" }}>
-            <strong style={{ display: "block", color: fieldColors.white, overflowWrap: "anywhere" }}>{material.name}</strong>
-            <span style={{ color: fieldColors.goldBright, fontSize: "13px" }}>{material.quantity}</span>
-            {material.note ? (
-              <div style={{ color: fieldColors.whiteSoft, fontSize: "12px", marginTop: "4px", overflowWrap: "anywhere" }}>
-                {material.note}
-              </div>
-            ) : null}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  function renderScheduleJobCard(jobCard: WorkbenchJobCard, block: (typeof todayBlocks)[number]) {
-    const crewNames = getCrewNames(jobCard);
-    return (
-      <div
-        key={block.block.id}
-        onClick={() => openFieldJob(jobCard.job.id)}
-        onKeyDown={(event) => {
-          if (!isActivateKey(event.key)) {
-            return;
-          }
-          event.preventDefault();
-          openFieldJob(jobCard.job.id);
-        }}
-        role="button"
-        tabIndex={0}
-        style={{ ...shellCardStyle(), padding: "16px", display: "grid", gap: "12px", width: "100%", textAlign: "left", cursor: "pointer", border: "none" }}
-      >
-        <div style={{ display: "grid", gap: "6px" }}>
-          <strong style={{ color: fieldColors.white, fontSize: "20px", lineHeight: 1.15, overflowWrap: "anywhere" }}>
-            {jobCard.job.fieldName || jobCard.job.title}
-          </strong>
-          <div style={{ color: fieldColors.goldBright, fontSize: "13px", fontWeight: 800 }}>
-            {jobCard.job.number || "No job number"}
-          </div>
-          <div style={{ color: fieldColors.white, fontSize: "14px", overflowWrap: "anywhere" }}>
-            {jobCard.contactName ?? "No customer linked"}
-          </div>
-          <div style={{ color: fieldColors.whiteSoft, fontSize: "13px", overflowWrap: "anywhere" }}>
-            {[jobCard.job.addressLine1, jobCard.job.addressLine2, jobCard.job.city, jobCard.job.region, jobCard.job.postalCode]
-              .filter(Boolean)
-              .join(", ") || "No address added"}
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gap: "6px" }}>
-          <span style={infoLabelStyle()}>Scheduled</span>
-          <span style={{ color: fieldColors.white }}>{formatBlockTime(block.block.startAt, block.block.endAt, block.block.timeBucket)}</span>
-          {crewNames.length > 0 ? (
-            <>
-              <span style={infoLabelStyle()}>Assigned Crew</span>
-              <span style={{ color: fieldColors.whiteSoft, overflowWrap: "anywhere" }}>{crewNames.join(", ")}</span>
-            </>
-          ) : null}
-        </div>
-
-        {jobCard.neededMaterialsCount > 0 ? (
-          <>
-            <div
-              style={{
-                borderRadius: "14px",
-                background: fieldColors.warningBg,
-                color: fieldColors.warningText,
-                padding: "12px 14px",
-                fontWeight: 900,
-                fontSize: "15px",
-              }}
-            >
-              Material is needed — don&apos;t forget!
-            </div>
-            {renderNeededPreview(jobCard.neededMaterialsPreview)}
-            <button
-              type="button"
-              style={actionButtonStyle()}
-              disabled={workbench.clearNeededMaterials.isPending}
-              onClick={(event) => {
-                stopEvent(event);
-                openFieldJob(jobCard.job.id);
-              }}
-            >
-              Open pickup checklist
-            </button>
-          </>
-        ) : null}
-
-        <div style={{ display: "grid", gap: "10px" }}>
-          <button type="button" style={actionButtonStyle("secondary")} onClick={(event) => {
-            stopEvent(event);
-            openFieldJob(jobCard.job.id);
-          }}>
-            Open Job
-          </button>
-          {getAllowedNextJobStatuses(jobCard.job.status).includes("work_complete") ? (
-            <button
-              type="button"
-              style={actionButtonStyle()}
-              disabled={workbench.updateJobStatus.isPending}
-              onClick={(event) => {
-                stopEvent(event);
-                void handleMarkJobComplete(jobCard);
-              }}
-            >
-              {workbench.updateJobStatus.isPending ? "Completing..." : "Job Complete"}
-            </button>
-          ) : null}
-          {canManageSchedule ? (
-            <button
-              type="button"
-              style={actionButtonStyle()}
-              disabled={scheduling.autoFillScheduleBlocks.isPending}
-              onClick={(event) => {
-                stopEvent(event);
-                void handleAutoFillNextAvailable(jobCard);
-              }}
-            >
-              {jobCard.job.estimatedHours ? "Auto-fill Next Available" : "No estimated time set — schedule as 1 day?"}
-            </button>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
   function renderJobListCard(jobCard: WorkbenchJobCard) {
-    return (
-      <div
-        key={jobCard.job.id}
-        onClick={() => openFieldJob(jobCard.job.id)}
-        onKeyDown={(event) => {
-          if (!isActivateKey(event.key)) {
-            return;
-          }
-          event.preventDefault();
-          openFieldJob(jobCard.job.id);
-        }}
-        role="button"
-        tabIndex={0}
-        style={{ ...shellCardStyle(), padding: "16px", display: "grid", gap: "12px", width: "100%", textAlign: "left", cursor: "pointer", border: "none" }}
-      >
-        <div style={{ display: "grid", gap: "6px" }}>
-          <strong style={{ fontSize: "24px", lineHeight: 1.1, color: fieldColors.white, overflowWrap: "anywhere" }}>
-            {jobCard.job.fieldName || jobCard.job.title}
-          </strong>
-          <span style={{ color: fieldColors.goldBright, fontSize: "14px", fontWeight: 800 }}>{jobCard.job.number || "No job number"}</span>
-          <span style={{ color: fieldColors.white, overflowWrap: "anywhere" }}>{jobCard.contactName ?? "No customer linked"}</span>
-          <span style={{ color: fieldColors.whiteSoft, fontSize: "13px", overflowWrap: "anywhere" }}>
-            {[jobCard.job.addressLine1, jobCard.job.city, jobCard.job.region].filter(Boolean).join(", ") || "No address added"}
-          </span>
-        </div>
-
-        {jobCard.neededMaterialsCount > 0 ? (
-          <div
-            style={{
-              borderRadius: "14px",
-              background: fieldColors.warningBg,
-              color: fieldColors.warningText,
-              padding: "12px 14px",
-              fontWeight: 900,
-              fontSize: "15px",
-            }}
-          >
-            Material is needed — don&apos;t forget!
-          </div>
-        ) : null}
-
-        <button type="button" onClick={(event) => {
-          stopEvent(event);
-          openFieldJob(jobCard.job.id);
-        }} style={actionButtonStyle()}>
-          Open Job
-        </button>
-        {getAllowedNextJobStatuses(jobCard.job.status).includes("work_complete") ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              stopEvent(event);
-              void handleMarkJobComplete(jobCard);
-            }}
-            style={actionButtonStyle("secondary")}
-            disabled={workbench.updateJobStatus.isPending}
-          >
-            {workbench.updateJobStatus.isPending ? "Completing..." : "Job Complete"}
-          </button>
-        ) : null}
-      </div>
-    );
+    const running=String(runningDraft?.jobId)===String(jobCard.job.id);
+    return <article className="field-home-job" key={jobCard.job.id}>
+     <button type="button" className="field-home-job-open" onClick={()=>openFieldJob(jobCard.job.id)}>
+      <span className="field-home-job-meta">{jobCard.job.number||"JOB"}<span>{running?"Timer running":jobCard.job.status.replaceAll('_',' ')}</span></span>
+      <strong>{jobCard.job.fieldName||jobCard.job.title}</strong>
+      <span>{jobCard.contactName||"No customer linked"}</span>
+      <span className="field-home-address">{[jobCard.job.addressLine1,jobCard.job.city].filter(Boolean).join(', ')||"No address added"}</span>
+     </button>
+     {jobCard.neededMaterialsCount>0&&<button type="button" className="field-home-pickup" onClick={()=>openFieldJob(jobCard.job.id)}>{jobCard.neededMaterialsCount} materials to pick up ↗</button>}
+     <div className="field-home-job-actions"><button type="button" onClick={()=>openFieldJob(jobCard.job.id)}>Open job ↗</button>
+      {!runningDraft&&<button type="button" className="field-home-start" disabled={timerBusy} onClick={()=>void runTimerAction(()=>workbench.startTimer(jobCard.job.id))}>▶ Start timer</button>}
+     </div>
+    </article>;
   }
 
   return (
     <div
+      className="field-home"
       data-theme="field"
       style={{
         minHeight: "100vh",
@@ -1059,73 +440,9 @@ export function FieldModePage() {
         {renderBrandHeader()}
         {renderTimerHero()}
 
-        {renderMainAccordion(
-          "today",
-          "Work Scheduled For Today",
-          <div style={{ display: "grid", gap: "12px" }}>
-            {todayBlocks.length === 0 ? (
-              <div style={{ ...softCardStyle(), padding: "14px", color: fieldColors.whiteSoft }}>Nothing scheduled for today.</div>
-            ) : (
-              todayBlocks.map((entry) => {
-                const card = jobCardById.get(entry.job.id);
-                return card ? renderScheduleJobCard(card, entry) : null;
-              })
-            )}
-          </div>,
-        )}
-
-        {renderMainAccordion(
-          "tomorrow",
-          "Work Scheduled For Tomorrow",
-          <div style={{ display: "grid", gap: "12px" }}>
-            {tomorrowBlocks.length === 0 ? (
-              <div style={{ ...softCardStyle(), padding: "14px", color: fieldColors.whiteSoft }}>Nothing scheduled for tomorrow.</div>
-            ) : (
-              tomorrowBlocks.map((entry) => {
-                const card = jobCardById.get(entry.job.id);
-                return card ? renderScheduleJobCard(card, entry) : null;
-              })
-            )}
-          </div>,
-        )}
-
-        {renderMainAccordion(
-          "week",
-          "Work Scheduled This Week",
-          <div style={{ display: "grid", gap: "12px" }}>
-            {weekBlocks.length === 0 ? (
-              <div style={{ ...softCardStyle(), padding: "14px", color: fieldColors.whiteSoft }}>Nothing else scheduled this week.</div>
-            ) : (
-              weekBlocks.map((entry) => {
-                const card = jobCardById.get(entry.job.id);
-                return card ? renderScheduleJobCard(card, entry) : null;
-              })
-            )}
-          </div>,
-        )}
-
-        {renderMainAccordion(
-          "jobs",
-          "Job List",
-          <div style={{ display: "grid", gap: "12px" }}>
-            <label style={{ display: "grid", gap: "6px" }}>
-              <span style={infoLabelStyle()}>Search Jobs</span>
-              <input
-                value={jobSearch}
-                onChange={(event) => setJobSearch(event.target.value)}
-                placeholder="Job title, number, customer, address, field name"
-                style={inputStyle()}
-              />
-            </label>
-
-            <button
-              type="button"
-              style={actionButtonStyle()}
-              onClick={() => setShowAddJobForm((current) => !current)}
-            >
-              {showAddJobForm ? "Close Add Job" : "Add Job"}
-            </button>
-
+        <section className="field-home-jobs" aria-label="Jobs">
+          <div className="field-home-section-heading"><div><span>YOUR WORK</span><h1>Jobs</h1></div><button type="button" onClick={()=>setShowAddJobForm(!showAddJobForm)}>{showAddJobForm?"Close":"+ New job"}</button></div>
+          <label className="field-home-search"><span>Find a job</span><input type="search" value={jobSearch} onChange={e=>setJobSearch(e.target.value)} placeholder="Search number, name, customer or address…" /></label>
             {showAddJobForm ? (
               <div style={{ ...shellCardStyle(), padding: "16px", display: "grid", gap: "12px" }}>
                 <label style={{ display: "grid", gap: "6px" }}>
@@ -1199,44 +516,12 @@ export function FieldModePage() {
               </div>
             ) : null}
 
-            {recentJobs.length > 0 ? (
-              <div style={{ display: "grid", gap: "8px" }}>
-                <div style={infoLabelStyle()}>Recently Opened</div>
-                <div style={{ display: "grid", gap: "8px" }}>
-                  {recentJobs.map((jobCard) => (
-                    <button
-                      key={jobCard.job.id}
-                      type="button"
-                      onClick={() => openFieldJob(jobCard.job.id)}
-                      style={{ ...softCardStyle(), padding: "12px", textAlign: "left", color: fieldColors.white }}
-                    >
-                      <strong style={{ display: "block", overflowWrap: "anywhere" }}>{jobCard.job.fieldName || jobCard.job.title}</strong>
-                      <span style={{ color: fieldColors.whiteSoft, fontSize: "13px" }}>{jobCard.job.number}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            <div style={{ display: "grid", gap: "8px" }}>
-              <div style={{ ...infoLabelStyle(), justifySelf: "center" }}>Tap a job to open details</div>
-              {filteredJobs.map((jobCard) => renderJobListCard(jobCard))}
-            </div>
-          </div>,
-          <span style={{ fontSize: "24px" }}>🔎</span>,
-        )}
-        {!mainAccordions.jobs ? (
-          <button
-            type="button"
-            style={actionButtonStyle()}
-            onClick={() => {
-              setMainAccordions((current) => ({ ...current, jobs: true }));
-              setShowAddJobForm(true);
-            }}
-          >
-            Add Job
-          </button>
-        ) : null}
+          {!jobSearch.trim()&&recentJobs.length>0&&<div className="field-home-recent" aria-label="Recent jobs">{recentJobs.slice(0,4).map(card=><button type="button" key={card.job.id} onClick={()=>openFieldJob(card.job.id)}>{card.job.fieldName||card.job.title} ↗</button>)}</div>}
+          <p className="field-home-result-count" role="status">{workbench.jobsQuery.isLoading?"Loading jobs…":`${filteredJobs.length} ${filteredJobs.length===1?'job':'jobs'}${jobSearch.trim()?' found':''}`}</p>
+          {workbench.jobsQuery.isError&&<p role="alert">Jobs could not load. <button type="button" onClick={()=>void workbench.jobsQuery.refetch()}>Try again</button></p>}
+          <div className="field-home-job-grid">{filteredJobs.map(renderJobListCard)}</div>
+          {!workbench.jobsQuery.isLoading&&!workbench.jobsQuery.isError&&!filteredJobs.length&&<p className="field-home-empty">{jobSearch.trim()?"No matching jobs. Try a different name or job number.":"Your jobs will appear here."}</p>}
+        </section>
       </div>
       {renderFinishTimerPanel()}
     </div>

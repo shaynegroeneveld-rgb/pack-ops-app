@@ -11,7 +11,7 @@ export function offlinePlugin(): Plugin {
       const version = createHash("sha256").update(JSON.stringify(files)).digest("hex").slice(0, 16);
       this.emitFile({ type: "asset", fileName: "sw.js", source: `
 const CACHE = "pack-ops-app-${version}";
-const FILES = ${JSON.stringify(["/", "/index.html", "/icon-192.png", "/manifest.webmanifest", ...files])};
+const FILES = ${JSON.stringify(["/", "/index.html", "/icon-192.png", "/pack-electric-brand.jpeg", "/manifest.webmanifest", ...files])};
 self.addEventListener("install", event => event.waitUntil((async () => {
   const cache = await caches.open(CACHE);
   await Promise.all(FILES.map(async file => {
