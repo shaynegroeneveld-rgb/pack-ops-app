@@ -16,3 +16,15 @@ it('loads unique materials at zero and records only individually counted quantit
  view.unmount();render(<AssemblyMaterialCounters {...props}/>);await screen.findByText('1 · Set qty');
  await waitFor(()=>expect(screen.getAllByRole('button',{name:'Add one Box'})).toHaveLength(1));
 });
+it('copies bubbles to another part without changing either part’s quantities',async()=>{
+ const targetKey=JSON.stringify(['field-material-counter-list-v1','org:worker','j','Finish']);
+ localStorage.setItem(targetKey,JSON.stringify(['existing']));
+ const changePart=vi.fn();
+ render(<AssemblyMaterialCounters assemblies={[]} catalog={[{id:'m',name:'Box',unit:'each',isActive:true,costPrice:3,unitPrice:4}] as any} jobId="j" part="Rough in" scope="org:worker" parts={['Rough in','Finish']} onSelectPart={changePart} onSaved={vi.fn()}/>);
+ fireEvent.change(screen.getByLabelText('Choose material or assembly'),{target:{value:'material:m'}});
+ await screen.findByText('0 · Set qty');fireEvent.click(screen.getByRole('button',{name:'Add one Box'}));await screen.findByText('1 · Set qty');
+ const before=await localDb.jobMaterials.toArray();const queued=await localDb.syncQueue.count();
+ fireEvent.change(screen.getByLabelText('Copy list to job part'),{target:{value:'Finish'}});
+ expect(JSON.parse(localStorage.getItem(targetKey)!)).toEqual(['existing','m']);expect(changePart).toHaveBeenCalledWith('Finish');
+ expect(await localDb.jobMaterials.toArray()).toEqual(before);expect(await localDb.syncQueue.count()).toBe(queued);
+});

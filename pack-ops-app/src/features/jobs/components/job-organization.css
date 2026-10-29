@@ -303,3 +303,9 @@
 .field-material-bubble .field-assembly-counter__line>button:last-child{order:1;flex:1}
 .field-material-bubble .field-assembly-counter__line>button:first-of-type{order:2;min-width:54px}
 .field-material-bubble .field-assembly-counter__line>button:nth-of-type(2){order:3}
+.field-part-switcher{display:flex;gap:6px;overflow-x:auto;padding:8px 0}
+.field-part-switcher button{flex-shrink:0;min-height:44px;border:1px solid #cbd5e1;border-radius:22px;padding:8px 14px;background:#fff;color:#25344c}
+.field-part-switcher button[aria-pressed=true]{background:#173d71;color:white;border-color:#173d71}
+.field-part-destination{margin:4px 0 12px;padding:8px 12px;background:#edf4ff;border-radius:8px}
+.field-copy-list{margin-top:8px;font-size:14px}
+.field-copy-list summary{cursor:pointer;padding:8px 0}

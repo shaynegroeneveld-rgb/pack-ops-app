@@ -193,7 +193,9 @@ function MaterialEntry({
         </p>
       )}
       <label>Job part<select value={draft.part} onChange={e=>setDraft({...draft,part:e.target.value})}>{allParts.map(p=><option key={p}>{p}</option>)}</select></label>
-      <AssemblyMaterialCounters key={`${draftScope}:${jobId}:${draft.part}`} assemblies={assemblies} catalog={catalogItems} jobId={jobId} part={draft.part} scope={draftScope} onSaved={()=>{onCounterSaved?.();}} />
+      {allParts.length > 1 && <div className="field-part-switcher" role="group" aria-label="Switch material job part">{allParts.map(part=><button type="button" key={part} aria-pressed={draft.part===part} onClick={()=>setDraft({...draft,part})}>{part}</button>)}</div>}
+      <p className="field-part-destination">Adding and counting in <strong>{draft.part}</strong></p>
+      <AssemblyMaterialCounters key={`${draftScope}:${jobId}:${draft.part}`} assemblies={assemblies} catalog={catalogItems} jobId={jobId} part={draft.part} scope={draftScope} parts={allParts} onSelectPart={part=>setDraft({...draft,part})} onSaved={()=>{onCounterSaved?.();}} />
       <details className="job-task-form">
         <summary>Saved entries · {usedMaterials.length}</summary>
         {allParts.length > 1 && (
