@@ -16,13 +16,13 @@ describe('material quantities and job context',()=>{
 describe('field material entry',()=>{
  it('counts fractional material quantities against the selected job part',async()=>{
  panel();fireEvent.change(screen.getByLabelText('Job part'),{target:{value:'Service'}});
- fireEvent.change(screen.getByLabelText('Choose material or assembly'),{target:{value:'material:material'}});
+ fireEvent.change(screen.getByLabelText('Search materials'),{target:{value:'Copper wire'}});fireEvent.click(screen.getByRole('button',{name:'Add Copper wire to counters'}));
  await screen.findByText('0 · Set qty');fireEvent.click(screen.getByRole('button',{name:'Set quantity for Copper wire'}));
  fireEvent.change(screen.getByLabelText('Total Copper wire'),{target:{value:'12.25'}});fireEvent.click(screen.getByRole('button',{name:'Save total'}));
  await screen.findByText('12.25 · Set qty');expect((await localDb.jobMaterials.toArray())[0]).toMatchObject({quantity:12.25,sectionName:'Service'});
  });
- it('keeps selection at zero without creating usage',async()=>{panel();fireEvent.change(screen.getByLabelText('Choose material or assembly'),{target:{value:'material:material'}});await screen.findByText('0 · Set qty');expect(await localDb.jobMaterials.count()).toBe(0);});
- it('keeps independent lists for different parts',async()=>{panel();fireEvent.change(screen.getByLabelText('Choose material or assembly'),{target:{value:'material:material'}});await screen.findByText('0 · Set qty');fireEvent.change(screen.getByLabelText('Job part'),{target:{value:'Shop'}});expect(screen.queryByRole('button',{name:'Add one Copper wire'})).toBeNull();fireEvent.change(screen.getByLabelText('Job part'),{target:{value:'General'}});await screen.findByText('0 · Set qty');});
+ it('keeps selection at zero without creating usage',async()=>{panel();fireEvent.change(screen.getByLabelText('Search materials'),{target:{value:'Copper wire'}});fireEvent.click(screen.getByRole('button',{name:'Add Copper wire to counters'}));await screen.findByText('0 · Set qty');expect(await localDb.jobMaterials.count()).toBe(0);});
+ it('keeps independent lists for different parts',async()=>{panel();fireEvent.change(screen.getByLabelText('Search materials'),{target:{value:'Copper wire'}});fireEvent.click(screen.getByRole('button',{name:'Add Copper wire to counters'}));await screen.findByText('0 · Set qty');fireEvent.change(screen.getByLabelText('Job part'),{target:{value:'Shop'}});expect(screen.queryByRole('button',{name:'Add one Copper wire'})).toBeNull();fireEvent.change(screen.getByLabelText('Job part'),{target:{value:'General'}});await screen.findByText('0 · Set qty');});
  it('requires confirmation before removing a saved entry',async()=>{const {props}=panel({usedMaterials:[{...item,id:'old',catalogItemId:'material',quantity:10,sectionName:'Shop',createdAt:'2026-01-01'}]});fireEvent.click(screen.getByRole('button',{name:'Remove',exact:true}));expect(props.onDeleteUsedMaterial).not.toHaveBeenCalled();fireEvent.click(screen.getByRole('button',{name:'Keep entry'}));expect(props.onDeleteUsedMaterial).not.toHaveBeenCalled();});
 });
 describe('job tasks',()=>{

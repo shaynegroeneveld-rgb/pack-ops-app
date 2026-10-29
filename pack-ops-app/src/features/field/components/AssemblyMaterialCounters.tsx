@@ -1,6 +1,6 @@
 import {useState} from 'react';
 import type {AssemblyView,CatalogItem} from '@/domain/materials/types';
-import {rankCatalogItems,rankAssemblies} from '@/services/materials/material-search';
+import {rankCatalogItems} from '@/services/materials/material-search';
 import {AssemblyCounterRow} from './AssemblyCounterRow';
 
 export function AssemblyMaterialCounters({assemblies,catalog,jobId,part,scope,onSaved,parts=[],onSelectPart}: {
@@ -10,7 +10,7 @@ export function AssemblyMaterialCounters({assemblies,catalog,jobId,part,scope,on
  const [ids,setIds]=useState<string[]>(()=>{try{const saved=JSON.parse(localStorage.getItem(storageKey)??'[]');return Array.isArray(saved)?saved.filter((id:unknown)=>typeof id==='string'):[];}catch{return [];}});
  const [search,setSearch]=useState(''),[error,setError]=useState('');
  const materialsFound=rankCatalogItems(catalog.filter(m=>m.isActive),search);
- const assembliesFound=rankAssemblies(assemblies,search);
+
  function load(selection:string){
   if(!selection)return;
   const assembly=assemblies.find(a=>'assembly:'+a.id===selection);
@@ -31,13 +31,14 @@ export function AssemblyMaterialCounters({assemblies,catalog,jobId,part,scope,on
   }catch{setError('Could not copy this list. Your current materials and counts have not changed.');}
  }
  return <>
-  <label>Find material or assembly<input type="search" placeholder="Name, nickname or supplier code" value={search} onChange={e=>setSearch(e.target.value)} autoCorrect="off" autoCapitalize="none" /></label>
-  <label>Choose material or assembly<select value="" onChange={e=>load(e.target.value)}><option value="">Choose to add bubbles…</option>
-   <optgroup label="Assemblies — materials only">{assembliesFound.map(a=><option key={a.id} value={'assembly:'+a.id}>{a.name}</option>)}</optgroup>
-   <optgroup label="Materials">{materialsFound.map(m=><option key={m.id} value={'material:'+m.id}>{m.name} · {m.unit}{m.sku?' · '+m.sku:''}</option>)}</optgroup>
-  </select></label>
+  <label>Add assembly<select value="" onChange={e=>load(e.target.value)}><option value="">Choose an assembly…</option>{assemblies.map(a=><option key={a.id} value={'assembly:'+a.id}>{a.name}</option>)}</select></label>
+  <label>Search materials<input type="search" placeholder="Name, nickname or supplier code" value={search} onChange={e=>setSearch(e.target.value)} autoCorrect="off" autoCapitalize="none" /></label>
+  {search.trim()&&<div className="field-material-search-results" aria-label="Material search results">
+   {materialsFound.slice(0,12).map(m=><button type="button" key={m.id} aria-label={`Add ${m.name} to counters`} onClick={()=>load('material:'+m.id)}><strong>{m.name}</strong><span>{m.unit}{m.sku?' · '+m.sku:''}{ids.includes(String(m.id))?' · Already in this part':''}</span></button>)}
+   {!materialsFound.length&&<p>No materials match. Try a name, size or supplier code.</p>}
+   {materialsFound.length>12&&<p className="job-muted">Showing the 12 closest matches. Add another word to narrow your search.</p>}
+  </div>}
   <p className="job-muted">New bubbles start at zero. +1 saves immediately. Your counts on this device · {part}.</p>
-  {!materialsFound.length&&!assembliesFound.length&&<p>No matches. Try a name, size or supplier code.</p>}
   {error&&<p role="alert" className="job-error">{error}</p>}
   {!!ids.length&&parts.some(p=>p!==part)&&<details className="field-copy-list"><summary>Use this material list in another part</summary><p className="job-muted">Copies the bubbles only. New materials start at zero; existing counts stay unchanged.</p><label>Copy list to job part<select value="" onChange={e=>copyList(e.target.value)}><option value="">Choose destination…</option>{parts.filter(p=>p!==part).map(p=><option key={p}>{p}</option>)}</select></label></details>}
   <div className="field-material-bubbles">{ids.map(id=>{
