@@ -12,7 +12,7 @@ it('debounces typing and confirms the selected address with the same session',as
  render(<Form/>);fireEvent.change(screen.getByRole('combobox'),{target:{value:'4320 Hales'}});
  expect(invoke).not.toHaveBeenCalled();await act(async()=>{await vi.advanceTimersByTimeAsync(350);});
  fireEvent.keyDown(screen.getByRole('combobox'),{key:'ArrowDown'});
- await act(async()=>{fireEvent.keyDown(screen.getByRole('combobox'),{key:'Enter'});});
+ await act(async()=>{fireEvent.keyDown(screen.getByRole('combobox'),{key:'Enter'});fireEvent.blur(screen.getByRole('combobox')); });
  expect((screen.getByRole('combobox') as HTMLInputElement).value).toContain('Spallumcheen');
  expect(invoke.mock.calls[0][1].body.sessionToken).toBe(invoke.mock.calls[1][1].body.sessionToken);
 });
