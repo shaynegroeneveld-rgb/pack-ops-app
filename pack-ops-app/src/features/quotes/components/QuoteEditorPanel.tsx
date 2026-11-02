@@ -1,3 +1,4 @@
+import {AddressSearch} from "@/components/address/AddressSearch";
 import { RenamePart } from "@/components/parts/RenamePart";
 import type { Contact } from "@/domain/contacts/types";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -1040,11 +1041,11 @@ export function QuoteEditorPanel({
           </label>
           <label style={{ display: "grid", gap: "6px" }}>
             <span>Site / Job Address</span>
-            <input
+            <AddressSearch
               style={mobileSafeInputStyle}
               value={currentDraft.siteAddress}
               disabled={isPending || isLockedByInvoice}
-              onChange={(event) => setDraft((current) => (current ? { ...current, siteAddress: event.target.value } : current))}
+              onChange={(siteAddress) => setDraft((current) => (current ? { ...current, siteAddress } : current))}
             />
           </label>
           <label style={{ display: "grid", gap: "6px" }}>

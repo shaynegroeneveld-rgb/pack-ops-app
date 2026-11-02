@@ -1,3 +1,4 @@
+import {AddressSearch} from "@/components/address/AddressSearch";
 import "./field-home.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -480,9 +481,9 @@ export function FieldModePage() {
                 </label>
                 <label style={{ display: "grid", gap: "6px" }}>
                   <span style={infoLabelStyle()}>Address</span>
-                  <input
+                  <AddressSearch
                     value={addJobDraft.address}
-                    onChange={(event) => setAddJobDraft((current) => ({ ...current, address: event.target.value }))}
+                    onChange={(address) => setAddJobDraft((current) => ({ ...current, address }))}
                     placeholder="Site address"
                     style={inputStyle()}
                   />

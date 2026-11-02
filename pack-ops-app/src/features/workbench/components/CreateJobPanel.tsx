@@ -1,3 +1,4 @@
+import {AddressSearch} from "@/components/address/AddressSearch";
 import { useEffect, useState } from "react";
 
 import type { JobType } from "@/domain/job-types/types";
@@ -12,7 +13,7 @@ export interface CreateJobPanelProps {
   defaultContactId?: string | null;
   isPending: boolean;
   isCreatingContact: boolean;
-  onCreate: (input: { title: string; description: string; contactId: string; estimatedHours?: number | null; jobTypeId?: string | null; isInternalOverhead?: boolean }) => Promise<unknown>;
+  onCreate: (input: { title: string; addressLine1?: string; description: string; contactId: string; estimatedHours?: number | null; jobTypeId?: string | null; isInternalOverhead?: boolean }) => Promise<unknown>;
   onCreateContact: (input: { displayName: string; email?: string; phone?: string }) => Promise<WorkbenchContactOption>;
   onCreateJobType: (input: { name: string }) => Promise<JobType>;
 }
@@ -28,6 +29,7 @@ export function CreateJobPanel({
   onCreateContact,
   onCreateJobType,
 }: CreateJobPanelProps) {
+  const [address, setAddress] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [estimatedHours, setEstimatedHours] = useState("");
@@ -107,6 +109,7 @@ export function CreateJobPanel({
                 const normalizedEstimatedHours = estimatedHours.trim();
                 const createPayload = {
                   title,
+                  addressLine1: address,
                   description,
                   contactId,
                   jobTypeId: jobTypeId || null,
@@ -119,6 +122,7 @@ export function CreateJobPanel({
                   ...createPayload,
                 });
                 setTitle("");
+                setAddress("");
                 setDescription("");
                 setEstimatedHours("");
                 setJobTypeId("");
@@ -133,6 +137,7 @@ export function CreateJobPanel({
             {isPending || isSubmittingCreate ? "Creating..." : "Create Job"}
           </button>
         </div>
+        <label>Site address (optional)<AddressSearch value={address} onChange={setAddress} disabled={isPending || isSubmittingCreate} /></label>
         {selectedContact?.subtitle ? (
           <p style={{ margin: 0, color: "#5b6475" }}>Contact: {selectedContact.subtitle}</p>
         ) : null}
