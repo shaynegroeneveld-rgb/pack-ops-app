@@ -1,3 +1,4 @@
+import {JobOverheadsPanel} from "@/features/reports/components/JobOverheadsPanel";
 import { RenamePart } from "@/components/parts/RenamePart";
 import { JobQuotePlan } from "./JobQuotePlan";
 import type {WorkbenchJobCard} from "@/services/workbench/workbench-service";
@@ -4251,6 +4252,17 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
           </details>}
         </div>
       </details>
+
+      {selectedJob && currentUser && (currentUser.user.role === "owner" || currentUser.user.role === "office") && <section style={{...cardStyle("#fff"),minWidth:0}}>
+        <JobOverheadsPanel key={selectedJob.job.id} orgId={currentUser.user.orgId} row={{
+          jobId:selectedJob.job.id,jobNumber:selectedJob.job.number,title:selectedJob.job.title,status:selectedJob.job.status,
+          isArchived:!!selectedJob.job.deletedAt,jobTypeId:selectedJob.job.jobTypeId??null,jobTypeName:null,performance:jobWorkspace?.performance??null,
+          address:[selectedJob.job.addressLine1,selectedJob.job.addressLine2,selectedJob.job.city,selectedJob.job.region,selectedJob.job.postalCode].filter(Boolean).join(', '),
+          workedDays:(jobWorkspace?.timeEntries??[]).filter(e=>e.status!=='rejected'&&e.hours>0).map(e=>e.workDate),
+          recordedMileage:(jobWorkspace?.manualActualCostLines??[]).filter(e=>e.category==='mileage').reduce((sum,e)=>sum+e.totalCost,0),
+          hasRecordedMileage:(jobWorkspace?.manualActualCostLines??[]).some(e=>e.category==='mileage')
+        }}/>
+      </section>}
 
       <section ref={manualActualSectionRef} style={{ ...cardStyle("#fff"), minWidth: 0 }}>
         <div style={sectionHeadingRow()}>

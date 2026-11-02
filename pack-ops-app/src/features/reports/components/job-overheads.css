@@ -1,0 +1,13 @@
+.job-overheads{color:#402825;font-family:inherit}
+.job-overheads>summary{font-size:17px;min-height:44px}
+.job-overheads table{width:100%;border-collapse:collapse;background:#faf8f4;border-radius:12px;font-size:14px}
+.job-overheads td,.job-overheads th{padding:10px 12px;border-bottom:1px solid #e4ded5;text-align:left}
+.job-overheads td:last-child,.job-overheads th:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.job-overheads p{font-size:13px;color:#75675d;margin:2px 0;line-height:1.5}
+.job-overheads label{display:grid;gap:5px;font-size:13px;min-width:0;flex:1 1 150px}
+.job-overheads input{box-sizing:border-box;width:100%;padding:10px;border:1px solid #d9cfc3;border-radius:10px;min-height:44px;background:white;color:#402825;font-size:16px}
+.job-overheads button{padding:9px 13px;min-height:44px;border:1px solid #d9cfc3;border-radius:10px;background:white;color:#623b30;cursor:pointer}
+.job-overheads button:disabled{opacity:.5;cursor:default}
+.job-overheads .job-overheads-primary{background:#622e29;color:#fff8ed;align-self:end}
+.job-overheads [role=alert]{color:#ad3030}
+@media(max-width:480px){.job-overheads td,.job-overheads th{padding:8px 6px;font-size:12px}}

@@ -30,6 +30,10 @@ export interface JobPerformanceReportRow {
   jobTypeId: string | null;
   jobTypeName: string | null;
   performance: JobPerformanceSummary | null;
+  address?: string;
+  workedDays?: string[];
+  recordedMileage?: number;
+  hasRecordedMileage?: boolean;
 }
 
 export interface JobPerformanceReportData {
@@ -266,6 +270,10 @@ export class JobPerformanceService {
     const rows = customerJobs.map((job) => ({
       jobId: String(job.id),
       jobNumber: job.number,
+      address: [job.addressLine1,job.addressLine2,job.city,job.region,job.postalCode].filter(Boolean).join(', '),
+      workedDays: timeEntries.filter(e=>String(e.jobId)===String(job.id)&&e.status!=='rejected'&&e.hours>0).map(e=>e.workDate),
+      recordedMileage: manualActualCostLines.filter(e=>String(e.jobId)===String(job.id)&&e.category==='mileage').reduce((sum,e)=>sum+e.totalCost,0),
+      hasRecordedMileage: manualActualCostLines.some(e=>String(e.jobId)===String(job.id)&&e.category==='mileage'),
       title: job.title,
       status: job.status,
       isArchived: Boolean(job.deletedAt),

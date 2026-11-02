@@ -1,0 +1,6 @@
+import {it,expect} from 'vitest';
+import {calculateOverheads,WORK_ORIGIN} from '@/services/jobs/job-overheads';
+const input={days:['2026-10-30','2026-10-30','2026-10-31','2026-11-01'],address:'Site',settings:{origin_address:WORK_ORIGIN,destination_address:'Site',round_trip_km:40,rate_per_km:0.75,trip_adjustment:0},admin:[{id:'a',work_date:'2026-10-31',hours:0.5,hourly_cost:65,note:''}],recordedMileage:0,hasRecordedMileage:false};
+it('counts distinct days once, computes mileage and fractional admin hours',()=>{const result=calculateOverheads(input);expect(result.trips).toBe(3);expect(result.additionalMileage).toBe(90);expect(result.adminCost).toBe(32.5);});
+it('does not double count recorded mileage or silently zero missing routes',()=>{expect(calculateOverheads({...input,hasRecordedMileage:true,recordedMileage:40}).additionalMileage).toBe(0);expect(calculateOverheads({...input,settings:null}).additionalMileage).toBeNull();expect(calculateOverheads({...input,address:'Changed address'}).additionalMileage).toBeNull();});
+it('respects October 31 cutoff and prevents negative trips',()=>{expect(calculateOverheads({...input,cutoff:'2026-10-31'}).trips).toBe(2);expect(calculateOverheads({...input,cutoff:'2026-10-30'}).adminCost).toBe(0);expect(calculateOverheads({...input,settings:{...input.settings,trip_adjustment:-9}}).trips).toBe(0);});

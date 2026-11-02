@@ -1,3 +1,4 @@
+import {JobOverheadsPanel} from "./JobOverheadsPanel";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -673,6 +674,7 @@ export function JobPerformancePage() {
                 </div>
 
                 {renderPerformance(row.performance)}
+                <JobOverheadsPanel row={row} orgId={currentUser.user.orgId}/>
               </article>
             ))
           )}
