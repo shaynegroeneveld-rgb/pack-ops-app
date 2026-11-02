@@ -1,3 +1,4 @@
+import { JOB_STATUSES } from "@/domain/enums";
 import type { Job } from "@/domain/jobs/types";
 import type { JobWaitingReason } from "@/domain/enums";
 
@@ -61,25 +62,7 @@ export function getWorkbenchJobStatusActions(job: Job): WorkbenchJobStatusAction
 export function getAllowedNextJobStatuses(
   status: Job["status"],
 ): Job["status"][] {
-  switch (status) {
-    case "scheduled":
-      return ["in_progress", "cancelled"];
-    case "in_progress":
-      return ["waiting", "work_complete", "cancelled"];
-    case "waiting":
-      return ["in_progress", "cancelled"];
-    case "work_complete":
-      return ["ready_to_invoice", "in_progress"];
-    case "ready_to_invoice":
-      return ["invoiced"];
-    case "invoiced":
-      return ["closed", "ready_to_invoice"];
-    case "closed":
-    case "cancelled":
-      return [];
-    default:
-      return [];
-  }
+  return JOB_STATUSES.filter(candidate => candidate !== status);
 }
 
 export function getSelectableJobStatuses(status: Job["status"]): Job["status"][] {

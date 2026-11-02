@@ -1,3 +1,5 @@
+import { JOB_STATUSES, type JobStatus } from "@/domain/enums";
+import { canUpdateWorkbenchJobStatus } from "@/services/permissions/workbench-permissions";
 import "./field-job.css";
 import { actionButtonStyle, fieldColors, infoLabelStyle, inputStyle, shellCardStyle, softCardStyle, toggleButtonStyle } from "./field-job-theme";
 import { JobTaskBoard } from "@/features/jobs/components/JobTaskBoard";
@@ -359,6 +361,13 @@ function AuthenticatedFieldJobPage({jobId, currentUser}: FieldJobPageProps & {cu
               {selectedJobCard.contactName ?? "No customer linked"}
             </span>
           </div>
+          <label style={{display:"grid",gap:6}}><span style={infoLabelStyle()}>Job status</span>
+            <select aria-label="Job status" value={selectedJobCard.job.status} style={inputStyle()}
+              disabled={workbench.updateJobStatus.isPending||!canUpdateWorkbenchJobStatus(currentUser.user,selectedJobCard.job,selectedJobCard.assignments)}
+              onChange={event=>void workbench.updateJobStatus.mutateAsync({jobId:selectedJobCard.job.id,status:event.target.value as JobStatus,waitingReason:event.target.value==='waiting'?(selectedJobCard.job.waitingReason??'other'):null}).catch(()=>undefined)}>
+              {JOB_STATUSES.map(status=><option key={status} value={status}>{status==='scheduled'?'New / scheduled':status.replaceAll('_',' ').replace(/^./,c=>c.toUpperCase())}</option>)}
+            </select>
+          </label>
           {selectedJobType?.notes ? (
             <div
               style={{

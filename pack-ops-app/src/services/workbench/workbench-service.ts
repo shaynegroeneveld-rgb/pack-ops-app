@@ -836,7 +836,7 @@ export class WorkbenchService {
     }
 
     const allowedStatuses = getAllowedNextJobStatuses(currentJob.status);
-    if (!allowedStatuses.includes(input.status)) {
+    if (input.status !== currentJob.status && !allowedStatuses.includes(input.status)) {
       throw new Error(`Invalid job status transition: ${currentJob.status} -> ${input.status}.`);
     }
 
