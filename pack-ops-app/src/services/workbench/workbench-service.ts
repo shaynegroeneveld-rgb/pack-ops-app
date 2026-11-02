@@ -744,6 +744,12 @@ export class WorkbenchService {
   async updateJobBasics(input: {
     jobId: string;
     title: string;
+    addressLine1?: string | null;
+    addressLine2?: string | null;
+    city?: string | null;
+    region?: string | null;
+    postalCode?: string | null;
+
     fieldName?: string | null;
     description: string;
     contactId: string;
@@ -781,6 +787,12 @@ export class WorkbenchService {
 
     const updatedJob = await this.jobs.update(input.jobId, {
       title: input.title.trim(),
+      ...(input.addressLine1 !== undefined ? {addressLine1: input.addressLine1?.trim() || null} : {}),
+      ...(input.addressLine2 !== undefined ? {addressLine2: input.addressLine2?.trim() || null} : {}),
+      ...(input.city !== undefined ? {city: input.city?.trim() || null} : {}),
+      ...(input.region !== undefined ? {region: input.region?.trim() || null} : {}),
+      ...(input.postalCode !== undefined ? {postalCode: input.postalCode?.trim() || null} : {}),
+
       fieldName: input.fieldName?.trim() || null,
       description: input.description.trim() || null,
       contactId: input.contactId as Job["contactId"],

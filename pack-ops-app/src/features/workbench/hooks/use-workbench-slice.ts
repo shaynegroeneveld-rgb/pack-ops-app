@@ -497,6 +497,12 @@ export function useWorkbenchSlice(
     mutationFn: (input: {
       jobId: string;
       title: string;
+    addressLine1?: string | null;
+    addressLine2?: string | null;
+    city?: string | null;
+    region?: string | null;
+    postalCode?: string | null;
+
       fieldName?: string | null;
       description: string;
       contactId: string;

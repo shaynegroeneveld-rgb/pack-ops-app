@@ -1,3 +1,4 @@
+import {AddressSearch} from "@/components/address/AddressSearch";
 import {JobOverheadsPanel} from "@/features/reports/components/JobOverheadsPanel";
 import { RenamePart } from "@/components/parts/RenamePart";
 import { JobQuotePlan } from "./JobQuotePlan";
@@ -94,6 +95,7 @@ type JobScreen = "main" | "attachments" | "actuals";
 const ADD_NEW_JOB_TYPE_VALUE = "__add_new_job_type__";
 
 type EditJobDraft = {
+  address: string;
   title: string;
   fieldName: string;
   contactId: string;
@@ -2391,6 +2393,7 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
 
     setEditJobDraft({
       title: selectedJob.job.title,
+      address: [selectedJob.job.addressLine1,selectedJob.job.addressLine2,selectedJob.job.city,selectedJob.job.region,selectedJob.job.postalCode].filter(Boolean).join(", "),
       fieldName: selectedJob.job.fieldName ?? "",
       contactId: selectedJob.job.contactId,
       description: selectedJob.job.description ?? "",
@@ -2457,6 +2460,7 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
       jobId: selectedJob.job.id,
       title: editJobDraft.title.trim() || selectedJob.job.title,
       fieldName: editJobDraft.fieldName.trim(),
+      ...(editJobDraft.address.trim() !== [selectedJob.job.addressLine1,selectedJob.job.addressLine2,selectedJob.job.city,selectedJob.job.region,selectedJob.job.postalCode].filter(Boolean).join(", ") ? {addressLine1: editJobDraft.address.trim() || null, addressLine2: null, city: null, region: null, postalCode: null} : {}),
       description: editJobDraft.description.trim(),
       contactId: editJobDraft.contactId,
       estimatedHours,
@@ -4718,6 +4722,12 @@ function AuthenticatedWorkbenchPage({currentUser,signOut}: {currentUser: NonNull
                   placeholder="Shop, Smith reno, lake cabin, etc."
                   style={{ fontSize: "16px" }}
                 />
+              </label>
+
+              <label style={{ display: "grid", gap: "6px" }}>
+                <span>Site address</span>
+                <AddressSearch value={editJobDraft.address} onChange={(address) => setEditJobDraft(current => current ? {...current,address} : current)} disabled={updateJob.isPending} style={{fontSize:16,minHeight:44}} />
+                <small>Include the unit number if needed. Changing the address requires recalculating mileage.</small>
               </label>
 
               <label style={{ display: "grid", gap: "6px" }}>
