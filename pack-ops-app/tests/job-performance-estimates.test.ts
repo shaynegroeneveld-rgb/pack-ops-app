@@ -22,3 +22,14 @@ it('loads all quote lines when the response is capped, keeping late material and
  expect(await repo.listByQuoteIds(['quote'])).toEqual([{id:'first'},{id:'last'}]);
  expect(query.range.mock.calls).toEqual([[0,499],[1,500]]);
 });
+it('includes admin and travel in total cost, actual/projected profit, margins and cost variance without inflating materials',()=>{
+ const input={...base,timeEntries:[{status:'approved',hours:2,hourlyRate:65}],savedInvoiceSell:{subtotal:1000,total:1050,laborRevenue:1000,materialRevenue:0,count:1,collected:1050,lastInvoiceDate:'2026-11-01'}};
+ const before=computeJobPerformanceSummary(input)!;
+ const after=computeJobPerformanceSummary({...input,additionalOverheadCost:146.41})!;
+ expect(after.coreMoney.actualTotalCost).toBeCloseTo(before.coreMoney.actualTotalCost!+146.41,2);
+ expect(after.coreMoney.actualGrossProfit).toBeCloseTo(before.coreMoney.actualGrossProfit!-146.41,2);
+ expect(after.coreMoney.projectedGrossProfit).toBeCloseTo(before.coreMoney.projectedGrossProfit!-146.41,2);
+ expect(after.estimateAccuracy.costVariance).toBeCloseTo(before.estimateAccuracy.costVariance!+146.41,2);
+ expect(after.actualMaterialCost).toBe(before.actualMaterialCost);
+ expect(after.coreMoney.actualMarginPct).toBeLessThan(before.coreMoney.actualMarginPct!);
+});

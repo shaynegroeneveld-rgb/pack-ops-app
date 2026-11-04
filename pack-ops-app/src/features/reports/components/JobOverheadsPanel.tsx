@@ -1,6 +1,6 @@
 import "./job-overheads.css";
 import {useRef,useState} from 'react';
-import {useQuery} from '@tanstack/react-query';
+import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {getSupabaseClient} from '@/data/supabase/client';
 import {calculateOverheads,WORK_ORIGIN,type AdminEntry,type OverheadSettings} from '@/services/jobs/job-overheads';
 import type {JobPerformanceReportRow} from '@/services/reports/job-performance-service';
@@ -11,6 +11,7 @@ export function JobOverheadsPanel({row,orgId}:{row:JobPerformanceReportRow;orgId
  return <details className="job-overheads" onToggle={e=>setOpen(e.currentTarget.open)}><summary style={{cursor:'pointer',padding:'12px 0',fontWeight:700}}>Admin & travel costs</summary>{open&&<OverheadEditor row={row} orgId={orgId}/>}</details>;
 }
 function OverheadEditor({row,orgId}:{row:JobPerformanceReportRow;orgId:string}){
+ const queryClient=useQueryClient();
  const client=getSupabaseClient(import.meta.env) as any;
  const [error,setError]=useState(''),[busy,setBusy]=useState(false),[hours,setHours]=useState(''),[note,setNote]=useState('');
  const [date,setDate]=useState(()=>new Date().toLocaleDateString('en-CA',{timeZone:'America/Vancouver'}));
@@ -21,12 +22,13 @@ function OverheadEditor({row,orgId}:{row:JobPerformanceReportRow;orgId:string}){
   if(settings.error||entries.error)throw settings.error||entries.error;
   return {settings:settings.data as OverheadSettings|null,admin:entries.data as AdminEntry[]};
  }});
- async function run(action:()=>Promise<void>){if(lock.current)return;lock.current=true;setBusy(true);setError('');try{await action();await query.refetch();}catch(e){setError(e instanceof Error?e.message:(e as any)?.message||'Could not save. Try again.');}finally{setBusy(false);lock.current=false;}}
+ async function run(action:()=>Promise<void>){if(lock.current)return;lock.current=true;setBusy(true);setError('');try{await action();await query.refetch();await queryClient.invalidateQueries({queryKey:["job-performance-report"]});}catch(e){setError(e instanceof Error?e.message:(e as any)?.message||'Could not save. Try again.');}finally{setBusy(false);lock.current=false;}}
  if(query.isLoading)return <p>Loading admin and travel…</p>;
  if(query.isError||!query.data)return <p role="alert">Admin and travel are unavailable. <button onClick={()=>void query.refetch()}>Retry</button></p>;
  const settings=draft??query.data.settings??{origin_address:WORK_ORIGIN,destination_address:row.address??'',round_trip_km:null,rate_per_km:0.75,trip_adjustment:0};
  const cost=calculateOverheads({days:row.workedDays??[],address:row.address??'',settings:query.data.settings,admin:query.data.admin,recordedMileage:row.recordedMileage??0,hasRecordedMileage:!!row.hasRecordedMileage});
- const base=row.performance?.coreMoney.actualTotalCost;
+ const reportedBase=row.performance?.coreMoney.actualTotalCost;
+ const base=reportedBase==null?null:reportedBase-(row.includedOverheadCost??0);
  const total=base==null||cost.additionalMileage===null?null:Math.round((base+cost.adminCost+cost.additionalMileage)*100)/100;
  const revenue=row.performance?.coreMoney.invoicedRevenue;
  const profit=total==null||revenue==null?null:revenue-total;
@@ -37,7 +39,7 @@ function OverheadEditor({row,orgId}:{row:JobPerformanceReportRow;orgId:string}){
  }
  return <div style={{display:'grid',gap:12}}>
   <table><tbody><tr><td>Recorded job costs (existing materials, labour and expenses)</td><td>{money(base)}</td></tr><tr><td>Admin time</td><td>{money(cost.adminCost)}</td></tr><tr><td>Recorded mileage (already included above)</td><td>{money(row.recordedMileage??0)}</td></tr><tr><td>Additional estimated travel</td><td>{money(cost.additionalMileage)}</td></tr><tr><th>Total including admin and estimated travel</th><th>{money(total)}</th></tr><tr><td>Profit after admin and estimated travel (invoiced revenue)</td><td>{money(profit)}</td></tr></tbody></table>
-  <p>Existing job totals exclude these additional admin and estimated travel amounts. Use this panel’s combined total for the fuller job-cost view.</p>
+  <p>Job Performance totals include saved admin and available travel estimates. Missing or outdated routes are flagged there; calculate them to complete the cost picture.</p>
   <p>Internal costing only. These entries do not add customer invoice lines. Enter only admin time not already recorded as job labour.</p>
   <form onSubmit={e=>{e.preventDefault();void run(async()=>{const n=Number(hours);if(!Number.isFinite(n)||n<=0||n>24||Math.abs(n*100-Math.round(n*100))>0.000001||!date)throw new Error('Enter a date and more than 0, up to 24 hours, with at most two decimals.');const {error}=await client.from('job_admin_entries').upsert({id:requestId.current,org_id:orgId,job_id:row.jobId,work_date:date,hours:n,hourly_cost:65,note});if(error)throw error;requestId.current=createId();setHours('');setNote('');});}} style={{display:'flex',gap:8,flexWrap:'wrap'}}>
    <label>Date<input type="date" required value={date} onChange={e=>setDate(e.target.value)}/></label><label>Admin hours · $65/hour<input inputMode="decimal" required value={hours} onChange={e=>setHours(e.target.value)} placeholder="0.5"/></label><label>What was done?<input value={note} onChange={e=>setNote(e.target.value)} placeholder="Ordering, planning, invoicing…"/></label><button className="job-overheads-primary" disabled={busy}>Save admin time</button>

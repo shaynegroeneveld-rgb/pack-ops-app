@@ -276,6 +276,7 @@ export function computeJobPerformanceSummary(input: {
     Pick<JobManualActualCostLine, "category" | "quantity" | "unitCost" | "totalCost">
   >;
   timeEntries: Array<Pick<TimeEntry, "status" | "hours" | "hourlyRate">>;
+  additionalOverheadCost?: number;
   canViewFinancials: boolean;
 }): JobPerformanceSummary | null {
   if (!input.canViewFinancials) {
@@ -355,7 +356,7 @@ export function computeJobPerformanceSummary(input: {
 
   const actualSellValue = input.savedInvoiceSell ? roundMoney(input.savedInvoiceSell.subtotal) : null;
   const totalActualCost =
-    actualLaborCost !== null ? roundMoney(actualLaborCost + actualMaterialCost) : null;
+    actualLaborCost !== null ? roundMoney(actualLaborCost + actualMaterialCost + (input.additionalOverheadCost ?? 0)) : null;
   const estimatedTotalCost =
     estimatedLaborCost !== null && estimatedMaterialCost !== null
       ? roundMoney(estimatedLaborCost + estimatedMaterialCost)

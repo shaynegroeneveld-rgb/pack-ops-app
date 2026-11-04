@@ -1,3 +1,4 @@
+import {calculateOverheads,type OverheadSettings,type AdminEntry} from "@/services/jobs/job-overheads";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { jobsMapper } from "@/data/mappers/jobs.mapper";
@@ -30,6 +31,10 @@ export interface JobPerformanceReportRow {
   jobTypeId: string | null;
   jobTypeName: string | null;
   performance: JobPerformanceSummary | null;
+  includedOverheadCost?: number;
+  adminCost?: number;
+  estimatedTravelCost?: number | null;
+  travelIncomplete?: boolean;
   address?: string;
   workedDays?: string[];
   recordedMileage?: number;
@@ -267,7 +272,35 @@ export class JobPerformanceService {
 
     const jobTypesById = new Map(jobTypes.map((jobType) => [String(jobType.id), jobType]));
 
-    const rows = customerJobs.map((job) => ({
+    const overheadClient = this.client as any;
+    async function readOverheads(table:string, activeOnly=false){
+      const all:any[]=[];
+      for(let offset=0;;){
+        let query=overheadClient.from(table).select('*').eq('org_id',contextOrgId).order('job_id');
+        if(activeOnly)query=query.is('deleted_at',null).order('id');
+        const result=await query.range(offset,offset+499);
+        if(result.error)throw result.error;
+        const batch=result.data??[];all.push(...batch);
+        if(!batch.length)break;
+        offset+=batch.length;
+      }
+      return {data:all};
+    }
+    const contextOrgId=this.context.orgId;
+    const [travelResponse,adminResponse]=await Promise.all([readOverheads('job_overhead_settings'),readOverheads('job_admin_entries',true)]);
+    const rows = customerJobs.map((job) => {
+      const overhead = calculateOverheads({
+        days:timeEntries.filter(e=>String(e.jobId)===String(job.id)&&e.status!=='rejected'&&e.hours>0).map(e=>e.workDate),
+        settings:(travelResponse.data as (OverheadSettings & {job_id:string})[]).find(e=>e.job_id===String(job.id))??null,
+        address:[job.addressLine1,job.addressLine2,job.city,job.region,job.postalCode].filter(Boolean).join(', '),
+        admin:(adminResponse.data as (AdminEntry & {job_id:string})[]).filter(e=>e.job_id===String(job.id)),
+        recordedMileage:0,
+        hasRecordedMileage:manualActualCostLines.some(e=>String(e.jobId)===String(job.id)&&e.category==='mileage'),
+      });
+      const includedOverheadCost=roundMoney(overhead.adminCost+(overhead.additionalMileage??0));
+      return ({
+      includedOverheadCost,adminCost:overhead.adminCost,estimatedTravelCost:overhead.additionalMileage,
+      travelIncomplete:overhead.trips>0&&overhead.additionalMileage===null,
       jobId: String(job.id),
       jobNumber: job.number,
       address: [job.addressLine1,job.addressLine2,job.city,job.region,job.postalCode].filter(Boolean).join(', '),
@@ -302,9 +335,10 @@ export class JobPerformanceService {
         jobMaterials: jobMaterials.filter((entry) => String(entry.jobId) === String(job.id)),
         manualActualCostLines: manualActualCostLines.filter((entry) => String(entry.jobId) === String(job.id)),
         timeEntries: timeEntries.filter((entry) => String(entry.jobId) === String(job.id)),
+        additionalOverheadCost: includedOverheadCost,
         canViewFinancials: true,
       }),
-    }));
+    });});
 
     return {
       rows,

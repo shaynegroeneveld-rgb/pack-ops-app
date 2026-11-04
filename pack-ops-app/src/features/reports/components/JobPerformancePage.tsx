@@ -61,7 +61,7 @@ function downloadJobPerformanceCsv(rows: JobPerformanceReportRow[]) {
     "Job Number", "Title", "Status", "Job Type", "Archived", "Quoted Value", "Invoiced Revenue",
     "Collected Revenue", "Outstanding Revenue", "Actual Hours", "Actual Labour Cost", "Actual Material/Other Cost",
     "Actual Total Cost", "Actual Gross Profit", "Actual Margin %", "Revenue Per Hour", "Gross Profit Per Hour",
-    "Estimated Hours", "Hours Variance", "Estimated Total Cost", "Cost Variance", "Health", "Payment Status",
+    "Estimated Hours", "Hours Variance", "Estimated Total Cost", "Cost Variance", "Health", "Payment Status", "Admin Cost", "Additional Estimated Travel", "Travel Needs Calculation",
   ];
   const body = rows.map((row) => {
     const performance = row.performance;
@@ -73,7 +73,7 @@ function downloadJobPerformanceCsv(rows: JobPerformanceReportRow[]) {
       performance?.coreMoney.actualMarginPct, performance?.coreMoney.revenuePerHour, performance?.coreMoney.grossProfitPerHour,
       performance?.estimatedHours, performance?.hoursVariance, performance?.estimateAccuracy.estimatedTotalCost,
       performance?.estimateAccuracy.costVariance, performance?.diagnostics.healthStatus,
-      performance?.billingHealth.paymentStatus,
+      performance?.billingHealth.paymentStatus, row.adminCost, row.estimatedTravelCost, row.travelIncomplete ? "Yes" : "No",
     ].map(csvCell).join(",");
   });
   const blob = new Blob([[headers.map(csvCell).join(","), ...body].join("\n")], { type: "text/csv;charset=utf-8" });
@@ -535,11 +535,12 @@ export function JobPerformancePage() {
 
   return (
     <section style={pageStyle()}>
+      {report?.rows.some(row=>row.travelIncomplete)&&<p role="status" style={{background:'#fff3cd',padding:12,borderRadius:8}}>Some jobs with worked days still need a driving distance calculated. Totals include saved admin and available travel costs; those missing travel costs are not yet included.</p>}
       <header style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start", flexWrap: "wrap", marginBottom: "18px" }}>
         <div style={{ display: "grid", gap: "6px" }}>
           <h1 style={titleStyle()}>Job Performance</h1>
           <p style={subtitleStyle()}>
-            Owner-facing job performance reporting with hours, costs, sell, and current margin estimates.
+            Job costs and profits include saved admin time and available travel estimates.
           </p>
         </div>
         <button type="button" onClick={() => downloadJobPerformanceCsv(filteredRows)} disabled={filteredRows.length === 0} style={secondaryButtonStyle()}>
@@ -673,7 +674,8 @@ export function JobPerformancePage() {
                   </div>
                 </div>
 
-                {renderPerformance(row.performance)}
+                {row.travelIncomplete&&<p>Travel not yet included: add or confirm the job address and calculate driving distance below.</p>}
+                  {renderPerformance(row.performance)}
                 <JobOverheadsPanel row={row} orgId={currentUser.user.orgId}/>
               </article>
             ))
