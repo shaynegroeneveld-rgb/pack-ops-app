@@ -13,10 +13,10 @@ serve(async req=>{
   const actor=await client.from('users').select('org_id,role').eq('id',auth.data.user.id).is('deleted_at',null).single();
   if(actor.error||!['owner','office'].includes(actor.data?.role))return json({error:'Office access required.'},403);
   const {jobId}=await req.json();if(typeof jobId!=='string')return json({error:'Choose a job.'},400);
-  const job=await client.from('jobs').select('address_line1,address_line2,city,region,postal_code').eq('id',jobId).eq('org_id',actor.data.org_id).single();
+  const job=await client.from('jobs').select('address_line1,address_line2,city,state,postcode').eq('id',jobId).eq('org_id',actor.data.org_id).single();
   if(job.error||!job.data)return json({error:'Job not available.'},404);
   if(!job.data.address_line1)return json({error:'Add a street address to the job first.'},400);
-  const destination=[job.data.address_line1,job.data.address_line2,job.data.city,job.data.region,job.data.postal_code,'Canada'].filter(Boolean).join(', ');
+  const destination=[job.data.address_line1,job.data.address_line2,job.data.city,job.data.state,job.data.postcode,'Canada'].filter(Boolean).join(', ');
   const key=Deno.env.get('GOOGLE_MAPS_ROUTES_API_KEY');
   if(!key)return json({error:'Automatic driving distance needs Google Maps Routes setup. You can enter a verified round-trip distance manually.'},503);
   async function distance(from:string,to:string){
