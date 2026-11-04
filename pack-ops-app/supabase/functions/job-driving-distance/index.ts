@@ -21,7 +21,7 @@ serve(async req=>{
   if(!key)return json({error:'Automatic driving distance needs Google Maps Routes setup. You can enter a verified round-trip distance manually.'},503);
   async function distance(from:string,to:string){
    const response=await fetch('https://routes.googleapis.com/directions/v2:computeRoutes',{method:'POST',signal:AbortSignal.timeout(15000),headers:{'Content-Type':'application/json','X-Goog-Api-Key':key!,'X-Goog-FieldMask':'routes.distanceMeters'},body:JSON.stringify({origin:{address:from},destination:{address:to},travelMode:'DRIVE',routingPreference:'TRAFFIC_UNAWARE'})});
-   if(!response.ok)throw new Error('Driving route lookup failed. Check the address and routing service setup.');
+   if(!response.ok){const failure=await response.json().catch(()=>({}));const reason=failure.error?.details?.find((d:any)=>d.reason)?.reason;console.error('routes_request_failed',{status:response.status,reason:reason??failure.error?.status});throw new Error(response.status===403?'Google Routes denied this request. Check that the Routes key and billing are enabled.':response.status===429?'Google routing is temporarily at its usage limit. Try again shortly.':`Google could not calculate this driving route (${failure.error?.status??response.status}). Check the saved street address.`);}
    const result=await response.json();const meters=result.routes?.[0]?.distanceMeters;
    if(typeof meters!=='number'||!Number.isFinite(meters)||meters<0)throw new Error('No driving route was found. Enter a verified distance manually.');return meters;
   }
